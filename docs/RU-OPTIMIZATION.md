@@ -19,7 +19,14 @@ route, asset and inbound defaults tuned for the hostile-network reality.
    so that Russian banking/government/marketplace apps go direct while everything else
    is proxied. Pattern matching is package-prefix based, mirroring the China scanner.
 
-3. **Inbound credential hardening (VLESS-SOCKS5 mitigation).** The local SOCKS5/HTTP
+3. **Explicit "Apply Russia preset" action.** In addition to the locale-based
+   first-launch seeding, the Route screen overflow menu now has an **"Apply Russia
+   preset"** entry (and a symmetric "Apply China preset"). It is idempotent: it wipes
+   the current rule set and re-seeds the RU defaults (sniff, hijack-dns, bypass-icmp,
+   block-quic, block-ads, geosite-ru / geoip-ru bypass, bypass-lan). Use this after a
+   fresh install on a non-RU locale or any time you want to reset to the RU template.
+
+4. **Inbound credential hardening (VLESS-SOCKS5 mitigation).** The local SOCKS5/HTTP
    mixed inbound is never brought up without authentication:
     * `DataStore.ensureInboundCredentials()` generates a random UUID password on demand.
     * `Settings → Inbound → Allow access` now calls it automatically when toggled on.
