@@ -68,6 +68,122 @@ object AppScanner {
         ("(" + chinaAppPrefixList.joinToString("|").replace(".", "\\.") + ").*").toRegex()
     }
 
+    // Known package prefixes of popular apps from the Russian ecosystem: banks, state
+    // services, marketplaces, messengers and major local platforms. Used by the
+    // "scan Russian apps" action to select them for per-app bypass routing.
+    private val russianAppPrefixList by lazy {
+        listOf(
+            // Banks
+            "ru.sberbankmobile",
+            "ru.sberbank",
+            "ru.sberbankmobile_android_pay",
+            "ru.alfabank",
+            "ru.vtb24",
+            "ru.vtb",
+            "ru.rosbank",
+            "ru.raiffeisennews",
+            "ru.raiffeisen",
+            "ru.gazprombank",
+            "ru.rshb",
+            "ru.mkb",
+            "ru.psbank",
+            "com.idamob.tinkoff",
+            "com.ftband.mono",
+            "ru.tinkoff",
+            "ru.akbars",
+            "ru.otpbank",
+            "ru.otkritie",
+            "ru.yoomoney",
+            // Government & utilities
+            "ru.rostel",
+            "ru.mos",
+            "ru.rt.mlk",
+            "ru.rzd",
+            "ru.nalog",
+            "ru.fssp",
+            "ru.gosuslugi",
+            "ru.rtlabs",
+            "ru.pochta",
+            "ru.csc",
+            // Marketplaces
+            "ru.ozon",
+            "com.wildberries",
+            "ru.wildberries",
+            "ru.beru",
+            "ru.aliexpress",
+            "com.avito",
+            "ru.avito",
+            "ru.yandex.market",
+            "com.lamoda",
+            "ru.dns_shop",
+            "ru.mvideo",
+            "ru.eldorado",
+            "com.citilink",
+            // Yandex
+            "ru.yandex",
+            "com.yandex",
+            // VK / mail.ru / OK
+            "com.vkontakte",
+            "ru.mail",
+            "com.mail",
+            "ru.ok",
+            "ru.mamba",
+            // Messengers / media popular in RU
+            "org.telegram.messenger",
+            "ua.itaysonlab.messenger",
+            "com.vk.im",
+            "com.icq",
+            "ru.rutube",
+            // Telecom operators
+            "ru.megafon",
+            "ru.mts",
+            "ru.beeline",
+            "ru.tele2",
+            "ru.feature",
+            // Taxi / delivery
+            "ru.yandex.taxi",
+            "com.citymobil",
+            "ru.citymobil",
+            "com.cmtelematics",
+            "ru.foodfox",
+            "ru.sbermarket",
+            "ru.yandex.eda",
+            "ru.delivery",
+            "ru.sravni",
+            // Kinopoisk / media
+            "ru.kinopoisk",
+            "ru.ivi.client",
+            "ru.okko",
+            "ru.mts.mtstv",
+            "ru.more.play",
+            "ru.rt.video",
+            // Music
+            "ru.yandex.music",
+            "com.zvooq",
+            "ru.zvuk",
+            // Antivirus / local AV
+            "com.kaspersky",
+            "ru.drweb",
+        )
+    }
+
+    private val russianAppRegex by lazy {
+        ("(" + russianAppPrefixList.joinToString("|").replace(".", "\\.") + ").*").toRegex()
+    }
+
+    /**
+     * Detect apps belonging to the Russian ecosystem (banks, government, marketplaces,
+     * Yandex/VK/OK, RU telecom, RU media). Matching is done purely by package name
+     * because most RU apps have distinctive `ru.*`, `com.yandex.*`, `com.vkontakte.*`
+     * prefixes and heavy dex inspection is unnecessary and expensive.
+     */
+    fun isRussianApp(packageName: String): Boolean {
+        skipPrefixList.forEach {
+            if (packageName == it || packageName.startsWith("$it.")) return false
+        }
+        return packageName.matches(russianAppRegex)
+    }
+
     fun isChinaApp(packageName: String, packageManager: PackageManager): Boolean {
         skipPrefixList.forEach {
             if (packageName == it || packageName.startsWith("$it.")) return false

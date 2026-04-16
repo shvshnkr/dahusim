@@ -88,6 +88,19 @@ internal actual fun AppManagerScreen(
                 },
             )
             DropdownMenuItem(
+                text = { Text(stringResource(Res.string.action_scan_russian_apps)) },
+                onClick = {
+                    viewModel.scanRussianApps()
+                    onDismiss()
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = vectorResource(Res.drawable.document_scanner),
+                        contentDescription = null,
+                    )
+                },
+            )
+            DropdownMenuItem(
                 text = { Text(stringResource(Res.string.invert_selections)) },
                 onClick = {
                     viewModel.invertSections()

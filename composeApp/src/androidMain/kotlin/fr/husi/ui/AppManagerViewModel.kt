@@ -103,6 +103,14 @@ internal class AppManagerViewModel(
     }
 
     fun scanChinaApps() {
+        scanApps { packageName, _ -> AppScanner.isChinaApp(packageName, packageManager) }
+    }
+
+    fun scanRussianApps() {
+        scanApps { packageName, _ -> AppScanner.isRussianApp(packageName) }
+    }
+
+    private fun scanApps(predicate: (String, String) -> Boolean) {
         scanJob = viewModelScope.launch(singleThreadContext) {
             val cachedApps = cachedApps
             val bypass = DataStore.bypassMode
@@ -132,7 +140,7 @@ internal class AppManagerViewModel(
                 }
 
                 val appInfo = packageInfo.applicationInfo!!
-                if (AppScanner.isChinaApp(packageName, packageManager)) {
+                if (predicate(packageName, appInfo.uid.toString())) {
                     if (bypass) {
                         proxiedUids.add(appInfo.uid)
                     } else {

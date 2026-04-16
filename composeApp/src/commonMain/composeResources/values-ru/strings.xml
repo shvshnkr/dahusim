@@ -236,6 +236,7 @@
     <string name="action_export_clipboard">Экспорт в буфер обмена</string>
     <string name="action_export_file">Экспорт в файл</string>
     <string name="action_scan_china_apps">Сканировать китайские приложения</string>
+    <string name="action_scan_russian_apps">Сканировать российские приложения</string>
     <string name="action_from_link">По подписке</string>
     <string name="action_create_group">Пустая группа</string>
     <string name="clear_profiles">Очистить</string>

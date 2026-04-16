@@ -258,6 +258,7 @@
     <string name="action_create_group">Empty group</string>
     <string name="action_from_link">From subscription</string>
     <string name="action_scan_china_apps">Scan China apps</string>
+    <string name="action_scan_russian_apps">Scan Russian apps</string>
     <string name="action_export_file">Export to file</string>
     <string name="action_export_clipboard">Export to Clipboard</string>
     <string name="action_export">Export</string>

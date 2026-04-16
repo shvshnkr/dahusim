@@ -163,10 +163,11 @@ object ProfileManager {
                         domains = "set+dns:geosite-category-ads-all",
                     ),
                 )
-                val walledCountry = mutableListOf("cn:中国")
-                if (Locale.getDefault().country == Locale.US.country) {
-                    // English users
-                    walledCountry += "ir:Iran"
+                val walledCountry = when (Locale.getDefault().country) {
+                    // Russian-speaking users: default to RU bypass profile.
+                    "RU", "BY", "KZ" -> mutableListOf("ru:Россия")
+                    Locale.US.country -> mutableListOf("cn:中国", "ir:Iran")
+                    else -> mutableListOf("cn:中国")
                 }
                 for (c in walledCountry) {
                     val country = c.substringBefore(":")
