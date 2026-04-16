@@ -108,9 +108,13 @@ import fr.husi.resources.more_vert
 import fr.husi.resources.need_reload
 import fr.husi.resources.ok
 import fr.husi.resources.process
+import fr.husi.resources.public_icon
 import fr.husi.resources.removed
 import fr.husi.resources.replay
 import fr.husi.resources.route_add
+import fr.husi.resources.route_apply_cn_preset
+import fr.husi.resources.route_apply_ru_preset
+import fr.husi.resources.route_apply_preset_applied
 import fr.husi.resources.route_block
 import fr.husi.resources.route_bypass
 import fr.husi.resources.route_manage_assets
@@ -233,6 +237,46 @@ fun RouteScreen(
                                 leadingIcon = {
                                     Icon(
                                         imageVector = vectorResource(Res.drawable.layers),
+                                        contentDescription = null,
+                                    )
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.route_apply_ru_preset)) },
+                                onClick = {
+                                    showMoreAction = false
+                                    viewModel.applyRussianPreset()
+                                    scope.launch {
+                                        snackbarState.showSnackbar(
+                                            message = resolveRepository()
+                                                .getString(Res.string.route_apply_preset_applied),
+                                            duration = SnackbarDuration.Short,
+                                        )
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = vectorResource(Res.drawable.public_icon),
+                                        contentDescription = null,
+                                    )
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.route_apply_cn_preset)) },
+                                onClick = {
+                                    showMoreAction = false
+                                    viewModel.applyChinaPreset()
+                                    scope.launch {
+                                        snackbarState.showSnackbar(
+                                            message = resolveRepository()
+                                                .getString(Res.string.route_apply_preset_applied),
+                                            duration = SnackbarDuration.Short,
+                                        )
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = vectorResource(Res.drawable.public_icon),
                                         contentDescription = null,
                                     )
                                 },

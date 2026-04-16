@@ -124,93 +124,121 @@ object ProfileManager {
             val currentRules = SagerDatabase.rulesDao.allRules().first()
             if (currentRules.isEmpty() && !DataStore.rulesFirstCreate) {
                 DataStore.rulesFirstCreate = true
-                createRule(
-                    RuleEntity(
-                        enabled = true,
-                        name = repository.getString(Res.string.sniff),
-                        action = ACTION_SNIFF,
-                    ),
-                )
-                createRule(
-                    RuleEntity(
-                        enabled = true,
-                        name = repository.getString(Res.string.hijack_dns),
-                        protocol = setOf("dns"),
-                        action = ACTION_HIJACK_DNS,
-                    ),
-                )
-                createRule(
-                    RuleEntity(
-                        enabled = true,
-                        action = ACTION_ROUTE,
-                        name = repository.getString(Res.string.bypass_icmp),
-                        network = setOf(NetworkICMP),
-                        outbound = RuleEntity.OUTBOUND_DIRECT,
-                    ),
-                )
-                createRule(
-                    RuleEntity(
-                        name = repository.getString(Res.string.route_opt_block_quic),
-                        action = ACTION_REJECT,
-                        protocol = setOf("quic"),
-                        network = setOf(NetworkUDP),
-                    ),
-                )
-                createRule(
-                    RuleEntity(
-                        name = repository.getString(Res.string.route_opt_block_ads),
-                        action = ACTION_REJECT,
-                        domains = "set+dns:geosite-category-ads-all",
-                    ),
-                )
-                val walledCountry = when (Locale.getDefault().country) {
-                    // Russian-speaking users: default to RU bypass profile.
-                    "RU", "BY", "KZ" -> mutableListOf("ru:Россия")
-                    Locale.US.country -> mutableListOf("cn:中国", "ir:Iran")
-                    else -> mutableListOf("cn:中国")
-                }
-                for (c in walledCountry) {
-                    val country = c.substringBefore(":")
-                    val displayCountry = c.substringAfter(":")
-                    if (country == "cn") createRule(
-                        RuleEntity(
-                            name = repository.getString(Res.string.route_play_store, displayCountry),
-                            action = ACTION_ROUTE,
-                            domains = "set+dns:geosite-google-play",
-                            outbound = RuleEntity.OUTBOUND_PROXY,
-                        ),
-                        false,
-                    )
-                    createRule(
-                        RuleEntity(
-                            name = repository.getString(Res.string.route_bypass_domain, displayCountry),
-                            action = ACTION_ROUTE,
-                            domains = "set+dns:geosite-$country",
-                            outbound = RuleEntity.OUTBOUND_DIRECT,
-                        ),
-                        false,
-                    )
-                    createRule(
-                        RuleEntity(
-                            name = repository.getString(Res.string.route_bypass_ip, displayCountry),
-                            action = ACTION_ROUTE,
-                            ip = "set-dns:geoip-$country",
-                            outbound = RuleEntity.OUTBOUND_DIRECT,
-                        ),
-                        false,
-                    )
-                }
-                createRule(
-                    RuleEntity(
-                        name = repository.getString(Res.string.route_opt_bypass_lan),
-                        action = ACTION_ROUTE,
-                        ip = RuleItem.CONTENT_PRIVATE,
-                        outbound = RuleEntity.OUTBOUND_DIRECT,
-                    ),
-                    false,
-                )
+                seedDefaultRules(defaultBypassCountries())
             }
         }
+    }
+
+    /**
+     * Bypass-country list used by the first-run rule seeder. Russian-speaking locales get a
+     * dedicated RU profile; English users keep the historic CN+IR default; everyone else gets CN.
+     */
+    private fun defaultBypassCountries(): List<Pair<String, String>> {
+        return when (Locale.getDefault().country) {
+            "RU", "BY", "KZ" -> listOf("ru" to "Россия")
+            Locale.US.country -> listOf("cn" to "中国", "ir" to "Iran")
+            else -> listOf("cn" to "中国")
+        }
+    }
+
+    /**
+     * Wipe all rules and seed the default set for the Russian Federation. Used by the
+     * explicit "Apply RU preset" action in the Route screen.
+     */
+    suspend fun applyRussianPreset() {
+        SagerDatabase.rulesDao.reset()
+        DataStore.rulesFirstCreate = true
+        seedDefaultRules(listOf("ru" to "Россия"))
+    }
+
+    /**
+     * Wipe all rules and seed the default China preset. Kept for parity with the RU action so
+     * users who switch locales can still easily restore the historic defaults.
+     */
+    suspend fun applyChinaPreset() {
+        SagerDatabase.rulesDao.reset()
+        DataStore.rulesFirstCreate = true
+        seedDefaultRules(listOf("cn" to "中国"))
+    }
+
+    private suspend fun seedDefaultRules(countries: List<Pair<String, String>>) {
+        createRule(
+            RuleEntity(
+                enabled = true,
+                name = repository.getString(Res.string.sniff),
+                action = ACTION_SNIFF,
+            ),
+        )
+        createRule(
+            RuleEntity(
+                enabled = true,
+                name = repository.getString(Res.string.hijack_dns),
+                protocol = setOf("dns"),
+                action = ACTION_HIJACK_DNS,
+            ),
+        )
+        createRule(
+            RuleEntity(
+                enabled = true,
+                action = ACTION_ROUTE,
+                name = repository.getString(Res.string.bypass_icmp),
+                network = setOf(NetworkICMP),
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+        createRule(
+            RuleEntity(
+                name = repository.getString(Res.string.route_opt_block_quic),
+                action = ACTION_REJECT,
+                protocol = setOf("quic"),
+                network = setOf(NetworkUDP),
+            ),
+        )
+        createRule(
+            RuleEntity(
+                name = repository.getString(Res.string.route_opt_block_ads),
+                action = ACTION_REJECT,
+                domains = "set+dns:geosite-category-ads-all",
+            ),
+        )
+        for ((country, displayCountry) in countries) {
+            if (country == "cn") createRule(
+                RuleEntity(
+                    name = repository.getString(Res.string.route_play_store, displayCountry),
+                    action = ACTION_ROUTE,
+                    domains = "set+dns:geosite-google-play",
+                    outbound = RuleEntity.OUTBOUND_PROXY,
+                ),
+                false,
+            )
+            createRule(
+                RuleEntity(
+                    name = repository.getString(Res.string.route_bypass_domain, displayCountry),
+                    action = ACTION_ROUTE,
+                    domains = "set+dns:geosite-$country",
+                    outbound = RuleEntity.OUTBOUND_DIRECT,
+                ),
+                false,
+            )
+            createRule(
+                RuleEntity(
+                    name = repository.getString(Res.string.route_bypass_ip, displayCountry),
+                    action = ACTION_ROUTE,
+                    ip = "set-dns:geoip-$country",
+                    outbound = RuleEntity.OUTBOUND_DIRECT,
+                ),
+                false,
+            )
+        }
+        createRule(
+            RuleEntity(
+                name = repository.getString(Res.string.route_opt_bypass_lan),
+                action = ACTION_ROUTE,
+                ip = RuleItem.CONTENT_PRIVATE,
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+            false,
+        )
     }
 
     fun enabledRules(): Flow<List<RuleEntity>> {

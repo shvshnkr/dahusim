@@ -259,6 +259,9 @@
     <string name="action_from_link">From subscription</string>
     <string name="action_scan_china_apps">Scan China apps</string>
     <string name="action_scan_russian_apps">Scan Russian apps</string>
+    <string name="route_apply_ru_preset">Apply Russia preset</string>
+    <string name="route_apply_cn_preset">Apply China preset</string>
+    <string name="route_apply_preset_applied">Routing preset applied</string>
     <string name="action_export_file">Export to file</string>
     <string name="action_export_clipboard">Export to Clipboard</string>
     <string name="action_export">Export</string>

@@ -67,6 +67,16 @@ class RouteScreenViewModel : ViewModel() {
         reloadRules(null)
     }
 
+    fun applyRussianPreset() = runOnIoDispatcher {
+        ProfileManager.applyRussianPreset()
+        reloadRules(null)
+    }
+
+    fun applyChinaPreset() = runOnIoDispatcher {
+        ProfileManager.applyChinaPreset()
+        reloadRules(null)
+    }
+
     fun toggleEnabled(rule: RuleEntity) = runOnIoDispatcher {
         ProfileManager.updateRule(
             rule.copy(

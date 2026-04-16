@@ -237,6 +237,9 @@
     <string name="action_export_file">Экспорт в файл</string>
     <string name="action_scan_china_apps">Сканировать китайские приложения</string>
     <string name="action_scan_russian_apps">Сканировать российские приложения</string>
+    <string name="route_apply_ru_preset">Применить профиль для России</string>
+    <string name="route_apply_cn_preset">Применить профиль для Китая</string>
+    <string name="route_apply_preset_applied">Профиль маршрутизации применён</string>
     <string name="action_from_link">По подписке</string>
     <string name="action_create_group">Пустая группа</string>
     <string name="clear_profiles">Очистить</string>
