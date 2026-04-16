@@ -117,6 +117,9 @@ import fr.husi.resources.route_apply_ru_preset
 import fr.husi.resources.route_apply_preset_applied
 import fr.husi.resources.route_block
 import fr.husi.resources.route_bypass
+import fr.husi.resources.route_enable_ru_mode
+import fr.husi.resources.route_enable_ru_mode_confirm
+import fr.husi.resources.route_enable_ru_mode_done
 import fr.husi.resources.route_manage_assets
 import fr.husi.resources.route_proxy
 import fr.husi.resources.route_reset
@@ -153,6 +156,7 @@ fun RouteScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showMoreAction by remember { mutableStateOf(false) }
     var showResetAlert by remember { mutableStateOf(false) }
+    var showRussianModeConfirm by remember { mutableStateOf(false) }
     var showAlertDialog by remember { mutableStateOf<MainViewModelUiEvent.AlertDialog?>(null) }
 
     fun needReload() = scope.launch {
@@ -237,6 +241,19 @@ fun RouteScreen(
                                 leadingIcon = {
                                     Icon(
                                         imageVector = vectorResource(Res.drawable.layers),
+                                        contentDescription = null,
+                                    )
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.route_enable_ru_mode)) },
+                                onClick = {
+                                    showMoreAction = false
+                                    showRussianModeConfirm = true
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = vectorResource(Res.drawable.public_icon),
                                         contentDescription = null,
                                     )
                                 },
@@ -443,6 +460,34 @@ fun RouteScreen(
             }
         },
     )
+
+    if (showRussianModeConfirm) AlertDialog(
+        onDismissRequest = { showRussianModeConfirm = false },
+        title = { Text(stringResource(Res.string.route_enable_ru_mode)) },
+        text = { Text(stringResource(Res.string.route_enable_ru_mode_confirm)) },
+        confirmButton = {
+            TextButton(stringResource(Res.string.ok)) {
+                showRussianModeConfirm = false
+                viewModel.enableRussianMode()
+            }
+        },
+        dismissButton = {
+            TextButton(stringResource(Res.string.cancel)) {
+                showRussianModeConfirm = false
+            }
+        },
+    )
+
+    LaunchedEffect(Unit) {
+        viewModel.russianModeResult.collect { added ->
+            snackbarState.showSnackbar(
+                message = resolveRepository()
+                    .getString(Res.string.route_enable_ru_mode_done, added),
+                actionLabel = resolveRepository().getString(Res.string.ok),
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
 
     LaunchedEffect(Unit) {
         mainViewModel.uiEvent.collect { event ->

@@ -262,6 +262,13 @@
     <string name="route_apply_ru_preset">Apply Russia preset</string>
     <string name="route_apply_cn_preset">Apply China preset</string>
     <string name="route_apply_preset_applied">Routing preset applied</string>
+    <string name="route_enable_ru_mode">Enable Russia mode</string>
+    <string name="route_enable_ru_mode_confirm">This will replace current routing rules with the Russia preset (geosite-ru / geoip-ru bypass, NSPK / 3-D Secure bypass, block ads and QUIC), switch the rule-set provider to Chocolate4U, set Mullvad DoH as the remote DNS, generate a SOCKS5 login/password if missing, and on Android select common Russian apps for per-app bypass. Continue?</string>
+    <string name="route_enable_ru_mode_done">Russia mode enabled. %1$d Russian apps added to per-app bypass.</string>
+    <string name="route_ru_bypass_nspk">Bypass NSPK / 3-D Secure (RU)</string>
+    <string name="custom_rule_provider_hint">One archive URL per line. Community RU lists:
+https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/sing-box-rules.zip
+https://community.antifilter.download/list/domains.lst</string>
     <string name="action_export_file">Export to file</string>
     <string name="action_export_clipboard">Export to Clipboard</string>
     <string name="action_export">Export</string>

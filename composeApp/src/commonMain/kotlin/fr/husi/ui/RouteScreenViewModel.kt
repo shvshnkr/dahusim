@@ -12,6 +12,7 @@ import fr.husi.database.SagerDatabase
 import fr.husi.ktx.onIoDispatcher
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.ktx.runOnIoDispatcher
+import fr.husi.utils.enableRussianPerAppBypass
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,6 +76,21 @@ class RouteScreenViewModel : ViewModel() {
     fun applyChinaPreset() = runOnIoDispatcher {
         ProfileManager.applyChinaPreset()
         reloadRules(null)
+    }
+
+    /**
+     * Fires once. Emits the number of per-app packages added (0 on desktop / no matches).
+     */
+    val russianModeResult: kotlinx.coroutines.flow.MutableSharedFlow<Int>
+        field = kotlinx.coroutines.flow.MutableSharedFlow()
+
+    fun enableRussianMode() = viewModelScope.launch {
+        onIoDispatcher {
+            ProfileManager.enableRussianMode()
+        }
+        val added = enableRussianPerAppBypass()
+        reloadRules(null)
+        russianModeResult.emit(added)
     }
 
     fun toggleEnabled(rule: RuleEntity) = runOnIoDispatcher {

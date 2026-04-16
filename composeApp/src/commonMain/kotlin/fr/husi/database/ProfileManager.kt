@@ -11,6 +11,7 @@ import fr.husi.fmt.SingBoxOptions.NetworkICMP
 import fr.husi.fmt.SingBoxOptions.NetworkUDP
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.repository.resolveRepository
+import fr.husi.RuleProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -124,7 +125,8 @@ object ProfileManager {
             val currentRules = SagerDatabase.rulesDao.allRules().first()
             if (currentRules.isEmpty() && !DataStore.rulesFirstCreate) {
                 DataStore.rulesFirstCreate = true
-                seedDefaultRules(defaultBypassCountries())
+                val russianLocale = Locale.getDefault().country in setOf("RU", "BY", "KZ")
+                seedDefaultRules(defaultBypassCountries(), withRussianExtras = russianLocale)
             }
         }
     }
@@ -148,7 +150,21 @@ object ProfileManager {
     suspend fun applyRussianPreset() {
         SagerDatabase.rulesDao.reset()
         DataStore.rulesFirstCreate = true
-        seedDefaultRules(listOf("ru" to "Россия"))
+        seedDefaultRules(listOf("ru" to "Россия"), withRussianExtras = true)
+    }
+
+    /**
+     * One-tap "Russian mode": route preset with NSPK bypass, Chocolate4U provider, Mullvad DoH
+     * and auto-generated SOCKS5 credentials. Per-app bypass selection is an Android concern and
+     * is handled by [fr.husi.utils.enableRussianPerAppBypass].
+     */
+    suspend fun enableRussianMode() {
+        applyRussianPreset()
+        DataStore.rulesProvider = RuleProvider.CHOCOLATE4U
+        if (DataStore.remoteDns == "tcp://dns.google" || DataStore.remoteDns.isBlank()) {
+            DataStore.remoteDns = "https://doh.mullvad.net/dns-query"
+        }
+        DataStore.ensureInboundCredentials()
     }
 
     /**
@@ -161,7 +177,10 @@ object ProfileManager {
         seedDefaultRules(listOf("cn" to "中国"))
     }
 
-    private suspend fun seedDefaultRules(countries: List<Pair<String, String>>) {
+    private suspend fun seedDefaultRules(
+        countries: List<Pair<String, String>>,
+        withRussianExtras: Boolean = false,
+    ) {
         createRule(
             RuleEntity(
                 enabled = true,
@@ -239,6 +258,28 @@ object ProfileManager {
             ),
             false,
         )
+        if (withRussianExtras) {
+            val nspkDomains = listOf(
+                "nspk.ru",
+                "mirconnect.ru",
+                "mir-connect.ru",
+                "privetmir.ru",
+                "securepayments.sberbank.ru",
+                "3dsecure.vtb.ru",
+                "3ds.tbank.ru",
+                "3dsecure.raiffeisen.ru",
+                "3ds.alfabank.ru",
+            ).joinToString(",") { "domain:$it" }
+            createRule(
+                RuleEntity(
+                    name = repository.getString(Res.string.route_ru_bypass_nspk),
+                    action = ACTION_ROUTE,
+                    domains = nspkDomains,
+                    outbound = RuleEntity.OUTBOUND_DIRECT,
+                ),
+                false,
+            )
+        }
     }
 
     fun enabledRules(): Flow<List<RuleEntity>> {

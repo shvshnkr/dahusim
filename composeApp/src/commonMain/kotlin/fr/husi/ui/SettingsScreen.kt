@@ -122,6 +122,7 @@ import fr.husi.resources.color_lens
 import fr.husi.resources.connection_test_url
 import fr.husi.resources.construction
 import fr.husi.resources.custom_rule_provider
+import fr.husi.resources.custom_rule_provider_hint
 import fr.husi.resources.description
 import fr.husi.resources.developer_mode
 import fr.husi.resources.direct_dns
@@ -895,7 +896,15 @@ fun SettingsScreen(
                                     null,
                                 )
                             },
-                            summary = { Text(contentOrUnset(value)) },
+                            summary = {
+                                Text(
+                                    if (value.isBlank() || value == defaultUrl) {
+                                        stringResource(Res.string.custom_rule_provider_hint)
+                                    } else {
+                                        contentOrUnset(value)
+                                    },
+                                )
+                            },
                             valueToText = { it },
                         ) { value, onValueChange, onOk ->
                             LinkOrContentTextField(value, onValueChange, onOk)
