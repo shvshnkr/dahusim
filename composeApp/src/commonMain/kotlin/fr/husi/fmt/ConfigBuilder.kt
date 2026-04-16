@@ -219,6 +219,16 @@ fun buildConfig(
     val bypassDNSBeans = hashSetOf<AbstractBean>()
     val isVPN = DataStore.serviceMode == Key.MODE_VPN
     val bind = if (!forTest && DataStore.allowAccess) "0.0.0.0" else LOCALHOST4
+    if (!forTest && !forExport) {
+        // VLESS-SOCKS5 / LAN exposure mitigation: never bring the mixed inbound up without
+        // authentication. See https://publish.obsidian.md/zapret/VLESS-SOCKS5-vulnerability
+        if (DataStore.ensureInboundCredentials()) {
+            Libcore.logWarning(
+                "[husi] SOCKS5/HTTP inbound had no credentials, generated random ones " +
+                    "(username=${DataStore.inboundUsername}). Review Inbound settings.",
+            )
+        }
+    }
     val remoteDns = DataStore.remoteDns.split("\n")
         .mapNotNull { dns -> dns.trim().takeIf { it.isNotBlank() && !it.startsWith("#") } }
     val directDNS = DataStore.directDns.split("\n")

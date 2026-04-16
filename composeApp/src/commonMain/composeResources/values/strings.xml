@@ -532,6 +532,7 @@
     <string name="ech_config">ECH configuration</string>
     <string name="inbound_username">Inbound username</string>
     <string name="inbound_password">Inbound password</string>
+    <string name="inbound_credentials_warning">Not set — local SOCKS5/HTTP inbound will require auth; random credentials will be auto-generated on connect to mitigate the VLESS-SOCKS5 attack.</string>
     <string name="http_upgrade_host">HTTPUpgrade Host</string>
     <string name="http_upgrade_path">HTTPUpgrade Path</string>
     <string name="scan_vpn_app">Scan VPN apps</string>

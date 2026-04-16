@@ -439,6 +439,7 @@
     <string name="nat_stun_server_hint">STUN сервер</string>
     <string name="vpn_core_type_unknown">Неизвестный</string>
     <string name="inbound_username">Имя пользователя SOCKS5</string>
+    <string name="inbound_credentials_warning">Не задано — локальный SOCKS5/HTTP инбаунд будет требовать аутентификацию; при подключении будут автоматически сгенерированы случайные учётные данные для защиты от атаки VLESS-SOCKS5.</string>
     <string name="route_opt_block_quic">Блокировать QUIC</string>
     <string name="get_cert">Получение сертификатов</string>
     <string name="get_cert_summary">Получить TLS сертификаты целевого сервера. Поддержка https и QUIC.</string>

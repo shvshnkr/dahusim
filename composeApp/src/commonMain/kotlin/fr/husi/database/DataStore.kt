@@ -111,6 +111,24 @@ object DataStore {
     var inboundUsername by configurationStore.string(Key.INBOUND_USERNAME) { "" }
     var inboundPassword by configurationStore.string(Key.INBOUND_PASSWORD) { "" }
 
+    /**
+     * Ensure the local SOCKS5/HTTP mixed inbound has authentication before exposing it.
+     *
+     * Without credentials any local Android app (or a LAN peer when [allowAccess] is on) can
+     * tunnel arbitrary traffic through our proxy. When combined with the VLESS-SOCKS5
+     * browser-probing attack the exposure is remotely exploitable via WebRTC/fetch tricks
+     * (see https://publish.obsidian.md/zapret/VLESS-SOCKS5-vulnerability).
+     *
+     * Returns true if new credentials were generated and persisted.
+     */
+    fun ensureInboundCredentials(): Boolean {
+        if (inboundUsername.isNotBlank() && inboundPassword.isNotBlank()) return false
+        val token = java.util.UUID.randomUUID().toString()
+        if (inboundUsername.isBlank()) inboundUsername = "husi"
+        if (inboundPassword.isBlank()) inboundPassword = token
+        return true
+    }
+
     var allowAccess by configurationStore.boolean(Key.ALLOW_ACCESS)
     var speedInterval by configurationStore.int(Key.SPEED_INTERVAL) { 1000 }
     var showGroupInNotification by configurationStore.boolean(Key.SHOW_GROUP_IN_NOTIFICATION)

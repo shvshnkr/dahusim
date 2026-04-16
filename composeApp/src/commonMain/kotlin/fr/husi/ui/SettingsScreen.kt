@@ -156,6 +156,7 @@ import fr.husi.resources.import_contacts
 import fr.husi.resources.inbound_password
 import fr.husi.resources.inbound_settings
 import fr.husi.resources.inbound_username
+import fr.husi.resources.inbound_credentials_warning
 import fr.husi.resources.insecure_warn
 import fr.husi.resources.ipv4_only
 import fr.husi.resources.ipv6_only
@@ -1371,6 +1372,11 @@ fun SettingsScreen(
                             value = value,
                             onValueChange = {
                                 DataStore.allowAccess = it
+                                if (it) {
+                                    // Exposing the mixed inbound to LAN without auth enables
+                                    // the VLESS-SOCKS5 and related SOCKS/HTTP abuse vectors.
+                                    DataStore.ensureInboundCredentials()
+                                }
                                 needReload()
                             },
                             title = { Text(stringResource(Res.string.allow_access)) },
@@ -1401,7 +1407,13 @@ fun SettingsScreen(
                                     null,
                                 )
                             },
-                            summary = { Text(contentOrUnset(value)) },
+                            summary = {
+                                if (value.isBlank()) {
+                                    Text(stringResource(Res.string.inbound_credentials_warning))
+                                } else {
+                                    Text(contentOrUnset(value))
+                                }
+                            },
                             valueToText = { it },
                         )
                     }
