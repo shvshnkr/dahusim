@@ -1,23 +1,32 @@
 package fr.husi.bg
 
 import android.content.Context
+import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy.UPDATE
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkerParameters
 import androidx.work.multiprocess.RemoteWorkManager
+import fr.husi.Action
 import fr.husi.lib.R
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
+import fr.husi.utils.simpleModeDebugEvent
+import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 actual object SubscriptionUpdater {
 
     private const val WORK_NAME = "SubscriptionUpdater"
+    private const val CHANNEL_ID = "service-subscription-silent"
 
     actual suspend fun reconfigureUpdater() {
         val repo = resolveAndroidRepository()
@@ -33,8 +42,14 @@ actual object SubscriptionUpdater {
             PeriodicWorkRequest.Builder(UpdateTask::class.java, repeatIntervalMinutes, TimeUnit.MINUTES)
                 .apply {
                     if (plan.initialDelaySeconds > 0) {
-                        setInitialDelay(plan.initialDelaySeconds, TimeUnit.SECONDS)
+                        setInitialDelay(plan.initialDelaySeconds + Random.nextLong(0, 180), TimeUnit.SECONDS)
                     }
+                    setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                    setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build(),
+                    )
                 }
                 .build(),
         )
@@ -48,28 +63,59 @@ actual object SubscriptionUpdater {
 
         val notification = runBlocking {
             val repo = resolveAndroidRepository()
-            NotificationCompat.Builder(applicationContext, "service-subscription")
+            NotificationCompat.Builder(applicationContext, CHANNEL_ID)
                 .setWhen(0)
                 .setTicker(repo.getString(Res.string.forward_success))
                 .setContentTitle(repo.getString(Res.string.subscription_update))
                 .setSmallIcon(R.drawable.ic_service_active)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setOnlyAlertOnce(true)
         }
 
         override suspend fun doWork(): Result {
-            SubscriptionAutoUpdateRunner.run { profile ->
+            val outcome = SubscriptionAutoUpdateRunner.runWithResult { profile ->
                 notification.setContentText(
                     resolveRepository().getString(
                         Res.string.subscription_update_message,
                         profile.displayName(),
                     ),
                 )
+                // #region agent log
+                simpleModeLog("SimpleMode", "H12 subscription_notification profile=${profile.displayName()} channel=$CHANNEL_ID")
+                // #endregion
                 nm.notify(2, notification.build())
             }
 
             nm.cancel(2)
+            // #region agent log
+            simpleModeLog("SimpleMode", "H12 subscription_notification_cancelled")
+            // #endregion
 
-            return Result.success()
+            if (outcome.shouldRequestUpstreamReset) {
+                // #region agent log
+                simpleModeLog(
+                    "SimpleMode",
+                    "H19 stale_transport_batch_reset_upstream " +
+                        "transportFails=${outcome.transportFailuresWhileVpnConnected} " +
+                        "allSucceeded=${outcome.allSucceeded}",
+                )
+                simpleModeDebugEvent(
+                    runId = "sub-update",
+                    hypothesisId = "H-STALE",
+                    location = "SubscriptionUpdater.UpdateTask.doWork",
+                    message = "Broadcast RESET_UPSTREAM after transport-like subscription failures",
+                    data = mapOf(
+                        "transportFails" to outcome.transportFailuresWhileVpnConnected.toString(),
+                        "allSucceeded" to outcome.allSucceeded.toString(),
+                    ),
+                )
+                // #endregion
+                applicationContext.sendBroadcast(
+                    Intent(Action.RESET_UPSTREAM_CONNECTIONS).setPackage(applicationContext.packageName),
+                )
+            }
+
+            return if (outcome.allSucceeded) Result.success() else Result.retry()
         }
     }
 

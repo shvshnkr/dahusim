@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
@@ -24,6 +25,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AppBarWithSearch
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -166,6 +168,7 @@ import fr.husi.resources.remove_duplicate
 import fr.husi.resources.removed
 import fr.husi.resources.search
 import fr.husi.resources.search_go
+import fr.husi.resources.simple_mode_switch
 import fr.husi.resources.sort_mode
 import fr.husi.resources.undo
 import fr.husi.ui.MainViewModel
@@ -187,6 +190,7 @@ fun ConfigurationScreen(
     onNavigationClick: () -> Unit,
     vm: ConfigurationScreenViewModel = viewModel { ConfigurationScreenViewModel() },
     onOpenProfileEditor: ((NavRoutes.ProfileEditor) -> Unit)? = null,
+    onSwitchToSimpleMode: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val snackbarState = remember { SnackbarHostState() }
@@ -504,6 +508,15 @@ fun ConfigurationScreen(
                                     showOverflowMenu = false
                                     showOrderMenu = true
                                 }
+                                onSwitchToSimpleMode?.let { switch ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.simple_mode_switch)) },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            switch()
+                                        },
+                                    )
+                                }
                             }
                             DropdownMenu(
                                 expanded = showConnectionTestMenu,
@@ -585,6 +598,16 @@ fun ConfigurationScreen(
                     scrollBehavior = scrollBehavior,
                     windowInsets = windowInsets.only(WindowInsetsSides.Horizontal),
                 )
+                onSwitchToSimpleMode?.let { switch ->
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        onClick = switch,
+                    ) {
+                        Text(stringResource(Res.string.simple_mode_switch))
+                    }
+                }
 
                 if (hasGroups && uiState.groups.size > 1) PrimaryScrollableTabRow(
                     selectedTabIndex = pagerState.currentPage.fastCoerceIn(

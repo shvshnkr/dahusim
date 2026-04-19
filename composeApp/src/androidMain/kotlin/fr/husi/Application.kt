@@ -12,6 +12,7 @@ import fr.husi.bg.AppChangeReceiver
 import fr.husi.bg.DefaultNetworkMonitor
 import fr.husi.bg.RouteAssetUpdater
 import fr.husi.bg.SubscriptionUpdater
+import fr.husi.bootstrap.DefaultUserBootstrap
 import fr.husi.database.DataStore
 import fr.husi.di.initHusiKoin
 import fr.husi.ktx.runOnDefaultDispatcher
@@ -84,6 +85,7 @@ class Application : Application(),
 
         if (isMainProcess) runOnDefaultDispatcher {
             runCatching {
+                DefaultUserBootstrap.bootstrapAll()
                 SubscriptionUpdater.reconfigureUpdater()
                 RouteAssetUpdater.reconfigureUpdater()
             }

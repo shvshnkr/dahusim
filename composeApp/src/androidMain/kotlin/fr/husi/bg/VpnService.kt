@@ -25,6 +25,7 @@ import fr.husi.resources.app_name
 import fr.husi.resources.reboot_required
 import fr.husi.ui.VpnRequestActivity
 import fr.husi.utils.Subnet
+import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.runBlocking
 import android.net.VpnService as BaseVpnService
 
@@ -275,6 +276,15 @@ class VpnService : BaseVpnService(),
         if (DataStore.allowAppsBypassVpn) {
             builder.allowBypass()
         }
+        // #region agent log
+        simpleModeLog(
+            "SimpleMode",
+            "H13 vpn_builder allowBypass=${DataStore.allowAppsBypassVpn} proxyApps=${DataStore.proxyApps} " +
+                "bypassMode=${DataStore.bypassMode} packagesCount=${DataStore.packages.size} " +
+                "tunStrictRoutePref=${DataStore.tunStrictRoute} singBoxStrictRouteOnAndroid=not_implemented " +
+                "perAppIsolation=VpnService_allowedApps+singbox_include_package",
+        )
+        // #endregion
 
         conn = builder.establish() ?: throw NullConnectionException()
 

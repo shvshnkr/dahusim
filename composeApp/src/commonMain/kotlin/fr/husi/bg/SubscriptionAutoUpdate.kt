@@ -3,12 +3,20 @@ package fr.husi.bg
 import fr.husi.database.DataStore
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
+import fr.husi.group.GroupUpdateResult
 import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
+import fr.husi.ktx.readableMessage
 
 data class SubscriptionAutoUpdatePlan(
     val repeatIntervalMinutes: Int,
     val initialDelaySeconds: Long,
+)
+
+data class SubscriptionAutoUpdateOutcome(
+    val allSucceeded: Boolean,
+    val transportFailuresWhileVpnConnected: Int,
+    val shouldRequestUpstreamReset: Boolean,
 )
 
 private data class AutoUpdateCandidate(
@@ -47,6 +55,60 @@ object SubscriptionAutoUpdatePlanner {
 }
 
 object SubscriptionAutoUpdateRunner {
+
+    suspend fun runWithResult(
+        nowSeconds: Long = currentEpochSeconds(),
+        onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
+    ): SubscriptionAutoUpdateOutcome {
+        return runWithResult(
+            subscriptions = SubscriptionAutoUpdatePlanner.loadAutoUpdateSubscriptions(),
+            nowSeconds = nowSeconds,
+            onBeforeUpdate = onBeforeUpdate,
+        )
+    }
+
+    suspend fun runWithResult(
+        subscriptions: List<ProxyGroup>,
+        nowSeconds: Long,
+        onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
+    ): SubscriptionAutoUpdateOutcome {
+        var allSucceeded = true
+        var transportFailuresWhileVpnConnected = 0
+        for (profile in dueSubscriptions(subscriptions, nowSeconds)) {
+            Logs.d("auto update: updating ${profile.displayName()}")
+            onBeforeUpdate(profile)
+            runCatching {
+                when (val r = GroupUpdater.executeUpdate(profile, false)) {
+                    is GroupUpdateResult.Success -> Unit
+                    is GroupUpdateResult.Failure -> {
+                        allSucceeded = false
+                        if (DataStore.serviceState.connected &&
+                            subscriptionMessageLooksLikeStaleTransport(r.message)
+                        ) {
+                            transportFailuresWhileVpnConnected++
+                        }
+                    }
+                    else -> {
+                        allSucceeded = false
+                    }
+                }
+            }.onFailure { e ->
+                Logs.w("auto update: update failed for ${profile.displayName()}", e)
+                allSucceeded = false
+                if (DataStore.serviceState.connected &&
+                    subscriptionMessageLooksLikeStaleTransport(e.readableMessage)
+                ) {
+                    transportFailuresWhileVpnConnected++
+                }
+            }
+        }
+        return SubscriptionAutoUpdateOutcome(
+            allSucceeded = allSucceeded,
+            transportFailuresWhileVpnConnected = transportFailuresWhileVpnConnected,
+            shouldRequestUpstreamReset = DataStore.serviceState.connected &&
+                transportFailuresWhileVpnConnected >= 2,
+        )
+    }
 
     suspend fun run(
         nowSeconds: Long = currentEpochSeconds(),
@@ -99,6 +161,20 @@ object SubscriptionAutoUpdateRunner {
             }
         }.map(AutoUpdateCandidate::group)
     }
+}
+
+private fun subscriptionMessageLooksLikeStaleTransport(message: String): Boolean {
+    val m = message.lowercase()
+    if (m.isBlank()) return false
+    return m.contains("eof") ||
+        m.contains("deadline exceeded") ||
+        m.contains("client.timeout exceeded") ||
+        m.contains("broken pipe") ||
+        m.contains("connection reset") ||
+        m.contains("i/o timeout") ||
+        m.contains("connection timed out") ||
+        m.contains("tls handshake timeout") ||
+        m.contains("unexpected eof")
 }
 
 private fun autoUpdateCandidates(

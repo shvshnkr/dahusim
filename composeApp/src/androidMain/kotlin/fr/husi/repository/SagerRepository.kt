@@ -159,17 +159,29 @@ open class SagerRepository(
                 "service-vpn",
                 getString(Res.string.service_vpn),
                 importanceVpn,
-            ),
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            },
             NotificationChannel(
                 "service-proxy",
                 getString(Res.string.service_proxy),
                 NotificationManager.IMPORTANCE_LOW,
-            ),
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            },
             NotificationChannel(
-                "service-subscription",
+                "service-subscription-silent",
                 getString(Res.string.service_subscription),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            },
         )
         notification.createNotificationChannels(channels)
     }

@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -49,6 +50,7 @@ import fr.husi.compose.material3.IconButton
 import fr.husi.compose.material3.NavigationDrawer
 import fr.husi.compose.material3.Text
 import fr.husi.compose.material3.rememberDrawerStateHolder
+import fr.husi.database.DataStore
 import fr.husi.database.SagerDatabase
 import fr.husi.fmt.PluginEntry
 import fr.husi.ktx.restartApplication
@@ -96,6 +98,7 @@ import fr.husi.resources.warning_amber
 import fr.husi.results.LocalResultEventBus
 import fr.husi.results.ResultEventBus
 import fr.husi.ui.configuration.ProfileSelectSheet
+import fr.husi.utils.simpleModeDebugEvent
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -151,13 +154,51 @@ private fun MainScreenContent(
     val scope = rememberCoroutineScope()
 
     val savedStateConfiguration = remember { NavRoutes.savedStateConfiguration }
-    val backStack = rememberNavBackStack(savedStateConfiguration, NavRoutes.Configuration)
+    val startRoute = remember { NavRoutes.Simple }
+    val backStack = rememberNavBackStack(savedStateConfiguration, startRoute)
     val resultBus = remember { ResultEventBus() }
     val drawerStateHolder = rememberDrawerStateHolder()
     val navigator = remember(koinScope, backStack) {
         koinScope.get<Navigator> {
-            parametersOf(backStack)
+            parametersOf(backStack, startRoute)
         }
+    }
+    var navColdStartDone by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (navColdStartDone) return@LaunchedEffect
+        navColdStartDone = true
+        // #region agent log
+        simpleModeDebugEvent(
+            runId = "cold-start",
+            hypothesisId = "H1",
+            location = "MainScreen.kt:navColdStart",
+            message = "backStack before normalize",
+            data = mapOf(
+                "simpleMode" to DataStore.simpleMode.toString(),
+                "size" to backStack.size.toString(),
+                "top" to (backStack.lastOrNull()?.toString() ?: "null"),
+            ),
+        )
+        // #endregion
+        while (backStack.size > 1) {
+            backStack.removeAt(backStack.lastIndex)
+        }
+        if (backStack.lastOrNull() != NavRoutes.Simple) {
+            backStack.clear()
+            backStack.add(NavRoutes.Simple)
+        }
+        // #region agent log
+        simpleModeDebugEvent(
+            runId = "cold-start",
+            hypothesisId = "H2",
+            location = "MainScreen.kt:navColdStart",
+            message = "backStack after normalize",
+            data = mapOf(
+                "size" to backStack.size.toString(),
+                "top" to (backStack.lastOrNull()?.toString() ?: "null"),
+            ),
+        )
+        // #endregion
     }
     val selectedDrawerRoute = navigator.selectedDrawerRoute
     val isAtStartDestination = navigator.isAtStartDestination
@@ -212,7 +253,7 @@ private fun MainScreenContent(
             !isAtStartDestination -> {
                 val popped = navigator.popBackStack()
                 if (!popped) {
-                    navigator.navigateToDrawerRoute(NavRoutes.Configuration)
+                    navigator.navigateToDrawerRoute(startRoute)
                 }
             }
 

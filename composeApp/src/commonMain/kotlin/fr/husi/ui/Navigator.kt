@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.NavKey
 
 class Navigator(
     private val backStack: MutableList<NavKey>,
+    private val startDestination: NavRoutes,
 ) {
     val currentRoute: NavRoutes?
         get() = backStack.lastOrNull() as? NavRoutes
@@ -31,7 +32,7 @@ class Navigator(
     }
 
     val isAtStartDestination: Boolean
-        get() = currentRoute == NavRoutes.Configuration
+        get() = currentRoute == startDestination
 
     fun popBackStack(): Boolean {
         if (backStack.size <= 1) {

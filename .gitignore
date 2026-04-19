@@ -9,6 +9,9 @@ build/
 .externalNativeBuild
 .cxx
 local.properties
+release.keystore
+*.jks
+Thumbs.db
 /composeApp/libs/
 /service_account_credentials.json
 jniLibs/

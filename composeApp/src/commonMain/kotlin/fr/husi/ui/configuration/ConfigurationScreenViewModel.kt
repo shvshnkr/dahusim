@@ -227,7 +227,7 @@ class ConfigurationScreenViewModel : ViewModel() {
                         }
                     }
             } finally {
-                saveResultsAndFinish(results)
+                saveResultsAndFinish(results, group)
             }
         }
     }
@@ -240,7 +240,7 @@ class ConfigurationScreenViewModel : ViewModel() {
         }
     }
 
-    private fun saveResultsAndFinish(results: List<ProfileTestResult>) {
+    private fun saveResultsAndFinish(results: List<ProfileTestResult>, groupId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             val displayedErrors = testErrorMessages.toMap()
             results.forEach {
@@ -283,11 +283,34 @@ class ConfigurationScreenViewModel : ViewModel() {
                     Logs.e(e)
                 }
             }
+            sortGroupByLatencyAscending(groupId)
 
             onDefaultDispatcher {
                 _uiState.update { state -> state.copy(testState = null) }
             }
             testErrorMessages.clear()
+        }
+    }
+
+    private suspend fun sortGroupByLatencyAscending(groupId: Long) {
+        val profiles = SagerDatabase.proxyDao.getByGroup(groupId).first()
+        if (profiles.isEmpty()) return
+        val sorted = profiles.sortedWith(
+            compareBy<ProxyEntity> { if (it.status == ProxyEntity.STATUS_AVAILABLE) 0 else 1 }
+                .thenBy { if (it.ping > 0) it.ping else Int.MAX_VALUE }
+                .thenBy { it.userOrder },
+        )
+        val toUpdate = sorted.mapIndexedNotNull { index, profile ->
+            val order = index.toLong()
+            if (profile.userOrder == order) {
+                null
+            } else {
+                profile.userOrder = order
+                profile
+            }
+        }
+        if (toUpdate.isNotEmpty()) {
+            SagerDatabase.proxyDao.updateProxy(toUpdate)
         }
     }
 

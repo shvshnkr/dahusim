@@ -23,6 +23,8 @@ import fr.husi.libcore.Libcore
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.Res
 import fr.husi.resources.no_proxies_found
+import fr.husi.utils.simpleModeDebugEvent
+import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -47,6 +49,24 @@ object RawUpdater : GroupUpdater() {
 
             proxies = contentText?.let { parseRaw(contentText) }
                 ?: errNotFound()
+            // #region agent log
+            simpleModeLog(
+                "SimpleMode",
+                "H16 raw_parse_content group=${proxyGroup.displayName()} parsed=${proxies.size} " +
+                    "source=content",
+            )
+            simpleModeDebugEvent(
+                runId = "sub-update",
+                hypothesisId = "SUB2-PARSE",
+                location = "RawUpdater.doUpdate",
+                message = "Parsed content subscription",
+                data = mapOf(
+                    "group" to proxyGroup.displayName(),
+                    "source" to "content",
+                    "parsed" to proxies.size.toString(),
+                ),
+            )
+            // #endregion
         } else {
 
             val response = Libcore.newHttpClient().apply {
@@ -62,6 +82,25 @@ object RawUpdater : GroupUpdater() {
                 setUserAgent(generateUserAgent(subscription.customUserAgent))
             }.execute()
             proxies = parseRaw(response.contentString) ?: errNotFound()
+            // #region agent log
+            simpleModeLog(
+                "SimpleMode",
+                "H16 raw_parse_http group=${proxyGroup.displayName()} parsed=${proxies.size} " +
+                    "bytes=${response.contentString.length} link=${subscription.link}",
+            )
+            simpleModeDebugEvent(
+                runId = "sub-update",
+                hypothesisId = "SUB2-PARSE",
+                location = "RawUpdater.doUpdate",
+                message = "Parsed HTTP subscription",
+                data = mapOf(
+                    "group" to proxyGroup.displayName(),
+                    "parsed" to proxies.size.toString(),
+                    "bytes" to response.contentString.length.toString(),
+                    "link" to subscription.link,
+                ),
+            )
+            // #endregion
 
             // https://github.com/crossutility/Quantumult/blob/master/extra-subscription-feature.md
             // Subscription-Userinfo: upload=2375927198; download=12983696043; total=1099511627776; expire=1862111613

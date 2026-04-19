@@ -15,6 +15,7 @@ sealed class NavRoutes : NavKey {
                 serializersModule = SerializersModule {
                     polymorphic(NavKey::class) {
                         subclass(Configuration::class, Configuration.serializer())
+                        subclass(Simple::class, Simple.serializer())
                         subclass(Groups::class, Groups.serializer())
                         subclass(Route::class, Route.serializer())
                         subclass(Settings::class, Settings.serializer())
@@ -45,6 +46,9 @@ sealed class NavRoutes : NavKey {
 
     @Serializable
     data object Configuration : NavRoutes()
+
+    @Serializable
+    data object Simple : NavRoutes()
 
     @Serializable
     data object Groups : NavRoutes()

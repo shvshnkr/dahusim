@@ -8,15 +8,7 @@ setupApp()
 
 android {
     defaultConfig {
-        splits.abi {
-            reset()
-            include(
-                "arm64-v8a",
-                "armeabi-v7a",
-                "x86_64",
-                "x86",
-            )
-        }
+        // ABI splits задаются в buildSrc (setupApp): при задаче *Arm64* — только arm64-v8a.
         ndkVersion = "29.0.14206865"
     }
     dependenciesInfo {

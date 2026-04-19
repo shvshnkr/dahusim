@@ -22,6 +22,8 @@ import fr.husi.repository.resolveRepository
 import fr.husi.resources.Res
 import fr.husi.resources.force_resolve_error
 import fr.husi.resources.update_subscription_warning
+import fr.husi.utils.simpleModeDebugEvent
+import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -345,16 +347,65 @@ abstract class GroupUpdater {
 
                 val warnings = mutableListOf<GroupUpdateWarning>()
                 return try {
-                    when (subscription.type) {
+                    val updateResult = when (subscription.type) {
                         SubscriptionType.RAW -> RawUpdater
                         SubscriptionType.OOCv1 -> OpenOnlineConfigUpdater
                         SubscriptionType.SIP008 -> SIP008Updater
                         else -> throw IllegalArgumentException()
                     }.doUpdate(proxyGroup, subscription, byUser, warnings)
+                    // #region agent log
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H16 group_update_success group=${proxyGroup.displayName()} link=${subscription.link} " +
+                            "changed=${updateResult.diff.changed} added=${updateResult.diff.added.size} " +
+                            "updated=${updateResult.diff.updated.size} deleted=${updateResult.diff.deleted.size} " +
+                            "duplicate=${updateResult.diff.duplicate.size}",
+                    )
+                    simpleModeDebugEvent(
+                        runId = "sub-update",
+                        hypothesisId = "SUB2-COUNT",
+                        location = "GroupUpdater.executeUpdate",
+                        message = "Group update completed",
+                        data = mapOf(
+                            "group" to proxyGroup.displayName(),
+                            "link" to subscription.link,
+                            "changed" to updateResult.diff.changed.toString(),
+                            "added" to updateResult.diff.added.size.toString(),
+                            "updated" to updateResult.diff.updated.size.toString(),
+                            "deleted" to updateResult.diff.deleted.size.toString(),
+                            "duplicate" to updateResult.diff.duplicate.size.toString(),
+                        ),
+                    )
+                    // #endregion
+                    updateResult
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
                     Logs.w(e)
+                    // #region agent log
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H16 group_update_failure group=${proxyGroup.displayName()} link=${subscription.link} " +
+                            "error=${e.readableMessage}",
+                    )
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H18 group_update_failure_ctx connected=${DataStore.serviceState.connected} " +
+                            "started=${DataStore.serviceState.started} proxyApps=${DataStore.proxyApps} " +
+                            "serviceMode=${DataStore.serviceMode}",
+                    )
+                    simpleModeDebugEvent(
+                        runId = "sub-update",
+                        hypothesisId = "SUB2-COUNT",
+                        location = "GroupUpdater.executeUpdate",
+                        message = "Group update failed",
+                        data = mapOf(
+                            "group" to proxyGroup.displayName(),
+                            "link" to subscription.link,
+                            "error" to e.readableMessage,
+                        ),
+                    )
+                    // #endregion
                     GroupUpdateResult.Failure(
                         group = proxyGroup,
                         message = e.readableMessage,

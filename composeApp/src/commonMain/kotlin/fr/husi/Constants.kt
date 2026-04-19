@@ -125,6 +125,14 @@ object Key {
     const val PROFILE_CURRENT = "profileCurrent"
 
     const val RULES_FIRST_CREATE = "rulesFirstCreate"
+    const val SIMPLE_MODE = "simpleMode"
+    const val DEFAULT_SUBSCRIPTIONS_BOOTSTRAPPED = "defaultSubscriptionsBootstrapped"
+    const val DEFAULT_PER_APP_BOOTSTRAPPED = "defaultPerAppBootstrapped"
+    const val AUTO_SELECT_FALLBACK_QUEUE = "autoSelectFallbackQueue"
+    const val AUTO_SELECT_FALLBACK_INDEX = "autoSelectFallbackIndex"
+    const val AUTO_SELECT_LAST_KNOWN_GOOD = "autoSelectLastKnownGood"
+    const val AUTO_CONNECT_PAUSED_UNTIL_GOOGLE = "autoConnectPausedUntilGoogle"
+    const val SIMPLE_MODE_ACTIVITY = "simpleModeActivity"
 
 }
 

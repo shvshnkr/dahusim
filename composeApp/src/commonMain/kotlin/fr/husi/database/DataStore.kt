@@ -239,5 +239,13 @@ object DataStore {
     var customPluginPrefix by configurationStore.string(Key.CUSTOM_PLUGIN_PREFIX)
 
     var rulesFirstCreate by configurationStore.boolean(Key.RULES_FIRST_CREATE)
+    var simpleMode by configurationStore.boolean(Key.SIMPLE_MODE) { true }
+    var defaultSubscriptionsBootstrapped by configurationStore.boolean(Key.DEFAULT_SUBSCRIPTIONS_BOOTSTRAPPED) { false }
+    var defaultPerAppBootstrapped by configurationStore.boolean(Key.DEFAULT_PER_APP_BOOTSTRAPPED) { false }
+    var autoSelectFallbackQueue by configurationStore.string(Key.AUTO_SELECT_FALLBACK_QUEUE) { "" }
+    var autoSelectFallbackIndex by configurationStore.int(Key.AUTO_SELECT_FALLBACK_INDEX) { 0 }
+    var autoSelectLastKnownGood by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD) { 0L }
+    var autoConnectPausedUntilGoogle by configurationStore.boolean(Key.AUTO_CONNECT_PAUSED_UNTIL_GOOGLE) { false }
+    var simpleModeActivity by configurationStore.string(Key.SIMPLE_MODE_ACTIVITY) { "" }
 
 }

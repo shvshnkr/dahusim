@@ -130,6 +130,7 @@ object AppScanner {
             "ru.mamba",
             // Messengers / media popular in RU
             "org.telegram.messenger",
+            "org.telegram.messenger.web",
             "ua.itaysonlab.messenger",
             "com.vk.im",
             "com.icq",

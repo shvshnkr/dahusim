@@ -20,6 +20,7 @@ import fr.husi.aidl.IServiceControlStub
 import fr.husi.aidl.IServiceObserver
 import fr.husi.aidl.SpeedDisplayData
 import fr.husi.bg.proto.ProxyInstance
+import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
 import fr.husi.database.ProxyEntity
 import fr.husi.database.SagerDatabase
@@ -31,9 +32,12 @@ import fr.husi.ktx.readableMessage
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.ktx.runOnMainDispatcher
 import fr.husi.ktx.showToast
+import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
+import fr.husi.utils.simpleModeDebugEvent
+import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -344,6 +348,7 @@ class BaseService {
 
                 // change the state
                 data.changeState(ServiceState.Stopped, msg)
+                DataStore.simpleModeActivity = ""
                 if (!msg.isNullOrBlank()) {
                     data.binder.notifyAlert(AlertType.COMMON, msg)
                 }
@@ -384,7 +389,19 @@ class BaseService {
             ServiceRegistry.baseService = this
 
             val data = data
-            if (data.state != ServiceState.Stopped) return Service.START_NOT_STICKY
+            if (data.state != ServiceState.Stopped) {
+                // #region agent log
+                simpleModeDebugEvent(
+                    runId = "run1",
+                    hypothesisId = "H3",
+                    location = "BaseService.kt:onStartCommand",
+                    message = "start command ignored because service not stopped",
+                    data = mapOf("state" to data.state.name),
+                )
+                // #endregion
+                simpleModeLog("SimpleMode", "H3 start_ignored state=${data.state.name}")
+                return Service.START_NOT_STICKY
+            }
             data.notification = createNotifier("")
             val profile = runBlocking { SagerDatabase.proxyDao.getById(DataStore.selectedProxy) }
             this as Context
@@ -425,6 +442,60 @@ class BaseService {
             data.changeState(ServiceState.Connecting)
             data.connectingJob = runOnDefaultDispatcher {
                 try {
+                    val reachability = NetworkReachabilityProbe.probe()
+                    DataStore.simpleModeActivity = "Preparing network checks..."
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H7 reachability google=${reachability.googleReachable} dzen=${reachability.dzenReachable} whitelistSource=${reachability.whitelistSourceReachable} paused=${DataStore.autoConnectPausedUntilGoogle}",
+                    )
+                    if (DataStore.autoConnectPausedUntilGoogle && !reachability.googleReachable) {
+                        stopRunner(
+                            false,
+                            resolveRepository().getString(Res.string.simple_mode_wait_for_google),
+                        )
+                        return@runOnDefaultDispatcher
+                    }
+                    if (DataStore.autoConnectPausedUntilGoogle && reachability.googleReachable) {
+                        DataStore.autoConnectPausedUntilGoogle = false
+                        simpleModeLog("SimpleMode", "H8 auto_connect_resumed_google_reachable")
+                    }
+                    if (!reachability.hasInternet) {
+                        DataStore.autoConnectPausedUntilGoogle = true
+                        stopRunner(
+                            false,
+                            resolveRepository().getString(Res.string.simple_mode_no_internet_pause),
+                        )
+                        return@runOnDefaultDispatcher
+                    }
+                    if (reachability.whitelistOnly) {
+                        data.binder.notifyAlert(
+                            AlertType.COMMON,
+                            resolveRepository().getString(Res.string.simple_mode_whitelist_warning),
+                        )
+                    }
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H9 connect_profile id=${profile.id} group=${profile.groupId} status=${profile.status} ping=${profile.ping} fallbackIndex=${DataStore.autoSelectFallbackIndex}",
+                    )
+                    DataStore.simpleModeActivity = "Connecting to server..."
+                    val bean = profile.requireBean()
+                    // #region agent log
+                    simpleModeDebugEvent(
+                        runId = "run2",
+                        hypothesisId = "H2",
+                        location = "BaseService.kt:connect_profile",
+                        message = "selected profile metadata",
+                        data = mapOf(
+                            "profileId" to profile.id.toString(),
+                            "type" to profile.type.toString(),
+                            "server" to bean.serverAddress,
+                            "port" to bean.serverPort.toString(),
+                            "status" to profile.status.toString(),
+                            "ping" to profile.ping.toString(),
+                        ),
+                    )
+                    // #endregion
+
                     data.notification.onTitle(profile.displayNameForService())
 
                     Executable.killAll()    // clean up old processes
@@ -434,12 +505,121 @@ class BaseService {
 
                     startProcesses()
                     data.changeState(ServiceState.Connected)
+                    simpleModeLog("SimpleMode", "H9 connected_profile id=${profile.id}")
+                    DataStore.simpleModeActivity = "Verifying internet access..."
+                    var postConnectHealthy = true
+                    runCatching {
+                        val client = Libcore.newClient(null)
+                        val delay = try {
+                            client.urlTest("", DataStore.connectionTestURL, DataStore.connectionTestTimeout)
+                        } finally {
+                            runCatching { client.close() }
+                        }
+                        // #region agent log
+                        simpleModeDebugEvent(
+                            runId = "run2",
+                            hypothesisId = "H3",
+                            location = "BaseService.kt:post_connect_url_test",
+                            message = "post-connect url test success",
+                            data = mapOf(
+                                "profileId" to profile.id.toString(),
+                                "delayMs" to delay.toString(),
+                                "url" to DataStore.connectionTestURL,
+                            ),
+                        )
+                        // #endregion
+                        simpleModeLog("SimpleMode", "H3 post_connect_url_test_success profileId=${profile.id} delayMs=$delay")
+                        DataStore.simpleModeActivity = ""
+                    }.onFailure { err ->
+                        // #region agent log
+                        simpleModeDebugEvent(
+                            runId = "run2",
+                            hypothesisId = "H3",
+                            location = "BaseService.kt:post_connect_url_test",
+                            message = "post-connect url test failed",
+                            data = mapOf(
+                                "profileId" to profile.id.toString(),
+                                "errorClass" to err.javaClass.name,
+                                "error" to err.readableMessage,
+                                "url" to DataStore.connectionTestURL,
+                            ),
+                        )
+                        // #endregion
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H3 post_connect_url_test_failed profileId=${profile.id} class=${err.javaClass.simpleName} error=${err.readableMessage}",
+                        )
+                        DataStore.simpleModeActivity = "Server unstable, switching..."
+                        postConnectHealthy = false
+                    }
+                    if (!postConnectHealthy) {
+                        val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
+                        if (fallback != null) {
+                            simpleModeLog(
+                                "SimpleMode",
+                                "H10 post_connect_unhealthy_switch profileId=${profile.id} nextId=$fallback",
+                            )
+                            // #region agent log
+                            simpleModeDebugEvent(
+                                runId = "run2",
+                                hypothesisId = "H4",
+                                location = "BaseService.kt:post_connect_fallback",
+                                message = "post-connect unhealthy, switching fallback",
+                                data = mapOf(
+                                    "profileId" to profile.id.toString(),
+                                    "nextId" to fallback.toString(),
+                                ),
+                            )
+                            // #endregion
+                            stopRunner(restart = true)
+                        } else {
+                            DataStore.autoConnectPausedUntilGoogle = true
+                            simpleModeLog(
+                                "SimpleMode",
+                                "H10 post_connect_unhealthy_exhausted profileId=${profile.id}",
+                            )
+                            DataStore.simpleModeActivity = ""
+                            // Keep this silent in simple mode: user already sees disconnected state.
+                            stopRunner(false)
+                        }
+                        return@runOnDefaultDispatcher
+                    }
+                    AutoServerSelector.markConnected(profile.id)
+                    simpleModeLog("SimpleMode", "H10 post_connect_healthy_mark_connected profileId=${profile.id}")
 
                     lateInit()
                 } catch (_: CancellationException) { // if the job was cancelled, it is canceller's responsibility to call stopRunner
                 } catch (e: UnknownHostException) {
                     Logs.e(e)
-                    stopRunner(false, resolveRepository().getString(Res.string.invalid_server))
+                    DataStore.simpleModeActivity = "Server unreachable, trying next..."
+                    // #region agent log
+                    simpleModeDebugEvent(
+                        runId = "run1",
+                        hypothesisId = "H1",
+                        location = "BaseService.kt:UnknownHostException",
+                        message = "connect failed, trying fallback",
+                        data = mapOf(
+                            "profileId" to profile.id.toString(),
+                            "error" to (e.message ?: "unknown_host"),
+                        ),
+                    )
+                    // #endregion
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H1 unknown_host profileId=${profile.id} error=${e.message ?: "unknown_host"}",
+                    )
+                    val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
+                    if (fallback != null) {
+                        stopRunner(restart = true)
+                    } else {
+                        DataStore.autoConnectPausedUntilGoogle = true
+                        simpleModeLog("SimpleMode", "H8 pause_until_google_enabled reason=unknown_host_exhausted")
+                        stopRunner(
+                            false,
+                            resolveRepository().getString(Res.string.invalid_server) + "\n" +
+                                resolveRepository().getString(Res.string.simple_mode_wait_for_google),
+                        )
+                    }
                 } catch (e: PluginNotFoundException) {
                     onMainDispatcher {
                         showToast(e.readableMessage)
@@ -448,17 +628,46 @@ class BaseService {
                     stopRunner(false, e.readableMessage)
                     data.binder.notifyAlert(AlertType.MISSING_PLUGIN, e.plugin)
                 } catch (exc: Throwable) {
+                    DataStore.simpleModeActivity = "Connection error, trying next..."
                     if (exc.javaClass.name.endsWith("proxyerror")) {
                         // error from golang
                         Logs.e(exc.readableMessage)
                     } else {
                         Logs.e(exc)
                     }
-                    stopRunner(
-                        false,
-                        "${resolveRepository().getString(Res.string.service_failed)}: ${exc.readableMessage}",
+                    // #region agent log
+                    simpleModeDebugEvent(
+                        runId = "run1",
+                        hypothesisId = "H5",
+                        location = "BaseService.kt:Throwable",
+                        message = "connect failed, throwable branch",
+                        data = mapOf(
+                            "profileId" to profile.id.toString(),
+                            "errorClass" to exc.javaClass.name,
+                            "error" to exc.readableMessage,
+                        ),
                     )
+                    // #endregion
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H5 throwable profileId=${profile.id} class=${exc.javaClass.simpleName} error=${exc.readableMessage}",
+                    )
+                    val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
+                    if (fallback != null) {
+                        stopRunner(restart = true)
+                    } else {
+                        DataStore.autoConnectPausedUntilGoogle = true
+                        simpleModeLog("SimpleMode", "H8 pause_until_google_enabled reason=throwable_exhausted")
+                        stopRunner(
+                            false,
+                            "${resolveRepository().getString(Res.string.service_failed)}: ${exc.readableMessage}\n" +
+                                resolveRepository().getString(Res.string.simple_mode_wait_for_google),
+                        )
+                    }
                 } finally {
+                    if (data.state == ServiceState.Stopped) {
+                        DataStore.simpleModeActivity = ""
+                    }
                     data.connectingJob = null
                 }
             }

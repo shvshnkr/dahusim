@@ -727,4 +727,19 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="package_name_regex">Регулярное выражение имени пакета</string>
     <string name="route_invert">Инвертировать совпадение</string>
     <string name="latency">Задержка</string>
+    <string name="simple_mode_description">daHusiM - обход ограничений Telegram, Whatsapp, Youtube с помощью открытых серверов энтузиастов.</string>
+    <string name="simple_mode_status">Статус: %1$s</string>
+    <string name="simple_mode_stopped">Остановлено</string>
+    <string name="simple_mode_connecting">Подключение…</string>
+    <string name="simple_mode_connected">Подключено</string>
+    <string name="simple_mode_connect">Подключить</string>
+    <string name="simple_mode_disconnect">Отключить</string>
+    <string name="simple_mode_logs">Отправить логи</string>
+    <string name="simple_mode_full_ui">Открыть полный интерфейс</string>
+    <string name="simple_mode_switch">Переключиться в простой режим</string>
+    <string name="simple_mode_no_profile">Нет доступного профиля. Дождитесь обновления подписок.</string>
+    <string name="simple_mode_permission_pending">Ожидание разрешения Android на VPN…</string>
+    <string name="simple_mode_whitelist_warning">Похоже, эта сеть работает в режиме белых списков (Google недоступен, Dzen доступен). Стабильная работа VPN в таком режиме не гарантируется; рекомендуются платные VPN/серверы. Husi всё равно попробует подключиться к доступным серверам.</string>
+    <string name="simple_mode_wait_for_google">Проверки автоподключения поставлены на паузу для экономии батареи. Они возобновятся, когда Google снова станет доступен.</string>
+    <string name="simple_mode_no_internet_pause">Интернет недоступен. Проверки автоподключения поставлены на паузу до восстановления связи.</string>
 </resources>

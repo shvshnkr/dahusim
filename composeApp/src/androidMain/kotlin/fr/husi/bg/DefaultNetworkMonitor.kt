@@ -1,8 +1,11 @@
 package fr.husi.bg
 
 import android.net.Network
+import fr.husi.database.DataStore
 import fr.husi.libcore.InterfaceUpdateListener
 import fr.husi.repository.resolveAndroidRepository
+import fr.husi.utils.simpleModeDebugEvent
+import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.NetworkInterface
@@ -10,6 +13,9 @@ import java.net.NetworkInterface
 object DefaultNetworkMonitor {
     var defaultNetwork: Network? = null
     private var listener: InterfaceUpdateListener? = null
+    private var lastInterfaceName: String? = null
+    private var lastInterfaceIndex: Int = -2
+    private var lastConnectedState: Boolean = false
     private val access = Mutex()
     private var refCount = 0
 
@@ -59,6 +65,23 @@ object DefaultNetworkMonitor {
         if (newNetwork != null) {
             val interfaceName =
                 resolveAndroidRepository().connectivity.getLinkProperties(newNetwork)?.interfaceName
+            // #region agent log
+            simpleModeLog(
+                "SimpleMode",
+                "H15 net_event event=available iface=${interfaceName ?: "unknown"} " +
+                    "connected=${DataStore.serviceState.connected}",
+            )
+            simpleModeDebugEvent(
+                runId = "network-switch",
+                hypothesisId = "NET-CALLBACK",
+                location = "DefaultNetworkMonitor.checkDefaultInterfaceUpdate",
+                message = "Default network available",
+                data = mapOf(
+                    "iface" to (interfaceName ?: "unknown"),
+                    "connected" to DataStore.serviceState.connected.toString(),
+                ),
+            )
+            // #endregion
             for (times in 0 until 10) {
                 var interfaceIndex: Int
                 try {
@@ -67,9 +90,55 @@ object DefaultNetworkMonitor {
                     Thread.sleep(100)
                     continue
                 }
+                if (interfaceName != lastInterfaceName || interfaceIndex != lastInterfaceIndex) {
+                    // #region agent log
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H15 net_iface_changed old=${lastInterfaceName ?: "none"}:$lastInterfaceIndex " +
+                            "new=${interfaceName ?: "unknown"}:$interfaceIndex connected=${DataStore.serviceState.connected}",
+                    )
+                    simpleModeDebugEvent(
+                        runId = "network-switch",
+                        hypothesisId = "NET-IFACE-CHANGE",
+                        location = "DefaultNetworkMonitor.checkDefaultInterfaceUpdate",
+                        message = "Interface changed",
+                        data = mapOf(
+                            "oldName" to (lastInterfaceName ?: "none"),
+                            "oldIndex" to lastInterfaceIndex.toString(),
+                            "newName" to (interfaceName ?: "unknown"),
+                            "newIndex" to interfaceIndex.toString(),
+                            "connected" to DataStore.serviceState.connected.toString(),
+                        ),
+                    )
+                    // #endregion
+                }
+                lastInterfaceName = interfaceName
+                lastInterfaceIndex = interfaceIndex
+                lastConnectedState = DataStore.serviceState.connected
                 listener.updateDefaultInterface(interfaceName, interfaceIndex)
             }
         } else {
+            // #region agent log
+            simpleModeLog(
+                "SimpleMode",
+                "H15 net_event event=lost connected=${DataStore.serviceState.connected} " +
+                    "lastIface=${lastInterfaceName ?: "none"}:$lastInterfaceIndex",
+            )
+            simpleModeDebugEvent(
+                runId = "network-switch",
+                hypothesisId = "NET-CALLBACK",
+                location = "DefaultNetworkMonitor.checkDefaultInterfaceUpdate",
+                message = "Default network lost",
+                data = mapOf(
+                    "connected" to DataStore.serviceState.connected.toString(),
+                    "lastIface" to (lastInterfaceName ?: "none"),
+                    "lastIndex" to lastInterfaceIndex.toString(),
+                ),
+            )
+            // #endregion
+            lastInterfaceName = null
+            lastInterfaceIndex = -1
+            lastConnectedState = DataStore.serviceState.connected
             listener.updateDefaultInterface("", -1)
         }
     }

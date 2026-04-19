@@ -776,4 +776,19 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="traffic_pattern">Traffic Pattern</string>
     <string name="route_invert">Invert Match</string>
     <string name="latency">Latency</string>
+    <string name="simple_mode_description">daHusiM - bypass Telegram, WhatsApp, and YouTube restrictions using open community-run servers.</string>
+    <string name="simple_mode_status">Status: %1$s</string>
+    <string name="simple_mode_stopped">Stopped</string>
+    <string name="simple_mode_connecting">Connecting…</string>
+    <string name="simple_mode_connected">Connected</string>
+    <string name="simple_mode_connect">Connect</string>
+    <string name="simple_mode_disconnect">Disconnect</string>
+    <string name="simple_mode_logs">Send logs</string>
+    <string name="simple_mode_full_ui">Open full interface</string>
+    <string name="simple_mode_switch">Switch to simple mode</string>
+    <string name="simple_mode_no_profile">No available profile yet. Wait for subscription refresh.</string>
+    <string name="simple_mode_permission_pending">Waiting for Android VPN permission...</string>
+    <string name="simple_mode_whitelist_warning">This network appears to use a whitelist mode (Google is unreachable, Dzen is reachable). Stable VPN operation is not guaranteed; paid VPN/server options are recommended for this mode. Husi will still try available servers.</string>
+    <string name="simple_mode_wait_for_google">Auto-connect checks are paused to save battery. They will resume once Google becomes reachable.</string>
+    <string name="simple_mode_no_internet_pause">No internet access detected. Auto-connect checks are paused until connectivity returns.</string>
 </resources>

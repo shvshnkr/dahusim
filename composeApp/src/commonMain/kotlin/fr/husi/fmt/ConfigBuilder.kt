@@ -256,6 +256,20 @@ fun buildConfig(
     val networkInterfaceStrategy = DataStore.networkInterfaceType
     val networkPreferredInterfaces = DataStore.networkPreferredInterfaces.toList()
     val defaultStrategy = DataStore.networkStrategy.blankAsNull()
+    val androidProxyIncludePackages = if (
+        PlatformInfo.isAndroid &&
+        DataStore.proxyApps &&
+        !DataStore.bypassMode
+    ) {
+        DataStore.packages
+            .asSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .toList()
+    } else {
+        emptyList()
+    }
     lateinit var mainTag: String
 
     val readableNames = mutableSetOf(TAG_DIRECT, TAG_BLOCK)
@@ -316,13 +330,36 @@ fun buildConfig(
                 Inbound_TunOptions().apply {
                     type = SingBoxOptions.TYPE_TUN
                     tag = TAG_TUN
-                    stack = when (DataStore.tunImplementation) {
-                        TunImplementation.GVISOR -> "gvisor"
-                        TunImplementation.SYSTEM -> "system"
-                        else -> "mixed"
+                    stack = if (
+                        PlatformInfo.isAndroid &&
+                        DataStore.tunStrictRoute &&
+                        androidProxyIncludePackages.isNotEmpty()
+                    ) {
+                        "gvisor"
+                    } else {
+                        when (DataStore.tunImplementation) {
+                            TunImplementation.GVISOR -> "gvisor"
+                            TunImplementation.SYSTEM -> "system"
+                            else -> "mixed"
+                        }
                     }
                     mtu = DataStore.mtu
                     applyPlatformConfig()
+                    if (PlatformInfo.isAndroid && DataStore.proxyApps) {
+                        val packageList = DataStore.packages
+                            .asSequence()
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
+                            .distinct()
+                            .toList()
+                        if (packageList.isNotEmpty()) {
+                            if (DataStore.bypassMode) {
+                                exclude_package = packageList.toMutableList()
+                            } else {
+                                include_package = packageList.toMutableList()
+                            }
+                        }
+                    }
                     when (networkStrategy) {
                         SingBoxOptions.STRATEGY_IPV4_ONLY -> {
                             address = mutableListOf(VpnConstants.PRIVATE_VLAN4_CLIENT + "/28")
@@ -701,6 +738,16 @@ fun buildConfig(
         // build outbounds from route item
         extraProxies.forEach { (key, p) ->
             tagMap[key] = buildChain(key, p)
+        }
+
+        if (androidProxyIncludePackages.isNotEmpty()) {
+            route!!.rules!!.add(
+                0,
+                Rule_Default().apply {
+                    package_name = androidProxyIncludePackages.toMutableList()
+                    outbound = mainTag
+                }.asKxsMap(),
+            )
         }
 
         // apply user rules

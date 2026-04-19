@@ -21,11 +21,13 @@ import fr.husi.ui.ProfilePickerController
 import fr.husi.ui.RouteScreen
 import fr.husi.ui.RouteSettingsScreen
 import fr.husi.ui.SettingsScreen
+import fr.husi.database.DataStore
 import fr.husi.ui.configuration.ConfigurationScreen
 import fr.husi.ui.dashboard.ConnectionDetailScreen
 import fr.husi.ui.dashboard.DashboardScreen
 import fr.husi.ui.profile.ConfigEditScreen
 import fr.husi.ui.profile.ProfileEditorScreen
+import fr.husi.ui.simple.SimpleHomeScreen
 import fr.husi.ui.tools.GetCertScreen
 import fr.husi.ui.tools.RuleSetMatchScreen
 import fr.husi.ui.tools.SpeedtestScreen
@@ -41,8 +43,11 @@ import org.koin.dsl.navigation3.navigation
 internal val commonNavigationModule = module {
     scope<MainScreenScope> {
         viewModelOf(::MainViewModel)
-        scoped { (backStack: MutableList<NavKey>) ->
-            Navigator(backStack)
+        scoped { params ->
+            Navigator(
+                backStack = params.get<MutableList<NavKey>>(),
+                startDestination = params.get<NavRoutes>(),
+            )
         }
         scoped { (onDrawerClick: () -> Unit) ->
             DrawerController(onDrawerClick)
@@ -57,6 +62,21 @@ internal val commonNavigationModule = module {
                 mainViewModel = viewModel,
                 onNavigationClick = drawerController::toggle,
                 onOpenProfileEditor = navigator::navigateTo,
+                onSwitchToSimpleMode = {
+                    DataStore.simpleMode = true
+                    navigator.navigateTo(NavRoutes.Simple)
+                },
+            )
+        }
+
+        navigation<NavRoutes.Simple> { _ ->
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            SimpleHomeScreen(
+                mainViewModel = viewModel,
+                onOpenFullMode = {
+                    navigator.navigateTo(NavRoutes.Configuration)
+                },
             )
         }
 
