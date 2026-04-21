@@ -740,16 +740,6 @@ fun buildConfig(
             tagMap[key] = buildChain(key, p)
         }
 
-        if (androidProxyIncludePackages.isNotEmpty()) {
-            route!!.rules!!.add(
-                0,
-                Rule_Default().apply {
-                    package_name = androidProxyIncludePackages.toMutableList()
-                    outbound = mainTag
-                }.asKxsMap(),
-            )
-        }
-
         // apply user rules
         for (rule in extraRules) {
             val (packageNames, processRules) = parseRuleProcessRules(
@@ -1064,6 +1054,16 @@ fun buildConfig(
                     addRule()
                 }
             }
+        }
+
+        // Per-app catch-all after user route rules so RU geosite/geoip direct match first.
+        if (androidProxyIncludePackages.isNotEmpty()) {
+            route!!.rules!!.add(
+                Rule_Default().apply {
+                    package_name = androidProxyIncludePackages.toMutableList()
+                    outbound = mainTag
+                }.asKxsMap(),
+            )
         }
 
         outbounds!!.add(
