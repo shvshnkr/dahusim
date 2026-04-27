@@ -183,11 +183,17 @@ jobs:
           cp -v "$APK" "$OUT"
           echo "asset_path=$OUT" >> "$GITHUB_OUTPUT"
           {
-            echo "## This build"
+            echo "## Pre-release: dahusim $VER"
+            echo
+            echo "**Как скачать:** на этой странице релиза внизу блок **Assets** — берите \`$OUT\` (готовый APK), не клон репозитория."
+            echo
+            echo "В этой ветке в описаниях **«КВН»** используется **вместо** слова «VPN» (шутливая подмена, не гарантия «услуги»). Возможен **автовыбор** публичных/открытых серверов энтузиастов — риск и закон на вас, см. README."
+            echo
+            echo "## Коммит сборки"
             echo
             git log -1 --oneline
             echo
-            echo "## Recent commits"
+            echo "## Недавние коммиты"
             echo
             git log -25 --oneline --no-merges
           } > release_body.md
@@ -196,6 +202,6 @@ jobs:
         with:
           prerelease: true
           tag_name: rolling-${{ github.run_id }}
-          name: "dahusim ${{ steps.rel.outputs.version_name }} (run ${{ github.run_number }})"
+          name: "dahusim ${{ steps.rel.outputs.version_name }} (сборка ${{ github.run_number }})"
           body_path: release_body.md
           files: ${{ steps.rel.outputs.asset_path }}
