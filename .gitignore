@@ -25,6 +25,9 @@ go.work*
 *.swp
 .gradle-home/
 
+# Локальная копия промпта (не в репозитории)
+docs/AUTO_SERVER_SELECTION_PROMPT.md
+
 # Vibe coding
 .claude
 .gemini
