@@ -173,13 +173,12 @@ val composeDesktopVersion = libs.versions.composeMultiplatform.get()
 
 val desktopJarName = desktopTarget.libcoreDesktopJarName
 val desktopJarFile = layout.projectDirectory.file("libs/$desktopJarName").asFile
-val libcoreDesktopJar =
-    files({
-        require(desktopJarFile.isFile) {
-            "Missing desktop libcore jar '${desktopJarFile.path}'. Build it first, e.g. make libcore_desktop DESKTOP_TARGETS=$desktopTarget."
-        }
-        desktopJarFile
-    })
+/** Desktop libcore; optional on classpath so Android-only CI can compile without prebuilt desktop jars. */
+val libcoreDesktopJar = files(desktopJarFile)
+
+val missingDesktopLibcoreMessage =
+    "Missing desktop libcore jar '${desktopJarFile.path}'. Build it first, e.g. make libcore_desktop DESKTOP_TARGETS=$desktopTarget."
+
 val desktopPackageName = metadata.getProperty("PACKAGE_NAME").trim()
 val desktopVersion = metadata.getProperty("VERSION_NAME").trim()
 val desktopTargetFormats = emptySet<TargetFormat>()
@@ -188,6 +187,8 @@ val generateBuildConfig by tasks.registering {
     val outputDir = layout.buildDirectory.dir("generated/buildConfig/kotlin")
     val versionName = metadata.getProperty("VERSION_NAME")
     val versionCode = metadata.getProperty("VERSION_CODE")
+    inputs.property("versionName", versionName)
+    inputs.property("versionCode", versionCode)
     outputs.dir(outputDir)
     doLast {
         val dir = outputDir.get().asFile.resolve("fr/husi")
@@ -248,8 +249,10 @@ kotlin {
         val commonMain by getting {
             kotlin.srcDir(generateBuildConfig)
             dependencies {
-                // This is workaround for IDE to get libcore info
-                compileOnly(libcoreDesktopJar)
+                // IDE / local: classpath hints when the jar exists. Omit when absent so Android CI does not resolve it.
+                if (desktopJarFile.isFile) {
+                    compileOnly(libcoreDesktopJar)
+                }
 
                 implementation(libs.jetbrains.compose.runtime)
                 implementation(libs.jetbrains.compose.foundation)
@@ -350,8 +353,18 @@ kotlin {
                 }
                 implementation(libs.clikt)
                 implementation(libs.kotlinx.coroutines.swing)
-                implementation(libcoreDesktopJar)
+                if (desktopJarFile.isFile) {
+                    implementation(libcoreDesktopJar)
+                }
             }
+        }
+    }
+}
+
+afterEvaluate {
+    listOf("compileKotlinDesktop", "compileDevKotlinDesktop", "compileTestKotlinDesktop").forEach { taskName ->
+        tasks.findByName(taskName)?.doFirst {
+            require(desktopJarFile.isFile) { missingDesktopLibcoreMessage }
         }
     }
 }
