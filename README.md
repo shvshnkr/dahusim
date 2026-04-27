@@ -10,6 +10,18 @@ We have migrated to [codeberg](https://codeberg.org/xchacha20-poly1305/husi)!
 
 Husi is a non-professional and recreational proxy tool integration, aiming at promoting proxy customization.
 
+## Disclaimer (this repository)
+
+**As is.** The software is provided without warranty of any kind, express or implied. The authors and contributors **disclaim all responsibility** for damages, losses, legal issues, or any consequences arising from use or misuse of this build. You use it entirely at your own risk; there is no commitment of fitness for any particular purpose.
+
+**Research and education.** This application is provided **for research and study** of networking and client behaviour, not as a vetted product for operational or compliance-sensitive environments.
+
+**In-app behaviour.** The client may use **automated or semi-automated selection of access points** (e.g. community- or operator-provided “enthusiast” endpoints) where the implementation supports it. You are responsible for the networks and services you use and for complying with local law.
+
+**Vibecoding and AI assist.** A substantial part of this codebase is **vibecoding** — fast, iterative work with an AI pair-programmer (e.g. in Cursor) — in addition to manual edits. It is not a formally specified, audited, or security-certified product unless you perform your own review. Treat outputs as you would unreviewed code.
+
+**Releases (GitHub).** The latest pre-built build from automation is on **[GitHub releases](https://github.com/dahusim/dahusim/releases/latest)** (naming: `dahusim_<version>_play_debug_arm64.apk`). A mirror of upstream Husi is linked above.
+
 ## 🗣️ Alert
 
 In August 2025, Google [announced](https://developer.android.com/developer-verification) that as of September 2026, it will no longer be possible to develop apps for the Android platform without first registering centrally with Google. This registration will involve:

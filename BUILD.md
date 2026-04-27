@@ -2,6 +2,8 @@
 
 Инструкции ниже проверялись **только на Windows 10** с **JDK 21 (Eclipse Adoptium)** и Gradle из проекта. На Linux и macOS команды обычно те же, но пути, кавычки и окружение отличаются — **мы их здесь не проверяли**.
 
+**CI (GitHub):** при пуше, где меняется не только документация, в [`.github/workflows/build.yml`](.github/workflows/build.yml) собирается Play debug APK (arm64) и публикуется pre-release; артефакты смотрите в [Releases](https://github.com/dahusim/dahusim/releases) (см. дисклеймер в [README](README.md)).
+
 ## Как выбирается ABI
 
 В `buildSrc` функция `requireTargetAbi()` смотрит на **ровно одну** задачу из командной строки Gradle. В имени задачи (без учёта регистра) ищутся подстроки **в таком порядке**:
@@ -121,3 +123,17 @@
 ## Версия приложения
 
 `VERSION_NAME` и `VERSION_CODE` задаются в `husi.properties` в корне репозитория.
+
+## Откат после правок RU optimization (git)
+
+Перед доработками по замечаниям из upstream был создан тег:
+
+`checkpoint/before-ru-refinements`
+
+Откат всего дерева к тому коммиту:
+
+```powershell
+git reset --hard checkpoint/before-ru-refinements
+```
+
+Просмотр коммита тега: `git show checkpoint/before-ru-refinements`.

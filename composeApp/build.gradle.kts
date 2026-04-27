@@ -179,6 +179,9 @@ val libcoreDesktopJar = files(desktopJarFile)
 val missingDesktopLibcoreMessage =
     "Missing desktop libcore jar '${desktopJarFile.path}'. Build it first, e.g. make libcore_desktop DESKTOP_TARGETS=$desktopTarget."
 
+val skipDesktopLibPreCheck: Boolean =
+    (project.findProperty("skipDesktopLibPreCheck")?.toString() == "true")
+
 val desktopPackageName = metadata.getProperty("PACKAGE_NAME").trim()
 val desktopVersion = metadata.getProperty("VERSION_NAME").trim()
 val desktopTargetFormats = emptySet<TargetFormat>()
@@ -362,6 +365,9 @@ kotlin {
 }
 
 afterEvaluate {
+    if (skipDesktopLibPreCheck) {
+        return@afterEvaluate
+    }
     listOf("compileKotlinDesktop", "compileDevKotlinDesktop", "compileTestKotlinDesktop").forEach { taskName ->
         tasks.findByName(taskName)?.doFirst {
             require(desktopJarFile.isFile) { missingDesktopLibcoreMessage }
