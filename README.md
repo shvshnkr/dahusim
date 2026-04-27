@@ -12,7 +12,7 @@ Husi is a non-professional and recreational proxy tool integration, aiming at pr
 
 ## О этой сборке (прежде всего на русском)
 
-**Где взять готовый APK (GitHub).** Собранные установщики публикуются **на GitHub** в виде вложений (assets) к pre-release. **Скачать последнюю версию** = открыть страницу **последнего релиза** и взять файл(ы) из блока *Assets* (вложения), не из исходников. Прямая ссылка на «последний релиз»: **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)**. Имя файла обычно вида `dahusim_<версия>_play_debug_arm64.apk`.
+**Где взять готовый APK (GitHub).** Собранные установщики публикуются **на GitHub** в виде вложений (assets) к pre-release. **Скачать последнюю версию** = открыть страницу **последнего релиза** и взять файлы из блока *Assets* (вложения), не из исходников. Прямая ссылка: **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)**. В релизе **четыре** debug-APK по ABI: `dahusim_<версия>_play_debug_arm64_v8a.apk`, `..._armeabi_v7a.apk`, `..._x86_64.apk`, `..._x86.apk` (суффикс в имени — целевая архитектура; на устройстве обычно нужен **arm64**).
 
 **КВН вместо «VPN».** В текстах этого форка мы пишем **«КВН»** (шутливое, договорённое обозначение **вместо** привычного **«VPN»** — отсылка к известной аббревиатуре, **не** к шоу в первую очередь) так, чтобы **не** путать сборку с рекламой «официального VPN» и не обещать «сервис как в рекламе». Это **клиент** для **исследовательского и любительского** сценария, без гарантий, что это «именно VPN» в юридическом/маркетинговом смысле.
 
@@ -22,7 +22,7 @@ Husi is a non-professional and recreational proxy tool integration, aiming at pr
 
 **Vibecode.** Значимая часть кода сделана в стиле **vibecoding** — быстрые итерации с нейроассистом (например Cursor) плюс ручные правки. Это **не** формальная ревизия и не аудит безопасности; исходники смотрите сами, как в неоценённом pull request.
 
-*English (short).*: Binary builds live on [GitHub Releases (latest)](https://github.com/shvshnkr/dahusim/releases/latest) as **release assets**; no warranty; “KVN” here is a tongue-in-cheek stand-in for “VPN”; public/community endpoints and auto-pick are at your own risk.
+*English (short).*: [GitHub Releases (latest)](https://github.com/shvshnkr/dahusim/releases/latest) ships **four** per-ABI debug APKs as **assets**; no warranty; “KVN” is a tongue-in-cheek stand-in for “VPN”; public/community endpoints and auto-pick are at your own risk.
 
 ## Disclaimer (this repository)
 
@@ -34,7 +34,7 @@ Husi is a non-professional and recreational proxy tool integration, aiming at pr
 
 **Vibecoding and AI assist.** A substantial part of this codebase is **vibecoding** — fast, iterative work with an AI pair-programmer (e.g. in Cursor) — in addition to manual edits. It is not a formally specified, audited, or security-certified product unless you perform your own review. Treat outputs as you would unreviewed code.
 
-**Releases (GitHub).** Pre-built APKs: **[latest release (assets on the same page)](https://github.com/shvshnkr/dahusim/releases/latest)** — file names like `dahusim_<version>_play_debug_arm64.apk`. A mirror of upstream Husi is linked at the top.
+**Releases (GitHub).** Pre-built APKs (four ABI splits): **[latest release — Assets](https://github.com/shvshnkr/dahusim/releases/latest)** — names like `dahusim_<version>_play_debug_<abi>.apk`. A mirror of upstream Husi is linked at the top.
 
 ## 🗣️ Alert
 

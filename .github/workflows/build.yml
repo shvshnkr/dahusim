@@ -95,8 +95,8 @@ jobs:
           path: composeApp/libs/libcore.aar
           if-no-files-found: error
 
-  android-play-arm64:
-    name: Play debug APK (arm64-v8a)
+  android-play-all-abi:
+    name: Play debug APK (все ABI)
     runs-on: ubuntu-latest
     needs: [changes, libcore]
     if: needs.changes.outputs.code == 'true'
@@ -132,29 +132,31 @@ jobs:
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
           echo "sdk.dir=${SDK}" > local.properties
 
-      - name: Assemble Play debug (arm64-v8a)
+      - name: Assemble Play debug (arm64-v8a, armeabi-v7a, x86_64, x86)
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
         run: |
-          ./gradlew :composeApp:exportLibraryDefinitions
-          ./gradlew assemblePlayDebugArm64 --no-daemon
+          # Две задачи в одном вызове → requireTargetAbi() не режет ABI (см. buildSrc).
+          ./gradlew :composeApp:exportLibraryDefinitions assemblePlayDebugAllAbi --no-daemon
 
       - name: Collect APK
         run: |
           mkdir -p dist
           find androidApp/build/outputs/apk -name '*.apk' -print -exec cp -v {} dist/ \;
           ls -la dist
+          # Ожидаем 4 split-APK (arm64-v8a, armeabi-v7a, x86_64, x86)
+          test "$(find dist -name '*.apk' | wc -l)" -eq 4
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dahusim-play-arm64-debug-apk
-          path: dist/*.apk
+          name: dahusim-play-debug-all-abi-apks
+          path: dist
           if-no-files-found: error
 
   rolling-release:
     name: GitHub pre-release (APK)
-    needs: [android-play-arm64]
+    needs: [android-play-all-abi]
     runs-on: ubuntu-latest
     if: success()
     permissions:
@@ -166,10 +168,10 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: dahusim-play-arm64-debug-apk
+          name: dahusim-play-debug-all-abi-apks
           path: dist
 
-      - name: Version and release notes
+      - name: Version, rename APK by ABI, release notes
         id: rel
         run: |
           set -e
@@ -177,15 +179,25 @@ jobs:
           SAFE_VER=$(printf '%s' "$VER" | tr ' /+' '---' | sed 's/[^0-9A-Za-z._-]/_/g')
           echo "version_name=$VER" >> "$GITHUB_OUTPUT"
           echo "safe_version=$SAFE_VER" >> "$GITHUB_OUTPUT"
-          APK=$(find dist -name '*.apk' -print -quit)
-          [ -n "$APK" ]
-          OUT="dahusim_${SAFE_VER}_play_debug_arm64.apk"
-          cp -v "$APK" "$OUT"
-          echo "asset_path=$OUT" >> "$GITHUB_OUTPUT"
+          mkdir -p release_assets
+          count=0
+          for apk in dist/*.apk; do
+            [ -f "$apk" ] || continue
+            bn=$(basename "$apk")
+            abi=$(echo "$bn" | grep -oE 'arm64-v8a|armeabi-v7a|x86_64|x86' | head -1)
+            if [ -z "$abi" ]; then
+              abi="unknown"
+            fi
+            abi_safe=$(echo "$abi" | tr '-' '_')
+            dest="release_assets/dahusim_${SAFE_VER}_play_debug_${abi_safe}.apk"
+            cp -v "$apk" "$dest"
+            count=$((count + 1))
+          done
+          [ "$count" -ge 1 ]
           {
             echo "## Pre-release: dahusim $VER"
             echo
-            echo "**Как скачать:** на этой странице релиза внизу блок **Assets** — берите \`$OUT\` (готовый APK), не клон репозитория."
+            echo "**Как скачать:** внизу страницы блок **Assets** — по одному APK на архитектуру (**arm64-v8a**, **armeabi-v7a**, **x86_64**, **x86**). Имена вида \`dahusim_<версия>_play_debug_<abi>.apk\`."
             echo
             echo "В этой ветке в описаниях **«КВН»** используется **вместо** слова «VPN» (шутливая подмена, не гарантия «услуги»). Возможен **автовыбор** публичных/открытых серверов энтузиастов — риск и закон на вас, см. README."
             echo
@@ -204,4 +216,4 @@ jobs:
           tag_name: rolling-${{ github.run_id }}
           name: "dahusim ${{ steps.rel.outputs.version_name }} (сборка ${{ github.run_number }})"
           body_path: release_body.md
-          files: ${{ steps.rel.outputs.asset_path }}
+          files: release_assets/*.apk

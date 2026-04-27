@@ -2,7 +2,7 @@
 
 Инструкции ниже проверялись **только на Windows 10** с **JDK 21 (Eclipse Adoptium)** и Gradle из проекта. На Linux и macOS команды обычно те же, но пути, кавычки и окружение отличаются — **мы их здесь не проверяли**.
 
-**CI (GitHub):** при пуше, где меняется не только документация, в [`.github/workflows/build.yml`](.github/workflows/build.yml) собирается Play debug APK (arm64) и публикуется pre-release. **APK** лежат во **вложениях (Assets)** к релизу: **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)** — скачивайте файлы оттуда, не из клонирования репо. См. раздел в [README](README.md).
+**CI (GitHub):** при пуше, где меняется не только документация, в [`.github/workflows/build.yml`](.github/workflows/build.yml) собираются **четыре** Play debug APK (arm64-v8a, armeabi-v7a, x86_64, x86) и публикуется pre-release. Файлы во **вложениях (Assets)** на **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)** — скачивайте оттуда, не из клонирования репо. См. [README](README.md).
 
 ## Как выбирается ABI
 
