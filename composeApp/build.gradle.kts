@@ -411,6 +411,10 @@ aboutLibraries {
     }
 }
 
+tasks.named("copyNonXmlValueResourcesForCommonMain") {
+    dependsOn(tasks.named("exportLibraryDefinitions"))
+}
+
 ksp {
     arg("room.incremental", "true")
     arg("room.schemaLocation", "${projectDir}/schemas")
