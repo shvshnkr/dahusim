@@ -3,6 +3,9 @@ name: Windows desktop (phase 2 stub)
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 
@@ -11,7 +14,7 @@ jobs:
     name: Phase 2 — см. docs/DESKTOP_WINDOWS_CI.md
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Статус
         run: |
           echo "Полная сборка windows/amd64 в CI не включена (фаза 2)."
