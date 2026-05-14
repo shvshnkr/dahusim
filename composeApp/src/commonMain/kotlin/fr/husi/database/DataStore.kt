@@ -247,6 +247,7 @@ object DataStore {
     var rulesFirstCreate by configurationStore.boolean(Key.RULES_FIRST_CREATE)
     var simpleMode by configurationStore.boolean(Key.SIMPLE_MODE) { true }
     var defaultSubscriptionsBootstrapped by configurationStore.boolean(Key.DEFAULT_SUBSCRIPTIONS_BOOTSTRAPPED) { false }
+    var firstLaunchSubscriptionUiRefreshDone by configurationStore.boolean(Key.FIRST_LAUNCH_SUBSCRIPTION_UI_REFRESH_DONE) { false }
     var defaultPerAppBootstrapped by configurationStore.boolean(Key.DEFAULT_PER_APP_BOOTSTRAPPED) { false }
     var autoSelectFallbackQueue by configurationStore.string(Key.AUTO_SELECT_FALLBACK_QUEUE) { "" }
     var autoSelectFallbackIndex by configurationStore.int(Key.AUTO_SELECT_FALLBACK_INDEX) { 0 }

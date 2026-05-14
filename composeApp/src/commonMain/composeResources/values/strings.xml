@@ -402,6 +402,9 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="service_subscription">Subscription Update Service</string>
     <string name="subscription_update">Subscription Update</string>
     <string name="subscription_update_message">Updating %1$s …</string>
+    <string name="first_launch_subscription_sync_title">Updating subscriptions</string>
+    <string name="first_launch_subscription_sync_message">Please wait. Refreshing subscription sources may take a while and needs internet access.</string>
+    <string name="first_launch_subscription_sync_progress">%1$d / %2$d - %3$s</string>
     <string name="group_filter">Filter</string>
     <string name="subscription_used">%1$s Used</string>
     <string name="subscription_traffic">%1$s Used / %2$s Remaining</string>

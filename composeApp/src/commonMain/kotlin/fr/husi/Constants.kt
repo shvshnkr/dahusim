@@ -127,6 +127,7 @@ object Key {
     const val RULES_FIRST_CREATE = "rulesFirstCreate"
     const val SIMPLE_MODE = "simpleMode"
     const val DEFAULT_SUBSCRIPTIONS_BOOTSTRAPPED = "defaultSubscriptionsBootstrapped"
+    const val FIRST_LAUNCH_SUBSCRIPTION_UI_REFRESH_DONE = "firstLaunchSubscriptionUiRefreshDone"
     const val DEFAULT_PER_APP_BOOTSTRAPPED = "defaultPerAppBootstrapped"
     const val AUTO_SELECT_FALLBACK_QUEUE = "autoSelectFallbackQueue"
     const val AUTO_SELECT_FALLBACK_INDEX = "autoSelectFallbackIndex"

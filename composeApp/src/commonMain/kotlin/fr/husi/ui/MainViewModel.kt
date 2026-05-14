@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import fr.husi.GroupType
 import fr.husi.Key
 import fr.husi.bg.DeepLinkDispatcher
+import fr.husi.bg.SubscriptionUpdater
 import fr.husi.database.DataStore
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
@@ -37,7 +38,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
+
+sealed interface FirstLaunchSubscriptionOverlayState {
+    data object Hidden : FirstLaunchSubscriptionOverlayState
+    data class Running(val title: String, val message: String, val progressLine: String) : FirstLaunchSubscriptionOverlayState
+}
 
 @Immutable
 sealed interface URLTestStatus {
@@ -88,6 +95,10 @@ class MainViewModel(
     private val _uiEvent = MutableSharedFlow<MainViewModelUiEvent>()
     val uiEvent = _uiEvent.asSharedFlow()
 
+    private val _firstLaunchSubscriptionOverlay =
+        MutableStateFlow<FirstLaunchSubscriptionOverlayState>(FirstLaunchSubscriptionOverlayState.Hidden)
+    val firstLaunchSubscriptionOverlay = _firstLaunchSubscriptionOverlay.asStateFlow()
+
     private fun alertDialog(
         message: StringOrRes,
         title: StringOrRes = StringOrRes.Res(Res.string.error_title),
@@ -124,6 +135,10 @@ class MainViewModel(
                     )
                 }
             }
+        }
+
+        viewModelScope.launch {
+            runFirstLaunchSubscriptionSyncIfNeeded()
         }
     }
 
@@ -341,6 +356,77 @@ class MainViewModel(
             ),
         )
         return deferred.await()
+    }
+
+    private suspend fun runFirstLaunchSubscriptionSyncIfNeeded() {
+        if (DataStore.firstLaunchSubscriptionUiRefreshDone) return
+        val groups =
+            try {
+                onIoDispatcher {
+                    SagerDatabase.groupDao.allGroups().first()
+                        .filter { it.type == GroupType.SUBSCRIPTION }
+                }
+            } catch (e: Exception) {
+                Logs.w("first launch subscription sync: load groups failed: ${e.readableMessage}")
+                DataStore.firstLaunchSubscriptionUiRefreshDone = true
+                return
+            }
+        if (groups.isEmpty()) {
+            DataStore.firstLaunchSubscriptionUiRefreshDone = true
+            return
+        }
+        val overlayTitle = repository.getString(Res.string.first_launch_subscription_sync_title)
+        val overlayMessage = repository.getString(Res.string.first_launch_subscription_sync_message)
+        try {
+            groups.forEachIndexed { index, group ->
+                val progressLine = repository.getString(
+                    Res.string.first_launch_subscription_sync_progress,
+                    index + 1,
+                    groups.size,
+                    group.displayName(),
+                )
+                withContext(Dispatchers.Main) {
+                    _firstLaunchSubscriptionOverlay.value =
+                        FirstLaunchSubscriptionOverlayState.Running(
+                            title = overlayTitle,
+                            message = overlayMessage,
+                            progressLine = progressLine,
+                        )
+                }
+                runCatching {
+                    when (
+                        val r = GroupUpdater.executeUpdate(
+                            group,
+                            byUser = false,
+                            allowDisconnectedUpdate = true,
+                        )
+                    ) {
+                        is GroupUpdateResult.AlreadyUpdating -> Unit
+                        is GroupUpdateResult.ConfirmRequired -> {
+                            Logs.w(
+                                "first launch subscription sync: unexpected ConfirmRequired for ${group.displayName()}",
+                            )
+                        }
+
+                        is GroupUpdateResult.Failure -> {
+                            Logs.w(
+                                "first launch subscription sync: ${group.displayName()}: ${r.message}",
+                            )
+                        }
+
+                        else -> Unit
+                    }
+                }.onFailure { e ->
+                    Logs.w("first launch subscription sync: ${group.displayName()}", e)
+                }
+            }
+        } finally {
+            runCatching { SubscriptionUpdater.reconfigureUpdater() }
+            DataStore.firstLaunchSubscriptionUiRefreshDone = true
+            withContext(Dispatchers.Main) {
+                _firstLaunchSubscriptionOverlay.value = FirstLaunchSubscriptionOverlayState.Hidden
+            }
+        }
     }
 
     private suspend fun performGroupUpdate(group: ProxyGroup, byUser: Boolean) {
