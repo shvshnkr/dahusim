@@ -1,3 +1,4 @@
+import org.gradle.api.GradleException
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.gradle.jvm.tasks.Jar
 
@@ -173,8 +174,10 @@ val composeDesktopVersion = libs.versions.composeMultiplatform.get()
 
 val desktopJarName = desktopTarget.libcoreDesktopJarName
 val desktopJarFile = layout.projectDirectory.file("libs/$desktopJarName").asFile
-/** Desktop libcore; optional on classpath so Android-only CI can compile without prebuilt desktop jars. */
-val libcoreDesktopJar = files(desktopJarFile)
+/** Desktop libcore. Must stay empty when the jar is absent — never use `files { require(...) }` (Gradle resolves it for Android compile). */
+val libcoreDesktopJar = objects.fileCollection().apply {
+    if (desktopJarFile.isFile) from(desktopJarFile)
+}
 
 val missingDesktopLibcoreMessage =
     "Missing desktop libcore jar '${desktopJarFile.path}'. Build it first, e.g. make libcore_desktop DESKTOP_TARGETS=$desktopTarget."
@@ -252,10 +255,7 @@ kotlin {
         val commonMain by getting {
             kotlin.srcDir(generateBuildConfig)
             dependencies {
-                // IDE / local: classpath hints when the jar exists. Omit when absent so Android CI does not resolve it.
-                if (desktopJarFile.isFile) {
-                    compileOnly(libcoreDesktopJar)
-                }
+                compileOnly(libcoreDesktopJar)
 
                 implementation(libs.jetbrains.compose.runtime)
                 implementation(libs.jetbrains.compose.foundation)
@@ -356,22 +356,28 @@ kotlin {
                 }
                 implementation(libs.clikt)
                 implementation(libs.kotlinx.coroutines.swing)
-                if (desktopJarFile.isFile) {
-                    implementation(libcoreDesktopJar)
-                }
+                implementation(libcoreDesktopJar)
             }
         }
     }
 }
 
-afterEvaluate {
-    if (skipDesktopLibPreCheck) {
-        return@afterEvaluate
-    }
-    listOf("compileKotlinDesktop", "compileDevKotlinDesktop", "compileTestKotlinDesktop").forEach { taskName ->
-        tasks.findByName(taskName)?.doFirst {
-            require(desktopJarFile.isFile) { missingDesktopLibcoreMessage }
-        }
+gradle.taskGraph.whenReady {
+    if (skipDesktopLibPreCheck || desktopJarFile.isFile) return@whenReady
+    val composePath = project.path
+    val desktopWorkTasks =
+        setOf(
+            "compileKotlinDesktop",
+            "compileDevKotlinDesktop",
+            "compileTestKotlinDesktop",
+            "kspKotlinDesktop",
+            "kspDevKotlinDesktop",
+            "kspTestKotlinDesktop",
+        )
+    if (allTasks.any { task ->
+            task.path.startsWith("$composePath:") && task.name in desktopWorkTasks
+        }) {
+        throw GradleException(missingDesktopLibcoreMessage)
     }
 }
 
