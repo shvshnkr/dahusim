@@ -4,7 +4,7 @@ Defaults for Russia and nearby (RU/BY/KZ): routing, assets, and inbound hardenin
 
 ## Source of truth
 
-This profile is **maintained only in this project** (your fork and branches such as `feature/ru-optimization`). There is no separate upstream line that “owns” it anymore: the old upstream branch for this work is dead, and **the canonical behaviour is whatever you ship here**.
+This profile is **maintained only in this project** (default branch `main` in this repository). There is no separate upstream line that “owns” it anymore: the old upstream branch for this work is dead, and **the canonical behaviour is whatever you ship here**.
 
 ## What changes
 

@@ -1,18 +1,12 @@
-<a href="https://apt.izzysoft.de/fdroid/index/apk/fr.husi/">
-    <img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png"
-    alt="Get it on IzzyOnDroid"
-    height="80">
-</a>
+# Dahusim
 
-We have migrated to [codeberg](https://codeberg.org/xchacha20-poly1305/husi)!
+**Dahusim** — форк Android-клиента **[husi](https://codeberg.org/xchacha20-poly1305/husi)** (Husi, sing-box и связанный UI): тот же класс приложений, но с **простым режимом**, **автовыбором точки из встроенного набора открытых («фри») серверов** и **готовыми маршрутами для обхода цензуры** с **оптимизацией под РФ** (геосайты/геоIP, сканер приложений, пресеты — см. [docs/RU-OPTIMIZATION.md](docs/RU-OPTIMIZATION.md)). Исходный **husi** живёт на Codeberg и развивается там; **этот репозиторий** — линия сборки Dahusim и поведения «из коробки».
 
-# Husi (虎兕)
+*English (short).* **Dahusim** is an **Android fork of [husi](https://codeberg.org/xchacha20-poly1305/husi)** with a **simple UI**, **auto-pick among bundled public/community endpoints**, and **RU-oriented routing presets** for censorship-heavy networks (see [docs/RU-OPTIMIZATION.md](docs/RU-OPTIMIZATION.md)). Upstream Husi is maintained on Codeberg; **this repo** is where this flavor of defaults and releases is maintained.
 
-Husi is a non-professional and recreational proxy tool integration, aiming at promoting proxy customization.
+## О сборках, «КВН» и рисках
 
-## О этой сборке (прежде всего на русском)
-
-**Где взять готовый APK (GitHub).** Собранные установщики публикуются **на GitHub** в виде вложений (assets) к pre-release. **Скачать последнюю версию** = открыть страницу **последнего релиза** и взять файлы из блока *Assets* (вложения), не из исходников. Прямая ссылка: **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)**. В релизе **четыре** debug-APK по ABI: `dahusim_<версия>_play_debug_arm64_v8a.apk`, `..._armeabi_v7a.apk`, `..._x86_64.apk`, `..._x86.apk` (суффикс в имени — целевая архитектура; на устройстве обычно нужен **arm64**).
+**Где взять готовый APK (GitHub).** Собранные установщики публикуются **на GitHub** в виде вложений (assets) к pre-release. **Скачать последнюю версию** = открыть страницу **последнего релиза** и взять файлы из блока *Assets*, не из исходников. Прямая ссылка: **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)**. В релизе **четыре** debug-APK по ABI: `dahusim_<версия>_play_debug_arm64_v8a.apk`, `..._armeabi_v7a.apk`, `..._x86_64.apk`, `..._x86.apk` (суффикс в имени — целевая архитектура; на устройстве обычно нужен **arm64**).
 
 **КВН вместо «VPN».** В текстах этого форка мы пишем **«КВН»** (шутливое, договорённое обозначение **вместо** привычного **«VPN»** — отсылка к известной аббревиатуре, **не** к шоу в первую очередь) так, чтобы **не** путать сборку с рекламой «официального VPN» и не обещать «сервис как в рекламе». Это **клиент** для **исследовательского и любительского** сценария, без гарантий, что это «именно VPN» в юридическом/маркетинговом смысле.
 
@@ -34,7 +28,7 @@ Husi is a non-professional and recreational proxy tool integration, aiming at pr
 
 **Vibecoding and AI assist.** A substantial part of this codebase is **vibecoding** — fast, iterative work with an AI pair-programmer (e.g. in Cursor) — in addition to manual edits. It is not a formally specified, audited, or security-certified product unless you perform your own review. Treat outputs as you would unreviewed code.
 
-**Releases (GitHub).** Pre-built APKs (four ABI splits): **[latest release — Assets](https://github.com/shvshnkr/dahusim/releases/latest)** — names like `dahusim_<version>_play_debug_<abi>.apk`. A mirror of upstream Husi is linked at the top.
+**Releases (GitHub).** Pre-built APKs (four ABI splits): **[latest release — Assets](https://github.com/shvshnkr/dahusim/releases/latest)** — names like `dahusim_<version>_play_debug_<abi>.apk`. Upstream **husi** is linked in the introduction above.
 
 ## 🗣️ Alert
 
