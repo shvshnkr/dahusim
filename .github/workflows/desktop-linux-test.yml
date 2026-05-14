@@ -1,4 +1,4 @@
-name: Linux desktop (test channel)
+name: Linux desktop (linux/amd64, test channel)
 
 # Temporarily manual-only: run from Actions tab when you want Linux packages pre-release.
 on:
@@ -144,17 +144,26 @@ jobs:
           test "$(find release_assets -type f | wc -l)" -ge 4
 
       - name: Release body
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           set -euo pipefail
           VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          TAG="linux-desktop-linux-amd64-${{ github.run_id }}"
           {
-            echo "## Linux desktop test build"
+            echo "## Linux desktop · **linux/amd64**"
             echo
-            echo "**Версия:** \`${VER}\` **Коммит:** \`$(git rev-parse --short HEAD)\`"
+            echo "**Платформа:** \`linux/amd64\` (сборка DESKTOP_TARGET=linux/amd64)."
+            echo
+            echo "**Версия:** \`${VER}\` **Коммит:** \`$(git rev-parse --short HEAD)\` **Тег:** \`${TAG}\`"
+            echo
+            echo "**Где скачать:** репозиторий → вкладка **Releases** (не артефакты Actions) → этот пре-релиз → внизу **Assets**."
+            echo
+            echo "[Все релизы репозитория](${REPO_URL}/releases)"
             echo
             echo "Отдельный тестовый канал (не смешивается с rolling APK pre-release из \`build.yml\`)."
             echo
-            echo "**Форматы:** deb, rpm, pacman (.pkg.tar.zst) для **linux/amd64**."
+            echo "**Форматы в Assets:** deb, rpm, pacman (.pkg.tar.zst), uber JAR."
             echo
             echo "## Коммит"
             echo
@@ -162,23 +171,40 @@ jobs:
           } > release_body.md
 
       - uses: softprops/action-gh-release@v3
+        id: gh_release
         with:
           prerelease: true
-          tag_name: linux-desktop-test-${{ github.run_id }}
-          name: Linux desktop test ${{ github.run_number }}
+          make_latest: false
+          fail_on_unmatched_files: true
+          tag_name: linux-desktop-linux-amd64-${{ github.run_id }}
+          target_commitish: ${{ github.sha }}
+          name: Linux desktop · linux/amd64 · test ${{ github.run_number }}
           body_path: release_body.md
-          files: release_assets/*
+          files: |
+            release_assets/*
 
-      - name: Prune old linux-desktop-test releases
+      - name: Release link (workflow summary)
+        run: |
+          {
+            echo "## Пре-релиз опубликован · linux/amd64"
+            echo
+            echo "Скачивание: откройте ссылку ниже → прокрутите до **Assets**."
+            echo
+            echo "${{ steps.gh_release.outputs.url }}"
+            echo
+            echo "Фильтр по тегам: ${{ github.server_url }}/${{ github.repository }}/releases?q=linux-desktop-linux-amd64+prerelease%3Atrue"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prune old linux-desktop-linux-amd64 releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           keep=15
           gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-            --jq '.[] | .tag_name | select(test("^linux-desktop-test-[0-9]+$"))' |
-            sed -n 's/^linux-desktop-test-//p' | sort -rn | tail -n +"$((keep + 1))" |
+            --jq '.[] | .tag_name | select(test("^linux-desktop-linux-amd64-[0-9]+$"))' |
+            sed -n 's/^linux-desktop-linux-amd64-//p' | sort -rn | tail -n +"$((keep + 1))" |
             while read -r rid; do
-              echo ">> delete release linux-desktop-test-${rid}"
-              gh release delete "linux-desktop-test-${rid}" --yes || true
+              echo ">> delete release linux-desktop-linux-amd64-${rid}"
+              gh release delete "linux-desktop-linux-amd64-${rid}" --yes || true
             done
