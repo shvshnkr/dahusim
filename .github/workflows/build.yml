@@ -9,9 +9,11 @@ on:
       - "master"
   workflow_dispatch:
 
+# Do not cancel in-progress: Android assemblePlayDebugAllAbi is long; a follow-up push
+# would otherwise kill Gradle mid-task ("Error: The operation was canceled").
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -38,6 +40,7 @@ jobs:
   libcore:
     name: Libcore (Android AAR)
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
@@ -98,6 +101,7 @@ jobs:
   android-play-all-abi:
     name: Play debug APK (все ABI)
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     needs: [changes, libcore]
     if: needs.changes.outputs.code == 'true'
     steps:
@@ -136,6 +140,7 @@ jobs:
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
+          GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
         run: |
           # Две задачи в одном вызове → requireTargetAbi() не режет ABI (см. buildSrc).
           ./gradlew :composeApp:exportLibraryDefinitions assemblePlayDebugAllAbi --no-daemon
