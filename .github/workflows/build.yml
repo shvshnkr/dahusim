@@ -1,12 +1,7 @@
 name: Build and pre-release
 
+# Temporarily manual-only: run from Actions tab when you want APK pre-release.
 on:
-  push:
-    branches:
-      - "feature/**"
-      - "dev*"
-      - "main"
-      - "master"
   workflow_dispatch:
 
 # Do not cancel in-progress: Android assemblePlayDebugAllAbi is long; a follow-up push

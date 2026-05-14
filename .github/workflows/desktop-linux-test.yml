@@ -1,22 +1,8 @@
 name: Linux desktop (test channel)
 
+# Temporarily manual-only: run from Actions tab when you want Linux packages pre-release.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "dev*"
-      - "main"
-      - "master"
-      - "feature/**"
-    paths:
-      - "composeApp/**"
-      - "libcore/**"
-      - "release/linux/**"
-      - "launcher/**"
-      - "husi.properties"
-      - "buildScript/**"
-      - ".github/workflows/desktop-linux-test.yml"
-      - ".github/CRONET_GO_VERSION"
 
 concurrency:
   group: desktop-linux-${{ github.workflow }}-${{ github.ref }}
