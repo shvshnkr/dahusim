@@ -133,12 +133,11 @@ jobs:
             case "$base" in
               *.pkg.tar.zst) ext="pkg.tar.zst" ;;
             esac
-            stem="${base%.$ext}"
-            cp -v "$f" "release_assets/${PKG}_${VER}_linux_amd64_${SHORT}_${stem}.${ext}"
+            cp -v "$f" "release_assets/${PKG}_${VER}_linux_amd64_${SHORT}.${ext}"
           done
           for f in composeApp/build/compose/jars/${PKG}-linux-x64-*.jar; do
             [ -f "$f" ] || continue
-            cp -v "$f" "release_assets/${PKG}_${VER}_linux_amd64_${SHORT}_$(basename "$f")"
+            cp -v "$f" "release_assets/${PKG}_${VER}_linux_amd64_${SHORT}.jar"
           done
           ls -la release_assets
           test "$(find release_assets -type f | wc -l)" -ge 4
