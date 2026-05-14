@@ -31,7 +31,7 @@ internal object DesktopTaskRegistry {
 
         override suspend fun run() {
             try {
-                SubscriptionAutoUpdateRunner.run()
+                SubscriptionAutoUpdateRunner.run(mode = SubscriptionUpdateMode.BackgroundEco)
             } finally {
                 SubscriptionUpdater.reconfigureUpdater()
             }

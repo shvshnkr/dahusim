@@ -7,12 +7,18 @@ import fr.husi.database.ProxyEntity
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.fmt.trojan.TrojanBean
+import fr.husi.fmt.v2ray.VLESSBean
+import fr.husi.ktx.applyDefaultValues
+import fr.husi.ktx.parseProxies
 import kotlinx.coroutines.flow.first
 
 /**
  * Creates a fixed BASIC group and syncs built-in Trojan profiles for simple mode.
  */
 object WhitelistBuiltinBootstrap {
+
+    private const val WL_VLESS_NAME_PREFIX = "WL vless #"
+    private const val WL_VLESS_ORDER_BASE = 100L
 
     @Volatile
     private var cachedGroupId: Long? = null
@@ -57,7 +63,37 @@ object WhitelistBuiltinBootstrap {
             }
         }
 
+        syncWhitelistBuiltinVlessProfiles(groupId)
         applyBuiltinUserOrders(groupId)
+    }
+
+    private suspend fun syncWhitelistBuiltinVlessProfiles(groupId: Long) {
+        val text = WhitelistBuiltinVlessShareLines.lines.joinToString("\n")
+        if (text.isBlank()) return
+        val beans = parseProxies(text).mapNotNull { it as? VLESSBean }
+        if (beans.isEmpty()) return
+        beans.forEachIndexed { index, raw ->
+            val n = index + 1
+            val stableName = WL_VLESS_NAME_PREFIX + "%02d".format(n)
+            raw.name = stableName
+            raw.applyDefaultValues()
+            val wantOrder = WL_VLESS_ORDER_BASE + n
+            val snapshot = SagerDatabase.proxyDao.getByGroup(groupId).first()
+            val entity = snapshot.find {
+                it.type == ProxyEntity.TYPE_VLESS && it.vlessBean?.name == stableName
+            }
+            if (entity == null) {
+                val created = ProfileManager.createProfile(groupId, raw)
+                if (created.userOrder != wantOrder) {
+                    created.userOrder = wantOrder
+                    ProfileManager.updateProfile(created)
+                }
+            } else {
+                entity.putBean(raw)
+                entity.userOrder = wantOrder
+                ProfileManager.updateProfile(entity)
+            }
+        }
     }
 
     private suspend fun applyBuiltinUserOrders(groupId: Long) {
@@ -87,10 +123,17 @@ object WhitelistBuiltinBootstrap {
             .toSet()
         return list
             .asSequence()
-            .filter { it.type == ProxyEntity.TYPE_TROJAN }
-            .filter {
-                val n = (it.trojanBean?.name).orEmpty()
-                n in allowedNames
+            .filter { entity ->
+                when (entity.type) {
+                    ProxyEntity.TYPE_TROJAN -> {
+                        val n = (entity.trojanBean?.name).orEmpty()
+                        n in allowedNames
+                    }
+                    ProxyEntity.TYPE_VLESS -> {
+                        (entity.vlessBean?.name).orEmpty().startsWith(WL_VLESS_NAME_PREFIX)
+                    }
+                    else -> false
+                }
             }
             .sortedBy { it.userOrder }
             .toList()

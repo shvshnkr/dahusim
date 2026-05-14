@@ -7,6 +7,12 @@ import fr.husi.group.GroupUpdateResult
 import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
 import fr.husi.ktx.readableMessage
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class SubscriptionAutoUpdatePlan(
     val repeatIntervalMinutes: Int,
@@ -18,6 +24,11 @@ data class SubscriptionAutoUpdateOutcome(
     val transportFailuresWhileVpnConnected: Int,
     val shouldRequestUpstreamReset: Boolean,
 )
+
+enum class SubscriptionUpdateMode {
+    ForegroundInteractive,
+    BackgroundEco,
+}
 
 private data class AutoUpdateCandidate(
     val group: ProxyGroup,
@@ -56,13 +67,20 @@ object SubscriptionAutoUpdatePlanner {
 
 object SubscriptionAutoUpdateRunner {
 
+    private data class SingleUpdateSummary(
+        val success: Boolean,
+        val staleTransportFailure: Boolean,
+    )
+
     suspend fun runWithResult(
         nowSeconds: Long = currentEpochSeconds(),
+        mode: SubscriptionUpdateMode = SubscriptionUpdateMode.BackgroundEco,
         onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
     ): SubscriptionAutoUpdateOutcome {
         return runWithResult(
             subscriptions = SubscriptionAutoUpdatePlanner.loadAutoUpdateSubscriptions(),
             nowSeconds = nowSeconds,
+            mode = mode,
             onBeforeUpdate = onBeforeUpdate,
         )
     }
@@ -70,38 +88,13 @@ object SubscriptionAutoUpdateRunner {
     suspend fun runWithResult(
         subscriptions: List<ProxyGroup>,
         nowSeconds: Long,
+        mode: SubscriptionUpdateMode = SubscriptionUpdateMode.BackgroundEco,
         onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
     ): SubscriptionAutoUpdateOutcome {
-        var allSucceeded = true
-        var transportFailuresWhileVpnConnected = 0
-        for (profile in dueSubscriptions(subscriptions, nowSeconds)) {
-            Logs.d("auto update: updating ${profile.displayName()}")
-            onBeforeUpdate(profile)
-            runCatching {
-                when (val r = GroupUpdater.executeUpdate(profile, false)) {
-                    is GroupUpdateResult.Success -> Unit
-                    is GroupUpdateResult.Failure -> {
-                        allSucceeded = false
-                        if (DataStore.serviceState.connected &&
-                            subscriptionMessageLooksLikeStaleTransport(r.message)
-                        ) {
-                            transportFailuresWhileVpnConnected++
-                        }
-                    }
-                    else -> {
-                        allSucceeded = false
-                    }
-                }
-            }.onFailure { e ->
-                Logs.w("auto update: update failed for ${profile.displayName()}", e)
-                allSucceeded = false
-                if (DataStore.serviceState.connected &&
-                    subscriptionMessageLooksLikeStaleTransport(e.readableMessage)
-                ) {
-                    transportFailuresWhileVpnConnected++
-                }
-            }
-        }
+        val due = dueSubscriptions(subscriptions, nowSeconds)
+        val summaries = executeDueUpdates(due, mode, onBeforeUpdate)
+        val allSucceeded = summaries.all { it.success }
+        val transportFailuresWhileVpnConnected = summaries.count { it.staleTransportFailure }
         return SubscriptionAutoUpdateOutcome(
             allSucceeded = allSucceeded,
             transportFailuresWhileVpnConnected = transportFailuresWhileVpnConnected,
@@ -112,11 +105,13 @@ object SubscriptionAutoUpdateRunner {
 
     suspend fun run(
         nowSeconds: Long = currentEpochSeconds(),
+        mode: SubscriptionUpdateMode = SubscriptionUpdateMode.BackgroundEco,
         onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
     ) {
         run(
             subscriptions = SubscriptionAutoUpdatePlanner.loadAutoUpdateSubscriptions(),
             nowSeconds = nowSeconds,
+            mode = mode,
             onBeforeUpdate = onBeforeUpdate,
         )
     }
@@ -124,12 +119,25 @@ object SubscriptionAutoUpdateRunner {
     suspend fun run(
         subscriptions: List<ProxyGroup>,
         nowSeconds: Long,
+        mode: SubscriptionUpdateMode = SubscriptionUpdateMode.BackgroundEco,
         onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
     ) {
-        for (profile in dueSubscriptions(subscriptions, nowSeconds)) {
-            Logs.d("auto update: updating ${profile.displayName()}")
-            onBeforeUpdate(profile)
-            GroupUpdater.executeUpdate(profile, false)
+        executeDueUpdates(dueSubscriptions(subscriptions, nowSeconds), mode, onBeforeUpdate)
+    }
+
+    suspend fun refreshDueWithBudget(
+        mode: SubscriptionUpdateMode,
+        budgetMs: Long,
+        nowSeconds: Long = currentEpochSeconds(),
+        onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
+    ): SubscriptionAutoUpdateOutcome? {
+        val effectiveBudgetMs = budgetMs.coerceAtLeast(0L)
+        return withTimeoutOrNull(effectiveBudgetMs) {
+            runWithResult(
+                nowSeconds = nowSeconds,
+                mode = mode,
+                onBeforeUpdate = onBeforeUpdate,
+            )
         }
     }
 
@@ -160,6 +168,74 @@ object SubscriptionAutoUpdateRunner {
                 true
             }
         }.map(AutoUpdateCandidate::group)
+    }
+
+    fun previewParallelism(
+        mode: SubscriptionUpdateMode,
+        foregroundParallelism: Int,
+        backgroundParallelism: Int,
+    ): Int {
+        return when (mode) {
+            SubscriptionUpdateMode.ForegroundInteractive -> foregroundParallelism.coerceIn(1, 6)
+            SubscriptionUpdateMode.BackgroundEco -> backgroundParallelism.coerceIn(1, 2)
+        }
+    }
+
+    private suspend fun executeDueUpdates(
+        due: List<ProxyGroup>,
+        mode: SubscriptionUpdateMode,
+        onBeforeUpdate: suspend (ProxyGroup) -> Unit,
+    ): List<SingleUpdateSummary> = coroutineScope {
+        if (due.isEmpty()) return@coroutineScope emptyList()
+        val parallelism = parallelismForMode(mode).coerceIn(1, due.size)
+        val semaphore = Semaphore(parallelism)
+        due.mapIndexed { index, profile ->
+            async {
+                semaphore.withPermit {
+                    Logs.d(
+                        "auto update: updating ${profile.displayName()} " +
+                            "mode=$mode index=${index + 1}/${due.size}",
+                    )
+                    onBeforeUpdate(profile)
+                    runSingleUpdate(profile)
+                }
+            }
+        }.awaitAll()
+    }
+
+    private fun parallelismForMode(mode: SubscriptionUpdateMode): Int {
+        return previewParallelism(
+            mode = mode,
+            foregroundParallelism = DataStore.subscriptionUpdateParallelismForeground,
+            backgroundParallelism = DataStore.subscriptionUpdateParallelismBackground,
+        )
+    }
+
+    private suspend fun runSingleUpdate(profile: ProxyGroup): SingleUpdateSummary {
+        return runCatching {
+            when (val r = GroupUpdater.executeUpdate(profile, false)) {
+                is GroupUpdateResult.Success -> {
+                    SingleUpdateSummary(success = true, staleTransportFailure = false)
+                }
+                is GroupUpdateResult.Failure -> {
+                    SingleUpdateSummary(
+                        success = false,
+                        staleTransportFailure = DataStore.serviceState.connected &&
+                            subscriptionMessageLooksLikeStaleTransport(r.message),
+                    )
+                }
+                else -> {
+                    SingleUpdateSummary(success = false, staleTransportFailure = false)
+                }
+            }
+        }.getOrElse { e ->
+            Logs.w("auto update: update failed for ${profile.displayName()}", e)
+            SingleUpdateSummary(
+                success = false,
+                staleTransportFailure = DataStore.serviceState.connected &&
+                    subscriptionMessageLooksLikeStaleTransport(e.readableMessage),
+            )
+        }
     }
 }
 

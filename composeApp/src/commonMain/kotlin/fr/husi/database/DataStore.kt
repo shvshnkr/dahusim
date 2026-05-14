@@ -254,5 +254,17 @@ object DataStore {
     var autoSelectLastKnownGood by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD) { 0L }
     var autoConnectPausedUntilGoogle by configurationStore.boolean(Key.AUTO_CONNECT_PAUSED_UNTIL_GOOGLE) { false }
     var simpleModeActivity by configurationStore.string(Key.SIMPLE_MODE_ACTIVITY) { "" }
+    var subscriptionUpdateParallelismForeground by configurationStore.int(Key.SUBSCRIPTION_UPDATE_PARALLELISM_FOREGROUND) {
+        3
+    }
+    var subscriptionUpdateParallelismBackground by configurationStore.int(Key.SUBSCRIPTION_UPDATE_PARALLELISM_BACKGROUND) {
+        1
+    }
+    var subscriptionConnectRefreshBudgetMs by configurationStore.long(Key.SUBSCRIPTION_CONNECT_REFRESH_BUDGET_MS) {
+        2200L
+    }
+    var subscriptionFallbackRefreshBudgetMs by configurationStore.long(Key.SUBSCRIPTION_FALLBACK_REFRESH_BUDGET_MS) {
+        1200L
+    }
 
 }

@@ -616,6 +616,14 @@ class BaseService {
                         postConnectHealthy = false
                     }
                     if (!postConnectHealthy) {
+                        runCatching {
+                            val fallbackRefreshBudgetMs =
+                                DataStore.subscriptionFallbackRefreshBudgetMs.coerceIn(200L, 5000L)
+                            SubscriptionAutoUpdateRunner.refreshDueWithBudget(
+                                mode = SubscriptionUpdateMode.ForegroundInteractive,
+                                budgetMs = fallbackRefreshBudgetMs,
+                            )
+                        }
                         val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
                         if (fallback != null) {
                             simpleModeLog(
@@ -676,6 +684,14 @@ class BaseService {
                         "SimpleMode",
                         "H1 unknown_host profileId=${profile.id} error=${e.message ?: "unknown_host"}",
                     )
+                    runCatching {
+                        val fallbackRefreshBudgetMs =
+                            DataStore.subscriptionFallbackRefreshBudgetMs.coerceIn(200L, 5000L)
+                        SubscriptionAutoUpdateRunner.refreshDueWithBudget(
+                            mode = SubscriptionUpdateMode.ForegroundInteractive,
+                            budgetMs = fallbackRefreshBudgetMs,
+                        )
+                    }
                     val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
                     if (fallback != null) {
                         stopRunner(restart = true)
@@ -727,6 +743,14 @@ class BaseService {
                         "SimpleMode",
                         "H5 throwable profileId=${profile.id} class=${exc.javaClass.simpleName} error=${exc.readableMessage}",
                     )
+                    runCatching {
+                        val fallbackRefreshBudgetMs =
+                            DataStore.subscriptionFallbackRefreshBudgetMs.coerceIn(200L, 5000L)
+                        SubscriptionAutoUpdateRunner.refreshDueWithBudget(
+                            mode = SubscriptionUpdateMode.ForegroundInteractive,
+                            budgetMs = fallbackRefreshBudgetMs,
+                        )
+                    }
                     val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
                     if (fallback != null) {
                         stopRunner(restart = true)

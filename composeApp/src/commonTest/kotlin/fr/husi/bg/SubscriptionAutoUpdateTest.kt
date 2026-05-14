@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SubscriptionAutoUpdateTest {
 
@@ -132,6 +133,42 @@ class SubscriptionAutoUpdateTest {
             dueSubscriptions.map { it.name },
         )
         assertFalse(dueSubscriptions.any { it.name == "connected-only-not-due" })
+    }
+
+    @Test
+    fun `foreground mode returns configured higher parallelism`() {
+        val p = SubscriptionAutoUpdateRunner.previewParallelism(
+            mode = SubscriptionUpdateMode.ForegroundInteractive,
+            foregroundParallelism = 5,
+            backgroundParallelism = 1,
+        )
+        assertEquals(5, p)
+    }
+
+    @Test
+    fun `background mode stays battery-friendly by default`() {
+        val p = SubscriptionAutoUpdateRunner.previewParallelism(
+            mode = SubscriptionUpdateMode.BackgroundEco,
+            foregroundParallelism = 5,
+            backgroundParallelism = 0,
+        )
+        assertEquals(1, p)
+    }
+
+    @Test
+    fun `parallelism clamp enforces safe upper bounds`() {
+        val fg = SubscriptionAutoUpdateRunner.previewParallelism(
+            mode = SubscriptionUpdateMode.ForegroundInteractive,
+            foregroundParallelism = 100,
+            backgroundParallelism = 1,
+        )
+        val bg = SubscriptionAutoUpdateRunner.previewParallelism(
+            mode = SubscriptionUpdateMode.BackgroundEco,
+            foregroundParallelism = 3,
+            backgroundParallelism = 99,
+        )
+        assertTrue(fg <= 6)
+        assertTrue(bg <= 2)
     }
 
     private fun autoUpdateGroup(

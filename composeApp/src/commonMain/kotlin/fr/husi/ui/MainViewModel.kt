@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import fr.husi.GroupType
 import fr.husi.Key
 import fr.husi.bg.DeepLinkDispatcher
+import fr.husi.bg.SubscriptionAutoUpdateRunner
+import fr.husi.bg.SubscriptionUpdateMode
 import fr.husi.bg.SubscriptionUpdater
 import fr.husi.database.DataStore
 import fr.husi.database.ProxyGroup
@@ -36,8 +38,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
@@ -378,47 +385,58 @@ class MainViewModel(
         val overlayTitle = repository.getString(Res.string.first_launch_subscription_sync_title)
         val overlayMessage = repository.getString(Res.string.first_launch_subscription_sync_message)
         try {
-            groups.forEachIndexed { index, group ->
-                val progressLine = repository.getString(
-                    Res.string.first_launch_subscription_sync_progress,
-                    index + 1,
-                    groups.size,
-                    group.displayName(),
-                )
-                withContext(Dispatchers.Main) {
-                    _firstLaunchSubscriptionOverlay.value =
-                        FirstLaunchSubscriptionOverlayState.Running(
-                            title = overlayTitle,
-                            message = overlayMessage,
-                            progressLine = progressLine,
-                        )
-                }
-                runCatching {
-                    when (
-                        val r = GroupUpdater.executeUpdate(
-                            group,
-                            byUser = false,
-                            allowDisconnectedUpdate = true,
-                        )
-                    ) {
-                        is GroupUpdateResult.AlreadyUpdating -> Unit
-                        is GroupUpdateResult.ConfirmRequired -> {
-                            Logs.w(
-                                "first launch subscription sync: unexpected ConfirmRequired for ${group.displayName()}",
+            val total = groups.size
+            val parallelism = DataStore.subscriptionUpdateParallelismForeground.coerceIn(1, 6)
+            coroutineScope {
+                val semaphore = Semaphore(parallelism)
+                groups.mapIndexed { index, group ->
+                    async {
+                        semaphore.withPermit {
+                            withContext(Dispatchers.Main) {
+                                val progressLine = repository.getString(
+                                    Res.string.first_launch_subscription_sync_progress,
+                                    index + 1,
+                                    total,
+                                    group.displayName(),
+                                )
+                                _firstLaunchSubscriptionOverlay.value =
+                                    FirstLaunchSubscriptionOverlayState.Running(
+                                        title = overlayTitle,
+                                        message = overlayMessage,
+                                        progressLine = progressLine,
+                                    )
+                            }
+                            runCatching {
+                                when (
+                                    val r = GroupUpdater.executeUpdate(
+                                        group,
+                                        byUser = false,
+                                        allowDisconnectedUpdate = true,
+                                    )
+                                ) {
+                                    is GroupUpdateResult.AlreadyUpdating -> Unit
+                                    is GroupUpdateResult.ConfirmRequired -> {
+                                        Logs.w(
+                                            "first launch subscription sync: unexpected ConfirmRequired for ${group.displayName()}",
+                                        )
+                                    }
+                                    is GroupUpdateResult.Failure -> {
+                                        Logs.w(
+                                            "first launch subscription sync: ${group.displayName()}: ${r.message}",
+                                        )
+                                    }
+                                    else -> Unit
+                                }
+                            }.onFailure { e ->
+                                Logs.w("first launch subscription sync: ${group.displayName()}", e)
+                            }
+                            Logs.d(
+                                "first launch subscription sync: progress ${index + 1}/$total " +
+                                    "(job=${index + 1})",
                             )
                         }
-
-                        is GroupUpdateResult.Failure -> {
-                            Logs.w(
-                                "first launch subscription sync: ${group.displayName()}: ${r.message}",
-                            )
-                        }
-
-                        else -> Unit
                     }
-                }.onFailure { e ->
-                    Logs.w("first launch subscription sync: ${group.displayName()}", e)
-                }
+                }.awaitAll()
             }
         } finally {
             runCatching { SubscriptionUpdater.reconfigureUpdater() }

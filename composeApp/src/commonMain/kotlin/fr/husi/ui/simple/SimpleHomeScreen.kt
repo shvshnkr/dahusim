@@ -28,6 +28,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.husi.Key
 import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
+import fr.husi.bg.SubscriptionAutoUpdateRunner
+import fr.husi.bg.SubscriptionUpdateMode
 import fr.husi.compose.rememberVpnServiceLauncher
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
@@ -220,6 +222,24 @@ fun SimpleHomeScreen(
                             return@launch
                         }
                         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = net.whitelistOnly
+                        DataStore.simpleModeActivity = "Refreshing subscriptions..."
+                        preconnectStage = "subscription_refresh"
+                        val refreshBudgetMs = DataStore.subscriptionConnectRefreshBudgetMs.coerceIn(200L, 8000L)
+                        val refreshOutcome = onDefaultDispatcher {
+                            SubscriptionAutoUpdateRunner.refreshDueWithBudget(
+                                mode = SubscriptionUpdateMode.ForegroundInteractive,
+                                budgetMs = refreshBudgetMs,
+                            )
+                        }
+                        simpleModeLog(
+                            "SimpleMode",
+                            if (refreshOutcome == null) {
+                                "H21 preconnect_subscription_refresh timeout budgetMs=$refreshBudgetMs"
+                            } else {
+                                "H21 preconnect_subscription_refresh done allSucceeded=${refreshOutcome.allSucceeded} " +
+                                    "staleFails=${refreshOutcome.transportFailuresWhileVpnConnected}"
+                            },
+                        )
                         DataStore.simpleModeActivity = "Selecting best server..."
                         preconnectStage = "prepare_for_connect"
                         // #region agent log

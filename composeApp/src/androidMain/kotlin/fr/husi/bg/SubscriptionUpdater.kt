@@ -87,7 +87,9 @@ actual object SubscriptionUpdater {
                 }
             }
 
-            val outcome = SubscriptionAutoUpdateRunner.runWithResult { profile ->
+            val outcome = SubscriptionAutoUpdateRunner.runWithResult(
+                mode = SubscriptionUpdateMode.BackgroundEco,
+            ) { profile ->
                 notification.setContentText(
                     resolveRepository().getString(
                         Res.string.subscription_update_message,

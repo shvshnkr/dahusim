@@ -134,6 +134,10 @@ object Key {
     const val AUTO_SELECT_LAST_KNOWN_GOOD = "autoSelectLastKnownGood"
     const val AUTO_CONNECT_PAUSED_UNTIL_GOOGLE = "autoConnectPausedUntilGoogle"
     const val SIMPLE_MODE_ACTIVITY = "simpleModeActivity"
+    const val SUBSCRIPTION_UPDATE_PARALLELISM_FOREGROUND = "subscriptionUpdateParallelismForeground"
+    const val SUBSCRIPTION_UPDATE_PARALLELISM_BACKGROUND = "subscriptionUpdateParallelismBackground"
+    const val SUBSCRIPTION_CONNECT_REFRESH_BUDGET_MS = "subscriptionConnectRefreshBudgetMs"
+    const val SUBSCRIPTION_FALLBACK_REFRESH_BUDGET_MS = "subscriptionFallbackRefreshBudgetMs"
 
 }
 
