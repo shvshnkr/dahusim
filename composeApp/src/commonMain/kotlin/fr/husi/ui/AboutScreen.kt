@@ -41,8 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,7 +62,6 @@ import fr.husi.libcore.Libcore
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.Font
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
 import io.github.oikvpqya.compose.fastscroller.material3.defaultMaterialScrollbarStyle
@@ -168,17 +165,10 @@ fun AboutScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        val isChinese = Locale.current.language == "zh"
                         CardItem(
                             icon = { Icon(vectorResource(Res.drawable.android), null) },
-                            title = stringResource(Res.string.app_name),
-                            titleTextStyle = if (isChinese) {
-                                MaterialTheme.typography.titleMedium.copy(
-                                    fontFamily = FontFamily(Font(Res.font.shuowenxiaozhuan_husi)),
-                                )
-                            } else {
-                                null
-                            },
+                            title = stringResource(Res.string.about_display_name),
+                            titleTextStyle = null,
                             description = displayVersion,
                             onCLick = {
                                 uriHandler.openUri(releaseLink)

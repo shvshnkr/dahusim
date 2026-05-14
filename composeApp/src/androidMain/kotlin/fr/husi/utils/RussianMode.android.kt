@@ -7,7 +7,7 @@ actual suspend fun enableRussianPerAppBypass(): Int {
     val russian = PackageCache.loaded.withLock {
         PackageCache.installedPackages.keys
             .asSequence()
-            .filter { AppScanner.isRussianApp(it) }
+            .filter { AppScanner.isRussianApp(it, PackageCache.packageManager) }
             .toCollection(LinkedHashSet())
     }
     if (russian.isEmpty()) return 0

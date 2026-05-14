@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">husi</string>
+    <string name="app_name">daHusiM</string>
+    <!-- Shown on About screen so sideload builds are identifiable regardless of locale app_name. -->
+    <string name="about_display_name">daHusiM</string>
     <string name="project">Project</string>
     <string name="github">Source code</string>
     <string name="telegram">Telegram update channel</string>
@@ -263,9 +265,9 @@
     <string name="route_apply_cn_preset">Apply China preset</string>
     <string name="route_apply_preset_applied">Routing preset applied</string>
     <string name="route_enable_ru_mode">Enable Russia mode</string>
-    <string name="route_enable_ru_mode_confirm">This will replace current routing rules with the Russia preset (geosite-ru / geoip-ru bypass, NSPK / 3-D Secure bypass, block ads and QUIC), switch the rule-set provider to Chocolate4U, set Mullvad DoH as the remote DNS, generate a SOCKS5 login/password if missing, and on Android select common Russian apps for per-app bypass. Continue?</string>
+    <string name="route_enable_ru_mode_confirm">This will replace current routing rules with the Russia preset (geosite-ru / geoip-ru bypass, block ads and QUIC), switch the rule-set provider to Chocolate4U, set Cloudflare DoH as the remote DNS, generate a SOCKS5 login/password if missing, and on Android select common Russian apps for per-app bypass. Continue?</string>
     <string name="route_enable_ru_mode_done">Russia mode enabled. %1$d Russian apps added to per-app bypass.</string>
-    <string name="route_ru_bypass_nspk">Bypass NSPK / 3-D Secure (RU)</string>
+    <string name="route_ru_bypass_nspk">RU payment / banking (geosite)</string>
     <string name="custom_rule_provider_hint">One archive URL per line. Community RU lists:
 https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/sing-box-rules.zip
 https://community.antifilter.download/list/domains.lst</string>
@@ -788,7 +790,11 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_switch">Switch to simple mode</string>
     <string name="simple_mode_no_profile">No available profile yet. Wait for subscription refresh.</string>
     <string name="simple_mode_permission_pending">Waiting for Android VPN permission...</string>
-    <string name="simple_mode_whitelist_warning">This network appears to use a whitelist mode (Google is unreachable, Dzen is reachable). Stable VPN operation is not guaranteed; paid VPN/server options are recommended for this mode. Husi will still try available servers.</string>
-    <string name="simple_mode_wait_for_google">Auto-connect checks are paused to save battery. They will resume once Google becomes reachable.</string>
+    <string name="simple_mode_whitelist_warning">This network appears to use a whitelist mode (Google is unreachable while Dzen or known list URLs respond). In simple mode, server selection may use built-in helper nodes only; stability is not guaranteed. Paid VPN or your own servers are recommended. Husi will still try to connect.</string>
+    <string name="simple_mode_wait_for_google">Auto-connect checks are paused to save battery. They will resume once you have normal internet outside whitelist-only networks.</string>
     <string name="simple_mode_no_internet_pause">No internet access detected. Auto-connect checks are paused until connectivity returns.</string>
+    <string name="simple_mode_all_servers_dead_title">No working servers</string>
+    <string name="simple_mode_all_servers_dead_message">Built-in helpers and your subscription profiles did not respond to health checks. You can wait for normal internet outside the whitelist (for list updates), or exit the app.</string>
+    <string name="simple_mode_wait_for_google_action">Wait for internet (no whitelist)</string>
+    <string name="simple_mode_exit_app_action">Exit app</string>
 </resources>

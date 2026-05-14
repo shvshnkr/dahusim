@@ -144,6 +144,9 @@ object AlertType {
 
     // message: plugin name
     const val NEED_WIFI_PERMISSION = 2
+
+    /** Simple mode: all auto-selected servers failed; message unused */
+    const val SIMPLE_MODE_ALL_SERVERS_DEAD = 3
 }
 
 fun logLevelString(level: Int): String = when (level) {

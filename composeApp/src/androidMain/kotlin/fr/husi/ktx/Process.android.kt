@@ -3,6 +3,7 @@ package fr.husi.ktx
 import android.content.Intent
 import com.jakewharton.processphoenix.ProcessPhoenix
 import fr.husi.repository.resolveAndroidRepository
+import fr.husi.ui.UiActivityTracker
 
 actual fun restartApplication() {
     ProcessPhoenix.triggerRebirth(
@@ -12,5 +13,7 @@ actual fun restartApplication() {
 }
 
 actual fun exitApplication() {
-    android.os.Process.killProcess(android.os.Process.myPid())
+    if (!UiActivityTracker.finishAffinityOnMainThread()) {
+        android.os.Process.killProcess(android.os.Process.myPid())
+    }
 }

@@ -1,6 +1,9 @@
 package fr.husi.database
 
+import fr.husi.bootstrap.WhitelistBuiltinBootstrap
+import fr.husi.bg.BackendState
 import fr.husi.bg.GuardedProcessPool
+import fr.husi.bg.ServiceState
 import fr.husi.bg.initPlugins
 import fr.husi.bg.launchPlugins
 import fr.husi.fmt.buildConfig
@@ -21,26 +24,65 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
 
+sealed class PrepareForConnectResult {
+    data class Success(val profileId: Long) : PrepareForConnectResult()
+    data object NoProfiles : PrepareForConnectResult()
+    data object AllProbesDead : PrepareForConnectResult()
+}
+
 /**
  * Keeps server auto-selection deterministic by reusing recent health metrics
  * and a persisted fallback queue for reconnect retries.
  */
 object AutoServerSelector {
 
-    suspend fun prepareForConnect(): Long? {
+    /** Stale [prepareForConnect] runs (e.g. double tap) must not overwrite UI after tunnel is up. */
+    private fun setSimpleModeActivityUnlessConnected(text: String) {
+        if (BackendState.status.value.state == ServiceState.Connected) {
+            simpleModeLog("SimpleMode", "H19 activity_write_skipped_while_connected text=${text.take(48)}")
+            return
+        }
+        DataStore.simpleModeActivity = text
+    }
+
+    suspend fun prepareForConnect(): PrepareForConnectResult {
         val selectedBefore = DataStore.selectedProxy
-        val proxies = SagerDatabase.proxyDao.getAll()
+        val whitelistBuiltinOnly = DataStore.simpleModeUseWhitelistBuiltinPoolOnly
+        DataStore.simpleModeUseWhitelistBuiltinPoolOnly = false
+
+        WhitelistBuiltinBootstrap.ensureGroupAndProfiles()
+
+        val builtinFour = WhitelistBuiltinBootstrap.whitelistPoolProxies()
+        val builtinFourIds = builtinFour.map { it.id }.toSet()
+        val priorityFirstIds: Set<Long> = if (whitelistBuiltinOnly) builtinFourIds else emptySet()
+        val proxies = if (whitelistBuiltinOnly) {
+            val rest = SagerDatabase.proxyDao.getAll().filter { it.id !in builtinFourIds }
+            builtinFour + rest
+        } else {
+            SagerDatabase.proxyDao.getAll()
+        }
         if (proxies.isEmpty()) {
             // #region agent log
             simpleModeDebugEvent(
                 runId = "run1",
                 hypothesisId = "H4",
                 location = "AutoServerSelector.kt:prepareForConnect",
-                message = "no proxies in database",
+                message = if (whitelistBuiltinOnly) {
+                    "no whitelist builtin proxies"
+                } else {
+                    "no proxies in database"
+                },
             )
             // #endregion
-            simpleModeLog("SimpleMode", "H4 no_proxies_global")
-            return null
+            simpleModeLog(
+                "SimpleMode",
+                if (whitelistBuiltinOnly) {
+                    "H4 no_proxies_whitelist_builtin"
+                } else {
+                    "H4 no_proxies_global"
+                },
+            )
+            return PrepareForConnectResult.NoProfiles
         }
 
         val availableCount = proxies.count { it.status == ProxyEntity.STATUS_AVAILABLE }
@@ -61,9 +103,9 @@ object AutoServerSelector {
         var urlTestCandidates: List<ProxyEntity> = emptyList()
 
         if (shouldQuickProbe) {
-            DataStore.simpleModeActivity = "Quick testing servers..."
+            setSimpleModeActivityUnlessConnected("Quick testing servers...")
             val parallelUrlPool = proxies
-                .sortedWith(heuristicPreTcpOrder())
+                .sortedWith(heuristicPreTcpOrder(priorityFirstIds))
                 .take(parallelUrlPoolSize)
                 .distinctBy { it.id }
             simpleModeLog(
@@ -76,7 +118,7 @@ object AutoServerSelector {
                     if (parallelUrlPool.isEmpty()) {
                         emptyMap()
                     } else {
-                        DataStore.simpleModeActivity = "Testing servers (URL)..."
+                        setSimpleModeActivityUnlessConnected("Testing servers (URL)...")
                         simpleModeLog(
                             "SimpleMode",
                             "H17 urltest_started candidates=${parallelUrlPool.size} baseCap=$urlTestCap extraTcp=$extraUrlTestByTcp mode=parallel_heuristic",
@@ -96,7 +138,8 @@ object AutoServerSelector {
                 )
                 var merged = urlJob.await().toMutableMap()
                 val preUrlSorted = proxies.sortedWith(
-                    compareBy<ProxyEntity> { if (quickProbePings.containsKey(it.id)) 0 else 1 }
+                    compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
+                        .thenBy { if (quickProbePings.containsKey(it.id)) 0 else 1 }
                         .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
                         .thenBy { statusRank(it.status) }
                         .thenBy { pingRank(it.ping) }
@@ -131,7 +174,8 @@ object AutoServerSelector {
         } else {
             quickProbePings = emptyMap()
             val preUrlSorted = proxies.sortedWith(
-                compareBy<ProxyEntity> { if (quickProbePings.containsKey(it.id)) 0 else 1 }
+                compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
+                    .thenBy { if (quickProbePings.containsKey(it.id)) 0 else 1 }
                     .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
                     .thenBy { statusRank(it.status) }
                     .thenBy { pingRank(it.ping) }
@@ -140,7 +184,7 @@ object AutoServerSelector {
             val baseUrlTest = preUrlSorted.take(urlTestCap)
             urlTestCandidates = baseUrlTest
             urlTestDelays = if (urlTestCandidates.isNotEmpty()) {
-                DataStore.simpleModeActivity = "Testing servers (URL)..."
+                setSimpleModeActivityUnlessConnected("Testing servers (URL)...")
                 simpleModeLog(
                     "SimpleMode",
                     "H17 urltest_started candidates=${urlTestCandidates.size} baseCap=$urlTestCap extraTcp=$extraUrlTestByTcp mode=sequential",
@@ -162,6 +206,24 @@ object AutoServerSelector {
             )
         }
 
+        val allProbesDead = shouldQuickProbe &&
+            quickProbePings.isEmpty() &&
+            urlTestDelays.isEmpty()
+        if (allProbesDead) {
+            simpleModeLog(
+                "SimpleMode",
+                "H22 prepare_all_probes_dead count=${proxies.size} whitelistDual=$whitelistBuiltinOnly",
+            )
+            simpleModeDebugEvent(
+                runId = "run1",
+                hypothesisId = "H22",
+                location = "AutoServerSelector.kt:prepareForConnect",
+                message = "all tcp and url probes failed",
+                data = mapOf("count" to proxies.size.toString()),
+            )
+            return PrepareForConnectResult.AllProbesDead
+        }
+
         val ranked = proxies
             .sortedWith(
                 if (quickProbePings.isNotEmpty()) {
@@ -173,6 +235,7 @@ object AutoServerSelector {
                         .thenBy { urlTestDelays[it.id] ?: Int.MAX_VALUE }
                         .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
                         .thenByDescending { it.id == DataStore.autoSelectLastKnownGood }
+                        .thenBy { if (it.id in priorityFirstIds) 0 else 1 }
                         .thenBy { it.userOrder }
                 } else {
                     compareBy<ProxyEntity> { if (urlTestDelays.containsKey(it.id)) 0 else 1 }
@@ -183,6 +246,7 @@ object AutoServerSelector {
                         .thenBy { statusRank(it.status) }
                         .thenBy { pingRank(it.ping) }
                         .thenByDescending { it.id == DataStore.autoSelectLastKnownGood }
+                        .thenBy { if (it.id in priorityFirstIds) 0 else 1 }
                         .thenBy { it.userOrder }
                 },
             )
@@ -233,7 +297,7 @@ object AutoServerSelector {
         DataStore.autoSelectFallbackQueue = ranked.joinToString(",")
         DataStore.autoSelectFallbackIndex = 0
         val best = ranked.first()
-        DataStore.simpleModeActivity = "Selecting server 1/${ranked.size}"
+        setSimpleModeActivityUnlessConnected("Selecting server 1/${ranked.size}")
         if (selectedBefore != best) {
             Logs.d("AutoSelect: switch selected profile $selectedBefore -> $best")
             DataStore.selectedProxy = best
@@ -263,7 +327,7 @@ object AutoServerSelector {
             "SimpleMode",
             "H4 queue_prepared before=$selectedBefore best=$best size=${ranked.size} avail=$availableCount initial=$initialCount bad=$badCount probeAlive=$quickProbeAlive urlOk=${urlTestDelays.size} head=$rankedHead",
         )
-        return best
+        return PrepareForConnectResult.Success(best)
     }
 
     fun tryMoveToFallback(currentId: Long): Long? {
@@ -310,7 +374,7 @@ object AutoServerSelector {
         val next = queue[nextIndex]
         DataStore.autoSelectFallbackIndex = nextIndex
         DataStore.selectedProxy = next
-        DataStore.simpleModeActivity = "Trying next server ${nextIndex + 1}/${queue.size}"
+        setSimpleModeActivityUnlessConnected("Trying next server ${nextIndex + 1}/${queue.size}")
         Logs.w("AutoSelect fallback: move to profile $next")
         // #region agent log
         simpleModeDebugEvent(
@@ -380,8 +444,9 @@ object AutoServerSelector {
     }
 
     /** Order used to start URL tests in parallel with TCP (no TCP results yet). */
-    private fun heuristicPreTcpOrder(): Comparator<ProxyEntity> =
-        compareBy<ProxyEntity> { statusRank(it.status) }
+    private fun heuristicPreTcpOrder(priorityFirstIds: Set<Long>): Comparator<ProxyEntity> =
+        compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
+            .thenBy { statusRank(it.status) }
             .thenBy { pingRank(it.ping) }
             .thenByDescending { throughputRank(it) }
             .thenBy { it.userOrder }

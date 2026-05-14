@@ -16,7 +16,7 @@ DARWIN_SDK_SCRIPT_ARG = $(if $(DARWIN_SDK),--darwinsdk "$(DARWIN_SDK)",)
 LAUNCHER_ZIG_TARGET = $(subst linux/amd64,x86_64-linux-musl,$(subst linux/arm64,aarch64-linux-musl,$(subst darwin/amd64,x86_64-macos,$(subst darwin/arm64,aarch64-macos,$(subst windows/amd64,x86_64-windows,$(subst windows/arm64,aarch64-windows,$(DESKTOP_TARGET)))))))
 LAUNCHER_ZIG_TARGET_ARG = $(if $(LAUNCHER_ZIG_TARGET),-Dtarget=$(LAUNCHER_ZIG_TARGET),)
 
-.PHONY: update libcore libcore_android libcore_desktop_common libcore_desktop apk apk_debug assets desktop desktop_release desktop_package desktop_package_linux desktop_package_linux_all desktop_package_macos desktop_package_windows desktop_package_windows_all desktop_uberjar launcher lint_go test_go plugin generate_option
+.PHONY: update sync_upstream libcore libcore_android libcore_desktop_common libcore_desktop apk apk_debug assets desktop desktop_release desktop_package desktop_package_linux desktop_package_linux_all desktop_package_macos desktop_package_windows desktop_package_windows_all desktop_uberjar launcher lint_go test_go plugin generate_option
 
 build: libcore_android assets apk
 
@@ -106,6 +106,10 @@ assets:
 
 update:
 	./run lib update
+
+# Fork ↔ upstream: docs/UPSTREAM_SYNC.md — пример: make sync_upstream SYNC_UPSTREAM_ARGS=merge
+sync_upstream:
+	./run lib sync_upstream $(SYNC_UPSTREAM_ARGS)
 
 lint_go:
 	cd libcore/ && GOOS=android golangci-lint run ./...

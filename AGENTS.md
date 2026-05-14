@@ -6,6 +6,17 @@ See [CONTRIBUTION](./CONTRIBUTING.md)
 
 See [README](./README.md)
 
+- **After any change to project sources** (Kotlin, Gradle, resources consumed by the app, etc.),
+  **increment `VERSION_CODE`** in [`husi.properties`](./husi.properties) by **one** before you run or
+  recommend a release/debug build. This keeps `BuildConfig.VERSION_CODE` and simple-mode logs
+  (`build=… code=…`) unambiguous.
+- **When the user will install via Telegram, messengers, or any channel where the APK filename must
+  be unique** (desktop clients glitch on duplicate names), also **bump `VERSION_NAME`** — e.g. raise
+  the trailing `alpha.N` number by one. The Android output is named from `VERSION_NAME` (see
+  `registerApkRenamer` in buildSrc), so bumping only `VERSION_CODE` leaves the **same Telegram
+  filename** and causes collisions. Do not skip `VERSION_CODE`; add `VERSION_NAME` when handing off
+  a sideload build.
+
 # Basic rules
 
 - **Pride in respecting the existing, shame in disrupting coherence.** Any changes should adhere to

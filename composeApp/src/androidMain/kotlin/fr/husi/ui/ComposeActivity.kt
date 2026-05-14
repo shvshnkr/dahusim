@@ -11,6 +11,16 @@ import fr.husi.database.DataStore
 
 open class ComposeActivity : PrivacyModeActivity() {
 
+    override fun onStart() {
+        super.onStart()
+        UiActivityTracker.attach(this)
+    }
+
+    override fun onStop() {
+        UiActivityTracker.detach(this)
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val usingNightMode = resources.isDarkMode(DataStore.nightTheme)
         if (Build.VERSION.SDK_INT == Build.VERSION_CODES.VANILLA_ICE_CREAM) {

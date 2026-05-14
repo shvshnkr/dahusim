@@ -1,0 +1,195 @@
+name: Linux desktop (test channel)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "dev*"
+      - "main"
+      - "master"
+      - "feature/**"
+    paths:
+      - "composeApp/**"
+      - "libcore/**"
+      - "release/linux/**"
+      - "launcher/**"
+      - "husi.properties"
+      - "buildScript/**"
+      - ".github/workflows/desktop-linux-test.yml"
+      - ".github/CRONET_GO_VERSION"
+
+concurrency:
+  group: desktop-linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-desktop-packages:
+    name: Package linux/amd64 + smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: https://codeberg.org/mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev rpm libarchive-tools zstd
+
+      - name: Go version
+        id: goversion
+        run: |
+          source buildScript/init/version.sh
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.goversion.outputs.go_version }}
+          cache-dependency-path: libcore/go.sum
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Resolve cronet-go version
+        id: cronet-go-version
+        run: |
+          echo "version=$(tr -d '[:space:]' < .github/CRONET_GO_VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout cronet-go
+        uses: actions/checkout@v4
+        with:
+          repository: sagernet/cronet-go
+          ref: ${{ steps.cronet-go-version.outputs.version }}
+          path: cronet-go
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Cache Chromium toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            cronet-go/naiveproxy/src/third_party/llvm-build/
+            cronet-go/naiveproxy/src/gn/out/
+            cronet-go/naiveproxy/src/chrome/build/pgo_profiles/
+            cronet-go/naiveproxy/src/out/sysroot-build/
+          key: cronet-toolchain-linux-amd64-${{ steps.cronet-go-version.outputs.version }}
+
+      - name: Download Chromium toolchain
+        run: |
+          set -xeuo pipefail
+          rm -f "$GITHUB_WORKSPACE/cronet-go/naiveproxy/src/build/linux/sysroot_scripts/keyring.gpg"
+          cd "$GITHUB_WORKSPACE/cronet-go"
+          GPG_TTY=/dev/null ./naiveproxy/src/build/linux/sysroot_scripts/generate_keyring.sh
+          go run ./cmd/build-naive --target=linux/amd64 download-toolchain
+
+      - name: Build libcore (desktop linux/amd64)
+        env:
+          CRONET_GO_ROOT: ${{ github.workspace }}/cronet-go
+        run: |
+          ./run lib core --desktop --desktoptargets linux/amd64
+
+      - name: Verify libcore jar
+        run: |
+          test -f composeApp/libs/libcore-desktop-linux-amd64.jar
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Geo / Gradle init assets
+        run: ./run init action gradle
+
+      - name: Ensure version tag for packaging
+        run: |
+          set -euo pipefail
+          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          if git rev-parse -q --verify "refs/tags/v${VER}" >/dev/null; then
+            echo "Tag v${VER} already present."
+          else
+            git config user.email "actions@github.com"
+            git config user.name "github-actions"
+            git tag -a "v${VER}" -m "ci: packaging tag for v${VER}" "${GITHUB_SHA}"
+          fi
+
+      - name: Uber jar + launcher + Linux packages
+        env:
+          BUILD_PLUGIN: none
+        run: |
+          set -euo pipefail
+          make desktop_package_linux DESKTOP_TARGET=linux/amd64 LINUX_PACKAGE_FORMATS=deb,rpm,pacman
+
+      - name: Smoke (artifacts + metadata)
+        run: bash buildScript/ci/smoke_linux_desktop_packages.sh
+
+      - name: Stage release assets
+        id: assets
+        run: |
+          set -euo pipefail
+          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          PKG=$(grep '^PACKAGE_NAME=' husi.properties | cut -d= -f2-)
+          SHORT=$(git rev-parse --short HEAD)
+          mkdir -p release_assets
+          shopt -s nullglob
+          for f in composeApp/build/compose/packages/linux/*.{deb,rpm,pkg.tar.zst}; do
+            base=$(basename "$f")
+            ext="${base##*.}"
+            case "$base" in
+              *.pkg.tar.zst) ext="pkg.tar.zst" ;;
+            esac
+            stem="${base%.$ext}"
+            cp -v "$f" "release_assets/${PKG}_${VER}_linux_amd64_${SHORT}_${stem}.${ext}"
+          done
+          for f in composeApp/build/compose/jars/${PKG}-linux-x64-*.jar; do
+            [ -f "$f" ] || continue
+            cp -v "$f" "release_assets/${PKG}_${VER}_linux_amd64_${SHORT}_$(basename "$f")"
+          done
+          ls -la release_assets
+          test "$(find release_assets -type f | wc -l)" -ge 4
+
+      - name: Release body
+        run: |
+          set -euo pipefail
+          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          {
+            echo "## Linux desktop test build"
+            echo
+            echo "**Версия:** \`${VER}\` **Коммит:** \`$(git rev-parse --short HEAD)\`"
+            echo
+            echo "Отдельный тестовый канал (не смешивается с rolling APK pre-release из \`build.yml\`)."
+            echo
+            echo "**Форматы:** deb, rpm, pacman (.pkg.tar.zst) для **linux/amd64**."
+            echo
+            echo "## Коммит"
+            echo
+            git log -1 --oneline
+          } > release_body.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          tag_name: linux-desktop-test-${{ github.run_id }}
+          name: Linux desktop test ${{ github.run_number }}
+          body_path: release_body.md
+          files: release_assets/*
+
+      - name: Prune old linux-desktop-test releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          keep=15
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq '.[] | .tag_name | select(test("^linux-desktop-test-[0-9]+$"))' |
+            sed -n 's/^linux-desktop-test-//p' | sort -rn | tail -n +"$((keep + 1))" |
+            while read -r rid; do
+              echo ">> delete release linux-desktop-test-${rid}"
+              gh release delete "linux-desktop-test-${rid}" --yes || true
+            done

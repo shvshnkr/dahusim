@@ -31,6 +31,8 @@ import fr.husi.bg.ServiceState
 import fr.husi.compose.rememberVpnServiceLauncher
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
+import fr.husi.database.PrepareForConnectResult
+import fr.husi.ktx.exitApplication
 import fr.husi.ktx.onDefaultDispatcher
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.Res
@@ -41,17 +43,23 @@ import fr.husi.resources.simple_mode_description
 import fr.husi.resources.simple_mode_disconnect
 import fr.husi.resources.simple_mode_full_ui
 import fr.husi.resources.simple_mode_logs
+import fr.husi.resources.simple_mode_no_internet_pause
 import fr.husi.resources.simple_mode_no_profile
 import fr.husi.resources.simple_mode_permission_pending
 import fr.husi.resources.simple_mode_status
 import fr.husi.resources.simple_mode_stopped
 import fr.husi.resources.vpn_permission_denied
 import fr.husi.ui.MainViewModel
+import fr.husi.ui.SimpleModeAllServersDeadChoice
 import fr.husi.ui.StringOrRes
 import fr.husi.utils.canShareSimpleModeLogs
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.shareSimpleModeLogs
+import fr.husi.simplemode.probeSimpleModeNetwork
 import fr.husi.utils.simpleModeLog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +72,7 @@ fun SimpleHomeScreen(
 ) {
     val scope = rememberCoroutineScope()
     var permissionPending by remember { mutableStateOf(false) }
+    var connectInFlight by remember { mutableStateOf<Job?>(null) }
     val status = BackendState.status.collectAsStateWithLifecycle().value
     val activityText = DataStore.configurationStore
         .stringFlow(Key.SIMPLE_MODE_ACTIVITY)
@@ -78,6 +87,9 @@ fun SimpleHomeScreen(
         simpleModeLog("SimpleMode", "state=${status.state.name}")
         if (status.state != ServiceState.Stopped) {
             permissionPending = false
+        }
+        if (status.state == ServiceState.Connected) {
+            DataStore.simpleModeActivity = ""
         }
     }
     LaunchedEffect(activityText) {
@@ -121,6 +133,7 @@ fun SimpleHomeScreen(
                 StatusTone.STOPPED -> stringResource(Res.string.simple_mode_stopped)
             }
             val detailText = when {
+                status.state == ServiceState.Connected -> null
                 permissionPending && !status.state.canStop -> stringResource(Res.string.simple_mode_permission_pending)
                 activityText.isNotBlank() -> activityText
                 else -> null
@@ -170,45 +183,126 @@ fun SimpleHomeScreen(
                     simpleModeLog("SimpleMode", "connect_ignored_permission_pending")
                     return@Button
                 }
-                simpleModeLog("SimpleMode", "connect_clicked")
-                DataStore.simpleModeActivity = "Selecting best server..."
-                scope.launch {
-                    // #region agent log
-                    simpleModeDebugEvent(
-                        runId = "run1",
-                        hypothesisId = "H2",
-                        location = "SimpleHomeScreen.kt:connect_click",
-                        message = "connect button tapped",
-                        data = mapOf(
-                            "state" to status.state.name,
-                            "selectedProxy" to DataStore.selectedProxy.toString(),
-                        ),
-                    )
-                    // #endregion
-                    val selected = onDefaultDispatcher {
-                        AutoServerSelector.prepareForConnect()
+                simpleModeLog(
+                    "SimpleMode",
+                    "connect_clicked state=${status.state.name} permissionPending=$permissionPending " +
+                        "activity=${activityText.ifBlank { "-" }}",
+                )
+                if (connectInFlight?.isActive == true) {
+                    simpleModeLog("SimpleMode", "connect_cancel_previous_inflight")
+                }
+                connectInFlight?.cancel()
+                connectInFlight = scope.launch {
+                    val clickStartedAt = System.currentTimeMillis()
+                    var preconnectStage = "checking_network"
+                    val watchdog = launch {
+                        delay(15_000)
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H21 preconnect_stall stage=$preconnectStage elapsedMs=${System.currentTimeMillis() - clickStartedAt} " +
+                                "activity=${DataStore.simpleModeActivity.ifBlank { "-" }}",
+                        )
                     }
-                    // #region agent log
-                    simpleModeDebugEvent(
-                        runId = "run1",
-                        hypothesisId = "H2",
-                        location = "SimpleHomeScreen.kt:after_prepare",
-                        message = "prepareForConnect completed",
-                        data = mapOf(
-                            "selected" to (selected?.toString() ?: "null"),
-                            "selectedProxyAfter" to DataStore.selectedProxy.toString(),
-                        ),
-                    )
-                    // #endregion
-                    if (selected == null && DataStore.selectedProxy <= 0L) {
-                        simpleModeLog("SimpleMode", "connect_blocked_no_profile")
-                        mainViewModel.showSnackbar(StringOrRes.Res(Res.string.simple_mode_no_profile))
-                        return@launch
+                    try {
+                        DataStore.simpleModeActivity = "Checking network..."
+                        simpleModeLog("SimpleMode", "H21 preconnect_stage stage=checking_network")
+                        val net = onDefaultDispatcher { probeSimpleModeNetwork() }
+                        preconnectStage = "network_probe_done"
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H21 preconnect_stage stage=network_probe_done hasInternet=${net.hasAnyInternet} " +
+                                "whitelistOnly=${net.whitelistOnly} googleOk=${net.googleOk}",
+                        )
+                        if (!net.hasAnyInternet) {
+                            DataStore.simpleModeActivity = ""
+                            simpleModeLog("SimpleMode", "connect_blocked_no_internet_probe")
+                            mainViewModel.showSnackbar(StringOrRes.Res(Res.string.simple_mode_no_internet_pause))
+                            return@launch
+                        }
+                        DataStore.simpleModeUseWhitelistBuiltinPoolOnly = net.whitelistOnly
+                        DataStore.simpleModeActivity = "Selecting best server..."
+                        preconnectStage = "prepare_for_connect"
+                        // #region agent log
+                        simpleModeDebugEvent(
+                            runId = "run1",
+                            hypothesisId = "H2",
+                            location = "SimpleHomeScreen.kt:connect_click",
+                            message = "connect button tapped",
+                            data = mapOf(
+                                "state" to status.state.name,
+                                "selectedProxy" to DataStore.selectedProxy.toString(),
+                                "whitelistOnly" to net.whitelistOnly.toString(),
+                                "googleOk" to net.googleOk.toString(),
+                            ),
+                        )
+                        // #endregion
+                        val prep = onDefaultDispatcher {
+                            AutoServerSelector.prepareForConnect()
+                        }
+                        preconnectStage = "prepare_result"
+                        simpleModeLog("SimpleMode", "H21 preconnect_stage stage=prepare_result result=$prep")
+                        // #region agent log
+                        simpleModeDebugEvent(
+                            runId = "run1",
+                            hypothesisId = "H2",
+                            location = "SimpleHomeScreen.kt:after_prepare",
+                            message = "prepareForConnect completed",
+                            data = mapOf(
+                                "result" to prep.toString(),
+                                "selectedProxyAfter" to DataStore.selectedProxy.toString(),
+                            ),
+                        )
+                        // #endregion
+                        when (prep) {
+                            PrepareForConnectResult.NoProfiles -> {
+                                simpleModeLog("SimpleMode", "connect_blocked_no_profile")
+                                mainViewModel.showSnackbar(StringOrRes.Res(Res.string.simple_mode_no_profile))
+                                return@launch
+                            }
+                            PrepareForConnectResult.AllProbesDead -> {
+                                DataStore.simpleModeActivity = ""
+                                simpleModeLog("SimpleMode", "connect_blocked_all_probes_dead")
+                                when (mainViewModel.promptSimpleModeAllServersDead()) {
+                                    SimpleModeAllServersDeadChoice.WaitForGoogle -> {
+                                        DataStore.autoConnectPausedUntilGoogle = true
+                                        resolveRepository().stopService()
+                                    }
+                                    SimpleModeAllServersDeadChoice.ExitApp -> exitApplication()
+                                }
+                                return@launch
+                            }
+                            is PrepareForConnectResult.Success -> {
+                                val selected = prep.profileId
+                                if (selected <= 0L && DataStore.selectedProxy <= 0L) {
+                                    simpleModeLog("SimpleMode", "connect_blocked_no_profile")
+                                    mainViewModel.showSnackbar(StringOrRes.Res(Res.string.simple_mode_no_profile))
+                                    return@launch
+                                }
+                                preconnectStage = "permission_request"
+                                simpleModeLog("SimpleMode", "connect_start_selected=$selected")
+                                permissionPending = true
+                                simpleModeLog(
+                                    "SimpleMode",
+                                    "permission_request_started elapsedMs=${System.currentTimeMillis() - clickStartedAt}",
+                                )
+                                connector()
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H21 preconnect_cancelled stage=$preconnectStage elapsedMs=${System.currentTimeMillis() - clickStartedAt}",
+                        )
+                        throw e
+                    } catch (t: Throwable) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H21 preconnect_failed stage=$preconnectStage class=${t.javaClass.simpleName} error=${t.message ?: "unknown"}",
+                        )
+                        throw t
+                    } finally {
+                        watchdog.cancel()
                     }
-                    simpleModeLog("SimpleMode", "connect_start_selected=$selected")
-                    permissionPending = true
-                    simpleModeLog("SimpleMode", "permission_request_started")
-                    connector()
                 }
             },
         ) {
@@ -287,10 +381,10 @@ private fun statusTone(
     activityText: String,
 ): StatusTone {
     return when {
+        state == ServiceState.Connected -> StatusTone.CONNECTED
         permissionPending -> StatusTone.CONNECTING
         activityText.isNotBlank() -> StatusTone.CONNECTING
         state == ServiceState.Connecting -> StatusTone.CONNECTING
-        state == ServiceState.Connected -> StatusTone.CONNECTED
         else -> StatusTone.STOPPED
     }
 }

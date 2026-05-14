@@ -35,6 +35,7 @@ abstract class BoxInstance(
 
     protected open fun buildConfig() {
         config = buildConfig(profile)
+        emitRouteBuildDebug(profile, config)
     }
 
     protected open suspend fun loadConfig() {

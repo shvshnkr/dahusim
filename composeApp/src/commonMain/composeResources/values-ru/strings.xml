@@ -241,9 +241,9 @@
     <string name="route_apply_cn_preset">Применить профиль для Китая</string>
     <string name="route_apply_preset_applied">Профиль маршрутизации применён</string>
     <string name="route_enable_ru_mode">Включить режим РФ</string>
-    <string name="route_enable_ru_mode_confirm">Это действие перезапишет текущие правила маршрутизации профилем для России (прямой доступ к geosite-ru / geoip-ru, НСПК / 3-D Secure; блок рекламы и QUIC), переключит источник rule-set на Chocolate4U, пропишет Mullvad DoH как удалённый DNS, сгенерирует логин/пароль для SOCKS5 при их отсутствии и на Android добавит распространённые российские приложения в исключения bypass. Продолжить?</string>
+    <string name="route_enable_ru_mode_confirm">Это действие перезапишет текущие правила маршрутизации профилем для России (прямой доступ к geosite-ru / geoip-ru; блок рекламы и QUIC), переключит источник rule-set на Chocolate4U, пропишет Cloudflare DoH как удалённый DNS, сгенерирует логин/пароль для SOCKS5 при их отсутствии и на Android добавит распространённые российские приложения в исключения bypass. Продолжить?</string>
     <string name="route_enable_ru_mode_done">Режим РФ включён. Добавлено %1$d российских приложений в исключения.</string>
-    <string name="route_ru_bypass_nspk">Обход НСПК / 3-D Secure (РФ)</string>
+    <string name="route_ru_bypass_nspk">Платежи и банки РФ (geosite)</string>
     <string name="custom_rule_provider_hint">Один URL архива на строку. Сообщество RU-списков:
 https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/sing-box-rules.zip
 https://community.antifilter.download/list/domains.lst</string>
@@ -462,7 +462,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="nat_result_hint">Провести проверку NAT</string>
     <string name="acquire_wake_lock">Использовать WakeLock</string>
     <string name="resolve_server">Разрешить адрес сервера в соответствии с политикой IPv6</string>
-    <string name="app_name">husi</string>
+    <string name="app_name">daHusiM</string>
     <string name="tuic_congestion_controller">Контроллер перегруженности</string>
     <string name="save">Сохранить</string>
     <string name="ech_config">Конфигурация ECH</string>
@@ -739,7 +739,11 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_switch">Переключиться в простой режим</string>
     <string name="simple_mode_no_profile">Нет доступного профиля. Дождитесь обновления подписок.</string>
     <string name="simple_mode_permission_pending">Ожидание разрешения Android на VPN…</string>
-    <string name="simple_mode_whitelist_warning">Похоже, эта сеть работает в режиме белых списков (Google недоступен, Dzen доступен). Стабильная работа VPN в таком режиме не гарантируется; рекомендуются платные VPN/серверы. Husi всё равно попробует подключиться к доступным серверам.</string>
-    <string name="simple_mode_wait_for_google">Проверки автоподключения поставлены на паузу для экономии батареи. Они возобновятся, когда Google снова станет доступен.</string>
+    <string name="simple_mode_whitelist_warning">Похоже, сеть в режиме белых списков (Google недоступен, при этом отвечают Dzen или известные URL списков). В простом режиме выбор сервера может идти только по встроенным вспомогательным узлам; стабильность не гарантируется — лучше свой платный VPN/сервер. Husi всё равно попробует подключиться.</string>
+    <string name="simple_mode_wait_for_google">Проверки автоподключения поставлены на паузу для экономии батареи. Они возобновятся, когда появится интернет без БС.</string>
     <string name="simple_mode_no_internet_pause">Интернет недоступен. Проверки автоподключения поставлены на паузу до восстановления связи.</string>
+    <string name="simple_mode_all_servers_dead_title">Нет рабочих серверов</string>
+    <string name="simple_mode_all_servers_dead_message">Встроенные узлы и профили из подписок не ответили на проверки. Можно ждать интернета без БС (для обычных обновлений списков) или выйти из приложения.</string>
+    <string name="simple_mode_wait_for_google_action">Ждать интернета без БС</string>
+    <string name="simple_mode_exit_app_action">Выйти из приложения</string>
 </resources>

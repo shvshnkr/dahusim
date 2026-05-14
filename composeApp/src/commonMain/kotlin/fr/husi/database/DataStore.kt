@@ -31,6 +31,13 @@ object DataStore {
     @Volatile
     var serviceState = ServiceState.Idle
 
+    /**
+     * When true, the next [AutoServerSelector.prepareForConnect] uses only the four built-in
+     * whitelist-helper profiles (simple mode, whitelist-only network). Cleared when read.
+     */
+    @Volatile
+    var simpleModeUseWhitelistBuiltinPoolOnly: Boolean = false
+
     val configurationStore = DataStorePreferenceDataStore.create(createConfigurationDataStore())
 
     init {
@@ -123,9 +130,8 @@ object DataStore {
      */
     fun ensureInboundCredentials(): Boolean {
         if (inboundUsername.isNotBlank() && inboundPassword.isNotBlank()) return false
-        val token = java.util.UUID.randomUUID().toString()
-        if (inboundUsername.isBlank()) inboundUsername = "husi"
-        if (inboundPassword.isBlank()) inboundPassword = token
+        if (inboundUsername.isBlank()) inboundUsername = InboundCredentialRandom.username()
+        if (inboundPassword.isBlank()) inboundPassword = InboundCredentialRandom.password()
         return true
     }
 
@@ -137,7 +143,7 @@ object DataStore {
     var directDns by configurationStore.string(Key.DIRECT_DNS) { "local" }
     var domainStrategyForDirect by configurationStore.string(Key.DOMAIN_STRATEGY_FOR_DIRECT)
     var domainStrategyForServer by configurationStore.string(Key.DOMAIN_STRATEGY_FOR_SERVER)
-    var enableFakeDns by configurationStore.boolean(Key.ENABLE_FAKE_DNS) { false }
+    var enableFakeDns by configurationStore.boolean(Key.ENABLE_FAKE_DNS) { true }
     var fakeDNSForAll by configurationStore.boolean(Key.FAKE_DNS_FOR_ALL) { false }
 
     // https://developer.chrome.com/blog/local-network-access

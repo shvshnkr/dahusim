@@ -172,31 +172,18 @@ object AppScanner {
         ("(" + russianAppPrefixList.joinToString("|").replace(".", "\\.") + ").*").toRegex()
     }
 
-    /**
-     * Detect apps belonging to the Russian ecosystem (banks, government, marketplaces,
-     * Yandex/VK/OK, RU telecom, RU media). Matching is done purely by package name
-     * because most RU apps have distinctive `ru.*`, `com.yandex.*`, `com.vkontakte.*`
-     * prefixes and heavy dex inspection is unnecessary and expensive.
-     */
-    fun isRussianApp(packageName: String): Boolean {
-        skipPrefixList.forEach {
-            if (packageName == it || packageName.startsWith("$it.")) return false
-        }
-        return packageName.matches(russianAppRegex)
-    }
-
-    fun isChinaApp(packageName: String, packageManager: PackageManager): Boolean {
-        skipPrefixList.forEach {
-            if (packageName == it || packageName.startsWith("$it.")) return false
-        }
-
+    private fun matchesSdkIndicators(
+        packageName: String,
+        packageManager: PackageManager,
+        nameRegex: Regex,
+    ): Boolean {
         val packageManagerFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             PackageManager.MATCH_UNINSTALLED_PACKAGES or PackageManager.GET_ACTIVITIES or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS or PackageManager.GET_PROVIDERS
         } else {
             @Suppress("DEPRECATION")
             PackageManager.GET_UNINSTALLED_PACKAGES or PackageManager.GET_ACTIVITIES or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS or PackageManager.GET_PROVIDERS
         }
-        if (packageName.matches(chinaAppRegex)) {
+        if (packageName.matches(nameRegex)) {
             Logs.d("Match package name: $packageName")
             return true
         }
@@ -210,25 +197,25 @@ object AppScanner {
                 packageManager.getPackageInfo(packageName, packageManagerFlags)
             }
             packageInfo.services?.forEach {
-                if (it.name.matches(chinaAppRegex)) {
+                if (it.name.matches(nameRegex)) {
                     Logs.d("Match service ${it.name} in $packageName")
                     return true
                 }
             }
             packageInfo.activities?.forEach {
-                if (it.name.matches(chinaAppRegex)) {
+                if (it.name.matches(nameRegex)) {
                     Logs.d("Match activity ${it.name} in $packageName")
                     return true
                 }
             }
             packageInfo.receivers?.forEach {
-                if (it.name.matches(chinaAppRegex)) {
+                if (it.name.matches(nameRegex)) {
                     Logs.d("Match receiver ${it.name} in $packageName")
                     return true
                 }
             }
             packageInfo.providers?.forEach {
-                if (it.name.matches(chinaAppRegex)) {
+                if (it.name.matches(nameRegex)) {
                     Logs.d("Match provider ${it.name} in $packageName")
                     return true
                 }
@@ -259,7 +246,7 @@ object AppScanner {
                         val clazzName =
                             clazz.type.substring(1, clazz.type.length - 1).replace("/", ".")
                                 .replace("$", ".")
-                        if (clazzName.matches(chinaAppRegex)) {
+                        if (clazzName.matches(nameRegex)) {
                             Logs.d("Match $clazzName in $packageName")
                             return true
                         }
@@ -271,4 +258,19 @@ object AppScanner {
         }
         return false
     }
+
+    fun isRussianApp(packageName: String, packageManager: PackageManager): Boolean {
+        skipPrefixList.forEach {
+            if (packageName == it || packageName.startsWith("$it.")) return false
+        }
+        return matchesSdkIndicators(packageName, packageManager, russianAppRegex)
+    }
+
+    fun isChinaApp(packageName: String, packageManager: PackageManager): Boolean {
+        skipPrefixList.forEach {
+            if (packageName == it || packageName.startsWith("$it.")) return false
+        }
+        return matchesSdkIndicators(packageName, packageManager, chinaAppRegex)
+    }
+
 }

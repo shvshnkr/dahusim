@@ -13,6 +13,7 @@ import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkerParameters
 import androidx.work.multiprocess.RemoteWorkManager
 import fr.husi.Action
+import fr.husi.database.DataStore
 import fr.husi.lib.R
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.repository.resolveRepository
@@ -73,6 +74,19 @@ actual object SubscriptionUpdater {
         }
 
         override suspend fun doWork(): Result {
+            if (!DataStore.serviceState.connected) {
+                val reachability = NetworkReachabilityProbe.probe()
+                if (!reachability.hasInternet) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H21 subscription_update_skipped_no_internet google=${reachability.googleReachable} " +
+                            "dzen=${reachability.dzenReachable} ya=${reachability.yaReachable} " +
+                            "wl=${reachability.whitelistSourceReachable}",
+                    )
+                    return Result.success()
+                }
+            }
+
             val outcome = SubscriptionAutoUpdateRunner.runWithResult { profile ->
                 notification.setContentText(
                     resolveRepository().getString(

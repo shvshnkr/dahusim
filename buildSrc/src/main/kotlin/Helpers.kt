@@ -19,7 +19,6 @@ private val Project.android: CommonExtension
 private val Project.androidApp: ApplicationExtension
     get() = extensions.getByType<ApplicationExtension>()
 
-private lateinit var metadata: Properties
 private lateinit var localProperties: Properties
 private lateinit var flavor: String
 
@@ -49,14 +48,11 @@ fun Project.requireFlavor(): String {
     return flavor
 }
 
-fun Project.requireMetadata(): Properties {
-    if (!::metadata.isInitialized) {
-        metadata = Properties().apply {
-            load(rootProject.file("husi.properties").inputStream())
-        }
+/** Always reloads from disk so `VERSION_CODE` / `VERSION_NAME` edits apply on the next Gradle run. */
+fun Project.requireMetadata(): Properties =
+    Properties().apply {
+        load(rootProject.file("husi.properties").inputStream())
     }
-    return metadata
-}
 
 @Suppress("NewApi")
 fun Project.requireLocalProperties(): Properties {

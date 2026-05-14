@@ -5,10 +5,14 @@ package fr.husi.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
@@ -53,6 +57,7 @@ import fr.husi.compose.material3.rememberDrawerStateHolder
 import fr.husi.database.DataStore
 import fr.husi.database.SagerDatabase
 import fr.husi.fmt.PluginEntry
+import fr.husi.ktx.exitApplication
 import fr.husi.ktx.restartApplication
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.permission.AppPermission
@@ -72,6 +77,7 @@ import fr.husi.resources.document
 import fr.husi.resources.error
 import fr.husi.resources.fast_rewind
 import fr.husi.resources.have_a_nice_day
+import fr.husi.resources.home
 import fr.husi.resources.info
 import fr.husi.resources.location_permission_description
 import fr.husi.resources.location_permission_title
@@ -92,6 +98,11 @@ import fr.husi.resources.plugin_unknown
 import fr.husi.resources.query_package_denied
 import fr.husi.resources.question_mark
 import fr.husi.resources.settings
+import fr.husi.resources.simple_mode_switch
+import fr.husi.resources.simple_mode_all_servers_dead_message
+import fr.husi.resources.simple_mode_all_servers_dead_title
+import fr.husi.resources.simple_mode_exit_app_action
+import fr.husi.resources.simple_mode_wait_for_google_action
 import fr.husi.resources.transform
 import fr.husi.resources.view_list
 import fr.husi.resources.warning_amber
@@ -367,6 +378,29 @@ private fun MainScreenContent(
                     NavRoutes.About,
                 ),
             )
+            HorizontalDivider(modifier = Modifier.padding(vertical = dividerPadding))
+            Button(
+                onClick = {
+                    closeDrawer()
+                    DataStore.simpleMode = true
+                    navigator.navigateTo(NavRoutes.Simple)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Icon(
+                    imageVector = vectorResource(Res.drawable.home),
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = stringResource(Res.string.simple_mode_switch),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
             if (drawerStateHolder.canCollapse) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = dividerPadding))
                 Row(
@@ -521,6 +555,32 @@ private fun MainScreenContent(
                     icon = { Icon(vectorResource(Res.drawable.warning_amber), null) },
                     title = { Text(stringResource(Res.string.location_permission_title)) },
                     text = { Text(stringResource(Res.string.location_permission_description)) },
+                )
+            }
+
+            AlertType.SIMPLE_MODE_ALL_SERVERS_DEAD -> {
+                AlertDialog(
+                    onDismissRequest = {
+                        DataStore.autoConnectPausedUntilGoogle = true
+                        resolveRepository().stopService()
+                        showServiceAlert = null
+                    },
+                    confirmButton = {
+                        TextButton(stringResource(Res.string.simple_mode_wait_for_google_action)) {
+                            DataStore.autoConnectPausedUntilGoogle = true
+                            resolveRepository().stopService()
+                            showServiceAlert = null
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(stringResource(Res.string.simple_mode_exit_app_action)) {
+                            showServiceAlert = null
+                            exitApplication()
+                        }
+                    },
+                    icon = { Icon(vectorResource(Res.drawable.warning_amber), null) },
+                    title = { Text(stringResource(Res.string.simple_mode_all_servers_dead_title)) },
+                    text = { Text(stringResource(Res.string.simple_mode_all_servers_dead_message)) },
                 )
             }
         }

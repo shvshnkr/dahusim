@@ -14,10 +14,25 @@ import fr.husi.fmt.SingBoxOptions.RuleSet
 import fr.husi.fmt.SingBoxOptions.RuleSet_Local
 import fr.husi.fmt.SingBoxOptions.RuleSet_Remote
 import fr.husi.fmt.SingBoxOptions.Rule_Default
+import fr.husi.ktx.JSONMap
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.parseBoolean
 import fr.husi.ktx.queryParameterNotBlank
+import fr.husi.ktx.toJSONMap
 import fr.husi.libcore.Libcore
+
+/** Fallback when merge/custom leaves tags but bases are missing (must match sing-geosite / sing-geoip layout). */
+private const val DEFAULT_RULESET_GEOSITE_BASE =
+    "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set"
+private const val DEFAULT_RULESET_GEOIP_BASE =
+    "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set"
+
+private fun ruleSetRemoteBaseForTag(tag: String, ipURL: String?, domainURL: String?): String {
+    val isIp = tag.startsWith("geoip-")
+    val primary = (if (isIp) ipURL else domainURL)?.takeIf { it.isNotBlank() }
+    if (primary != null) return primary
+    return if (isIp) DEFAULT_RULESET_GEOIP_BASE else DEFAULT_RULESET_GEOSITE_BASE
+}
 
 fun DNSRule_Default.makeCommonRule(list: List<RuleItem>) {
     domain = mutableListOf()
@@ -329,31 +344,103 @@ fun MyOptions.buildRuleSets(
     for (set in route!!.rule_set!!) names.add(set.tag!!)
     val list = ArrayList<RuleSet>(names.size)
 
-    val isRemote = ipURL != null
+    val preferRemote = !ipURL.isNullOrBlank() || !domainURL.isNullOrBlank()
+    val useLocalOnly = !preferRemote && localPath != null
     for (name in names.sorted()) {
-        if (isRemote) list.add(
-            RuleSet_Remote().apply {
-                tag = name
-                type = SingBoxOptions.RULE_SET_TYPE_REMOTE
-                format = SingBoxOptions.RULE_SET_FORMAT_BINARY
-                val isIP = name.startsWith("geoip-")
-                url = if (isIP) {
-                    "${ipURL}/${name}.srs"
-                } else {
-                    "${domainURL}/${name}.srs"
-                }
-            },
-        ) else list.add(
-            RuleSet_Local().apply {
-                tag = name
-                type = SingBoxOptions.RULE_SET_TYPE_LOCAL
-                format = SingBoxOptions.RULE_SET_FORMAT_BINARY
-                path = "$localPath/$name.srs"
-            },
-        )
+        if (useLocalOnly) {
+            list.add(
+                RuleSet_Local().apply {
+                    tag = name
+                    type = SingBoxOptions.RULE_SET_TYPE_LOCAL
+                    format = SingBoxOptions.RULE_SET_FORMAT_BINARY
+                    path = "$localPath/$name.srs"
+                },
+            )
+        } else {
+            val fileName = mapRuleSetFileName(name)
+            val base = ruleSetRemoteBaseForTag(name, ipURL, domainURL)
+            list.add(
+                RuleSet_Remote().apply {
+                    tag = name
+                    type = SingBoxOptions.RULE_SET_TYPE_REMOTE
+                    format = SingBoxOptions.RULE_SET_FORMAT_BINARY
+                    url = "$base/$fileName.srs"
+                },
+            )
+        }
     }
 
     route!!.rule_set = list
+}
+
+private fun mapRuleSetFileName(tag: String): String = when (tag) {
+    // sing-geosite no longer publishes geosite-ru.srs; current file is geosite-category-ru.srs.
+    "geosite-ru" -> "geosite-category-ru"
+    else -> tag
+}
+
+/**
+ * Subscription/clash `customConfigJson` is merged after [buildRuleSets]; [mergeJson] replaces
+ * whole `route.rule_set` lists, so broken remote URLs (e.g. rule-set-unstable) win.
+ * Rebuild `route.rule_set` from tags referenced in the merged dns/route rules.
+ */
+fun JSONMap.refreshRuleSetsAfterCustomMerge(
+    forTest: Boolean,
+    ipURL: String?,
+    domainURL: String?,
+    localPath: String?,
+) {
+    if (forTest) return
+    val preferRemote = !ipURL.isNullOrBlank() || !domainURL.isNullOrBlank()
+    val useLocalOnly = !preferRemote && localPath != null
+    if (!useLocalOnly && !preferRemote) return
+
+    val names = hashSetOf<String>()
+    (this["dns"] as? Map<*, *>)?.get("rules")?.let { collectSet(names, it as? List<*>) }
+    val routeAny = this["route"]
+    val routeObj = routeAny as? Map<*, *>
+    routeObj?.get("rules")?.let { collectSet(names, it as? List<*>) }
+    (routeObj?.get("rule_set") as? List<*>)?.forEach { entry ->
+        val tag = (entry as? Map<*, *>)?.get("tag") as? String
+        if (!tag.isNullOrBlank()) names.add(tag)
+    }
+    if (names.isEmpty()) return
+
+    val routeMutable: MutableMap<String, Any?> = when (routeAny) {
+        null -> mutableMapOf<String, Any?>().also { this["route"] = it }
+        is MutableMap<*, *> -> @Suppress("UNCHECKED_CAST") routeAny as MutableMap<String, Any?>
+        is Map<*, *> -> toJSONMap(routeAny).also { this["route"] = it }
+        else -> return
+    }
+    if (routeMutable["rules"] == null) {
+        routeMutable["rules"] = mutableListOf<Any?>()
+    }
+
+    val list = ArrayList<Map<String, Any?>>(names.size)
+    for (name in names.sorted()) {
+        if (useLocalOnly) {
+            list.add(
+                linkedMapOf(
+                    "tag" to name,
+                    "type" to SingBoxOptions.RULE_SET_TYPE_LOCAL,
+                    "format" to SingBoxOptions.RULE_SET_FORMAT_BINARY,
+                    "path" to "$localPath/$name.srs",
+                ),
+            )
+        } else {
+            val fileName = mapRuleSetFileName(name)
+            val base = ruleSetRemoteBaseForTag(name, ipURL, domainURL)
+            list.add(
+                linkedMapOf(
+                    "tag" to name,
+                    "type" to SingBoxOptions.RULE_SET_TYPE_REMOTE,
+                    "format" to SingBoxOptions.RULE_SET_FORMAT_BINARY,
+                    "url" to "$base/$fileName.srs",
+                ),
+            )
+        }
+    }
+    routeMutable["rule_set"] = list
 }
 
 /**
@@ -361,7 +448,7 @@ fun MyOptions.buildRuleSets(
  * @param rules item should be DNSRule or Rule.
  */
 @Suppress("UNCHECKED_CAST")
-private fun collectSet(set: MutableSet<String>, rules: List<*>?) {
+internal fun collectSet(set: MutableSet<String>, rules: List<*>?) {
     if (rules.isNullOrEmpty()) return
 
     for (rawRule in rules) {

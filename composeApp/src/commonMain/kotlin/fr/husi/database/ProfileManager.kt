@@ -125,8 +125,7 @@ object ProfileManager {
             val currentRules = SagerDatabase.rulesDao.allRules().first()
             if (currentRules.isEmpty() && !DataStore.rulesFirstCreate) {
                 DataStore.rulesFirstCreate = true
-                val russianLocale = Locale.getDefault().country in setOf("RU", "BY", "KZ")
-                seedDefaultRules(defaultBypassCountries(), withRussianExtras = russianLocale)
+                seedDefaultRules(defaultBypassCountries())
             }
         }
     }
@@ -144,42 +143,220 @@ object ProfileManager {
     }
 
     /**
-     * Wipe all rules and seed the default set for the Russian Federation. Used by the
-     * explicit "Apply RU preset" action in the Route screen.
+     * Apply RU routing: full seed when there are no rules; otherwise merge geosite-ru / geoip-ru
+     * direct bypass without wiping user rules (no separate NSPK list — covered by RU geosite).
      */
     suspend fun applyRussianPreset() {
-        SagerDatabase.rulesDao.reset()
         DataStore.rulesFirstCreate = true
-        seedDefaultRules(listOf("ru" to "Россия"), withRussianExtras = true)
+        val rules = SagerDatabase.rulesDao.allRules().first()
+        if (rules.isEmpty()) {
+            seedDefaultRules(listOf("ru" to "Россия"))
+        } else {
+            mergeRussianPresetRules()
+        }
     }
 
     /**
-     * One-tap "Russian mode": route preset with NSPK bypass, Chocolate4U provider, Mullvad DoH
-     * and auto-generated SOCKS5 credentials. Per-app bypass selection is an Android concern and
-     * is handled by [fr.husi.utils.enableRussianPerAppBypass].
+     * One-tap "Russian mode": RU routing preset, Chocolate4U provider, Cloudflare DoH if remote
+     * DNS is still the default, and auto-generated SOCKS5 credentials. Per-app bypass is handled
+     * by [fr.husi.utils.enableRussianPerAppBypass].
      */
     suspend fun enableRussianMode() {
         applyRussianPreset()
         DataStore.rulesProvider = RuleProvider.CHOCOLATE4U
         if (DataStore.remoteDns == "tcp://dns.google" || DataStore.remoteDns.isBlank()) {
-            DataStore.remoteDns = "https://doh.mullvad.net/dns-query"
+            DataStore.remoteDns = "https://1.1.1.1/dns-query"
         }
         DataStore.ensureInboundCredentials()
     }
 
     /**
-     * Wipe all rules and seed the default China preset. Kept for parity with the RU action so
-     * users who switch locales can still easily restore the historic defaults.
+     * Apply CN routing: full seed when empty; otherwise merge Play Store + CN bypass rules only.
      */
     suspend fun applyChinaPreset() {
-        SagerDatabase.rulesDao.reset()
         DataStore.rulesFirstCreate = true
-        seedDefaultRules(listOf("cn" to "中国"))
+        val rules = SagerDatabase.rulesDao.allRules().first()
+        if (rules.isEmpty()) {
+            seedDefaultRules(listOf("cn" to "中国"))
+        } else {
+            mergeChinaPresetRules()
+        }
+    }
+
+    private suspend fun mergeRussianPresetRules() {
+        var rules = SagerDatabase.rulesDao.allRules().first()
+        val display = "Россия"
+        val country = "ru"
+        val geositeRuleTag = "geosite-category-ru"
+        fun hasGeositeBypass(c: String) = rules.any {
+            it.action == ACTION_ROUTE && it.outbound == RuleEntity.OUTBOUND_DIRECT &&
+                (
+                    it.domains.contains("geosite-$c") ||
+                        it.domains.contains(geositeRuleTag)
+                    )
+        }
+        fun hasGeoipBypass(c: String) = rules.any {
+            it.action == ACTION_ROUTE && it.outbound == RuleEntity.OUTBOUND_DIRECT &&
+                it.ip.contains("geoip-$c")
+        }
+        if (!hasGeositeBypass(country)) {
+            createRule(
+                RuleEntity(
+                    enabled = true,
+                    name = repository.getString(Res.string.route_bypass_domain, display),
+                    action = ACTION_ROUTE,
+                    domains = "set+dns:$geositeRuleTag",
+                    outbound = RuleEntity.OUTBOUND_DIRECT,
+                ),
+                false,
+            )
+            rules = SagerDatabase.rulesDao.allRules().first()
+        }
+        if (!hasGeoipBypass(country)) {
+            createRule(
+                RuleEntity(
+                    enabled = true,
+                    name = repository.getString(Res.string.route_bypass_ip, display),
+                    action = ACTION_ROUTE,
+                    ip = "set-dns:geoip-$country",
+                    outbound = RuleEntity.OUTBOUND_DIRECT,
+                ),
+                false,
+            )
+            rules = SagerDatabase.rulesDao.allRules().first()
+        }
+        ensureRuGeoBypassRulesEnabled()
+        ensurePrivateLanBypassRuleMerged()
+    }
+
+    private suspend fun mergeChinaPresetRules() {
+        var rules = SagerDatabase.rulesDao.allRules().first()
+        val display = "中国"
+        val country = "cn"
+        val playName = repository.getString(Res.string.route_play_store, display)
+        val hasPlayStore = rules.any {
+            it.action == ACTION_ROUTE && it.outbound == RuleEntity.OUTBOUND_PROXY &&
+                it.domains.contains("geosite-google-play")
+        }
+        if (!hasPlayStore) {
+            createRule(
+                RuleEntity(
+                    enabled = true,
+                    name = playName,
+                    action = ACTION_ROUTE,
+                    domains = "set+dns:geosite-google-play",
+                    outbound = RuleEntity.OUTBOUND_PROXY,
+                ),
+                false,
+            )
+            rules = SagerDatabase.rulesDao.allRules().first()
+        }
+        fun hasGeositeBypass(c: String) = rules.any {
+            it.action == ACTION_ROUTE && it.outbound == RuleEntity.OUTBOUND_DIRECT &&
+                it.domains.contains("geosite-$c")
+        }
+        fun hasGeoipBypass(c: String) = rules.any {
+            it.action == ACTION_ROUTE && it.outbound == RuleEntity.OUTBOUND_DIRECT &&
+                it.ip.contains("geoip-$c")
+        }
+        if (!hasGeositeBypass(country)) {
+            createRule(
+                RuleEntity(
+                    enabled = true,
+                    name = repository.getString(Res.string.route_bypass_domain, display),
+                    action = ACTION_ROUTE,
+                    domains = "set+dns:geosite-$country",
+                    outbound = RuleEntity.OUTBOUND_DIRECT,
+                ),
+                false,
+            )
+            rules = SagerDatabase.rulesDao.allRules().first()
+        }
+        if (!hasGeoipBypass(country)) {
+            createRule(
+                RuleEntity(
+                    enabled = true,
+                    name = repository.getString(Res.string.route_bypass_ip, display),
+                    action = ACTION_ROUTE,
+                    ip = "set-dns:geoip-$country",
+                    outbound = RuleEntity.OUTBOUND_DIRECT,
+                ),
+                false,
+            )
+            rules = SagerDatabase.rulesDao.allRules().first()
+        }
+        ensurePrivateLanBypassRuleMerged()
+    }
+
+    /**
+     * For installs that already have rules: ensure LAN `private` → direct exists and is on.
+     * [DataStore.bypassLan] only adds VpnService-side excluded routes; sing-box still needs this
+     * rule when traffic hits TUN (ROM/stack differences).
+     */
+    suspend fun ensureBootstrapRoutingDefaults() {
+        if (SagerDatabase.rulesDao.allRules().first().isEmpty()) return
+        when (Locale.getDefault().country) {
+            "RU", "BY", "KZ" -> mergeRussianPresetRules()
+            else -> ensurePrivateLanBypassRuleMerged()
+        }
+    }
+
+    /** Turns RU geosite/geoip → direct rules back on if they exist but were disabled. */
+    private suspend fun ensureRuGeoBypassRulesEnabled() {
+        val rules = SagerDatabase.rulesDao.allRules().first()
+        val geositeRuleTag = "geosite-category-ru"
+        val country = "ru"
+        for (rule in rules) {
+            if (rule.dnsOnly || rule.action != ACTION_ROUTE || rule.outbound != RuleEntity.OUTBOUND_DIRECT) {
+                continue
+            }
+            val d = rule.domains.lowercase()
+            val ip = rule.ip.lowercase()
+            val isRuGeo = d.contains(geositeRuleTag) || d.contains("geosite-$country")
+            val isRuIp = ip.contains("geoip-$country")
+            if ((isRuGeo || isRuIp) && !rule.enabled) {
+                rule.enabled = true
+                updateRule(rule)
+            }
+        }
+    }
+
+    private suspend fun ensurePrivateLanBypassRuleMerged() {
+        var rules = SagerDatabase.rulesDao.allRules().first()
+        fun isPrivateLanRule(rule: RuleEntity): Boolean {
+            if (rule.dnsOnly || rule.action != ACTION_ROUTE || rule.outbound != RuleEntity.OUTBOUND_DIRECT) {
+                return false
+            }
+            val ip = rule.ip.trim().lowercase()
+            if (ip.isBlank()) return false
+            if (ip.contains("geoip-")) return false
+            return ip == RuleItem.CONTENT_PRIVATE.lowercase() ||
+                ip.split(',', '\n', ';', ' ').any { it.trim() == RuleItem.CONTENT_PRIVATE.lowercase() }
+        }
+        if (!rules.any(::isPrivateLanRule)) {
+            createRule(
+                RuleEntity(
+                    enabled = true,
+                    name = repository.getString(Res.string.route_opt_bypass_lan),
+                    action = ACTION_ROUTE,
+                    ip = RuleItem.CONTENT_PRIVATE,
+                    outbound = RuleEntity.OUTBOUND_DIRECT,
+                ),
+                false,
+            )
+            rules = SagerDatabase.rulesDao.allRules().first()
+        }
+        rules = SagerDatabase.rulesDao.allRules().first()
+        for (rule in rules) {
+            if (isPrivateLanRule(rule) && !rule.enabled) {
+                rule.enabled = true
+                updateRule(rule)
+            }
+        }
     }
 
     private suspend fun seedDefaultRules(
         countries: List<Pair<String, String>>,
-        withRussianExtras: Boolean = false,
     ) {
         createRule(
             RuleEntity(
@@ -207,6 +384,7 @@ object ProfileManager {
         )
         createRule(
             RuleEntity(
+                enabled = true,
                 name = repository.getString(Res.string.route_opt_block_quic),
                 action = ACTION_REJECT,
                 protocol = setOf("quic"),
@@ -215,6 +393,7 @@ object ProfileManager {
         )
         createRule(
             RuleEntity(
+                enabled = true,
                 name = repository.getString(Res.string.route_opt_block_ads),
                 action = ACTION_REJECT,
                 domains = "set+dns:geosite-category-ads-all",
@@ -223,6 +402,7 @@ object ProfileManager {
         for ((country, displayCountry) in countries) {
             if (country == "cn") createRule(
                 RuleEntity(
+                    enabled = true,
                     name = repository.getString(Res.string.route_play_store, displayCountry),
                     action = ACTION_ROUTE,
                     domains = "set+dns:geosite-google-play",
@@ -232,15 +412,21 @@ object ProfileManager {
             )
             createRule(
                 RuleEntity(
+                    enabled = true,
                     name = repository.getString(Res.string.route_bypass_domain, displayCountry),
                     action = ACTION_ROUTE,
-                    domains = "set+dns:geosite-$country",
+                    domains = if (country == "ru") {
+                        "set+dns:geosite-category-ru"
+                    } else {
+                        "set+dns:geosite-$country"
+                    },
                     outbound = RuleEntity.OUTBOUND_DIRECT,
                 ),
                 false,
             )
             createRule(
                 RuleEntity(
+                    enabled = true,
                     name = repository.getString(Res.string.route_bypass_ip, displayCountry),
                     action = ACTION_ROUTE,
                     ip = "set-dns:geoip-$country",
@@ -251,6 +437,7 @@ object ProfileManager {
         }
         createRule(
             RuleEntity(
+                enabled = true,
                 name = repository.getString(Res.string.route_opt_bypass_lan),
                 action = ACTION_ROUTE,
                 ip = RuleItem.CONTENT_PRIVATE,
@@ -258,28 +445,6 @@ object ProfileManager {
             ),
             false,
         )
-        if (withRussianExtras) {
-            val nspkDomains = listOf(
-                "nspk.ru",
-                "mirconnect.ru",
-                "mir-connect.ru",
-                "privetmir.ru",
-                "securepayments.sberbank.ru",
-                "3dsecure.vtb.ru",
-                "3ds.tbank.ru",
-                "3dsecure.raiffeisen.ru",
-                "3ds.alfabank.ru",
-            ).joinToString(",") { "domain:$it" }
-            createRule(
-                RuleEntity(
-                    name = repository.getString(Res.string.route_ru_bypass_nspk),
-                    action = ACTION_ROUTE,
-                    domains = nspkDomains,
-                    outbound = RuleEntity.OUTBOUND_DIRECT,
-                ),
-                false,
-            )
-        }
     }
 
     fun enabledRules(): Flow<List<RuleEntity>> {

@@ -311,7 +311,7 @@ fun SettingsScreen(
         .intFlow(Key.RULES_PROVIDER, RuleProvider.OFFICIAL)
         .collectAsStateWithLifecycle(RuleProvider.OFFICIAL)
     val fakeDNSState by DataStore.configurationStore
-        .booleanFlow(Key.ENABLE_FAKE_DNS, false)
+        .booleanFlow(Key.ENABLE_FAKE_DNS, true)
         .collectAsStateWithLifecycle(false)
     val ntpEnableState by DataStore.configurationStore
         .booleanFlow(Key.ENABLE_NTP, false)

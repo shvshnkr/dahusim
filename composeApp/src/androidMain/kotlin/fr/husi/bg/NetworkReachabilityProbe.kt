@@ -7,10 +7,11 @@ import java.net.URL
 internal data class NetworkReachability(
     val googleReachable: Boolean,
     val dzenReachable: Boolean,
+    val yaReachable: Boolean,
     val whitelistSourceReachable: Boolean,
 ) {
     val hasInternet: Boolean
-        get() = googleReachable || dzenReachable || whitelistSourceReachable
+        get() = googleReachable || dzenReachable || yaReachable || whitelistSourceReachable
 
     val whitelistOnly: Boolean
         get() = !googleReachable && (dzenReachable || whitelistSourceReachable)
@@ -19,10 +20,12 @@ internal data class NetworkReachability(
 internal object NetworkReachabilityProbe {
     private const val GOOGLE_PROBE_URL = "http://www.google.com/generate_204"
     private const val DZEN_PROBE_URL = "http://dzen.ru"
+    private const val YA_PROBE_URL = "https://ya.ru"
     private val WHITELIST_PROBE_URLS = listOf(
         "https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt",
         "https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/Whitelist.txt",
         "https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/Whitelist%20%E2%84%962.txt",
+        "https://raw.githubusercontent.com/Mihuil121/vpn-checker-backend-fox/main/checked/RU_Best/ru_white.txt",
         "https://storage.yandexcloud.net/wall-breaker-c0de-a666/config.txt",
     )
     private const val TIMEOUT_MS = 1800
@@ -33,11 +36,13 @@ internal object NetworkReachabilityProbe {
             return NetworkReachability(
                 googleReachable = false,
                 dzenReachable = false,
+                yaReachable = false,
                 whitelistSourceReachable = false,
             )
         }
         val google = probeUrl(GOOGLE_PROBE_URL)
         val dzen = probeUrl(DZEN_PROBE_URL)
+        val ya = probeUrl(YA_PROBE_URL)
         val whitelistSourceReachable = if (google) {
             false
         } else {
@@ -46,6 +51,7 @@ internal object NetworkReachabilityProbe {
         return NetworkReachability(
             googleReachable = google,
             dzenReachable = dzen,
+            yaReachable = ya,
             whitelistSourceReachable = whitelistSourceReachable,
         )
     }

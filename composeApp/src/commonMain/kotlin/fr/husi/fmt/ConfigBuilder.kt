@@ -1,4 +1,4 @@
-package fr.husi.fmt
+﻿package fr.husi.fmt
 
 import fr.husi.Key
 import fr.husi.NetworkInterfaceStrategy
@@ -139,6 +139,10 @@ fun buildConfig(
     val trafficMap = HashMap<String, List<ProxyEntity>>()
     val tagMap = HashMap<Long, String>()
     val optionsToMerge = proxy.requireBean().customConfigJson
+    /** Captured for [refreshRuleSetsAfterCustomMerge] after subscription JSON overwrites `route.rule_set`. */
+    var ruleSetMergeGeoIp: String? = null
+    var ruleSetMergeGeoSite: String? = null
+    var ruleSetMergeLocalPath: String? = null
 
     fun ProxyEntity.resolveChainInternal(): MutableList<ProxyEntity> {
         return when (val bean = requireBean()) {
@@ -222,12 +226,7 @@ fun buildConfig(
     if (!forTest && !forExport) {
         // VLESS-SOCKS5 / LAN exposure mitigation: never bring the mixed inbound up without
         // authentication. See https://publish.obsidian.md/zapret/VLESS-SOCKS5-vulnerability
-        if (DataStore.ensureInboundCredentials()) {
-            Libcore.logWarning(
-                "[husi] SOCKS5/HTTP inbound had no credentials, generated random ones " +
-                    "(username=${DataStore.inboundUsername}). Review Inbound settings.",
-            )
-        }
+        DataStore.ensureInboundCredentials()
     }
     val remoteDns = DataStore.remoteDns.split("\n")
         .mapNotNull { dns -> dns.trim().takeIf { it.isNotBlank() && !it.startsWith("#") } }
@@ -740,6 +739,33 @@ fun buildConfig(
             tagMap[key] = buildChain(key, p)
         }
 
+        fun List<RuleEntity>.hasRuGeoDirectBypass(): Boolean = any { rule ->
+            if (!rule.enabled || rule.dnsOnly) return@any false
+            if (rule.action != SingBoxOptions.ACTION_ROUTE || rule.outbound != RuleEntity.OUTBOUND_DIRECT) {
+                return@any false
+            }
+            val d = rule.domains.lowercase()
+            val ip = rule.ip.lowercase()
+            d.contains("geosite-category-ru") || d.contains("geosite-ru") ||
+                ip.contains("geoip-ru")
+        }
+        // Empty enabled-rules: never insert catch-all at index 0 — it jumps ahead of chain /
+        // mapping route rules built above and breaks post-connect checks; append after chain like RU defer.
+        val deferPerAppCatchAllAfterBypass =
+            extraRules.hasRuGeoDirectBypass() || extraRules.isEmpty()
+        val perAppCatchAllRule: JSONMap? =
+            if (androidProxyIncludePackages.isNotEmpty()) {
+                Rule_Default().apply {
+                    package_name = androidProxyIncludePackages.toMutableList()
+                    outbound = mainTag
+                }.asKxsMap()
+            } else {
+                null
+            }
+        if (perAppCatchAllRule != null && !deferPerAppCatchAllAfterBypass) {
+            route!!.rules!!.add(0, perAppCatchAllRule)
+        }
+
         // apply user rules
         for (rule in extraRules) {
             val (packageNames, processRules) = parseRuleProcessRules(
@@ -1056,14 +1082,10 @@ fun buildConfig(
             }
         }
 
-        // Per-app catch-all after user route rules so RU geosite/geoip direct match first.
-        if (androidProxyIncludePackages.isNotEmpty()) {
-            route!!.rules!!.add(
-                Rule_Default().apply {
-                    package_name = androidProxyIncludePackages.toMutableList()
-                    outbound = mainTag
-                }.asKxsMap(),
-            )
+        // Per-app catch-all: append after user rules when RU bypass exists, when there are no enabled
+        // rules (empty list), or when deferred; otherwise insert at 0 before user rules (legacy).
+        if (perAppCatchAllRule != null && deferPerAppCatchAllAfterBypass) {
+            route!!.rules!!.add(perAppCatchAllRule)
         }
 
         outbounds!!.add(
@@ -1341,18 +1363,19 @@ fun buildConfig(
         var ruleSetResource: String? = null
         var geositeLink: String? = null
         var geoipLink: String? = null
-        if (forExport) {
+        // Remote rule-set bases for export and for any live VPN/proxy config (!forTest).
+        // Local geo/*.srs is optional: RU preset etc. must not depend on Route → Update first.
+        // Profile URL tests (forTest) keep local geo/ to avoid GitHub fetches per probe.
+        if (forExport || !forTest) {
             // "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
             val pathPrefix = "https://raw.githubusercontent.com"
             val provider = DataStore.rulesProvider
 
             val normalBranch = "rule-set"
             val geoipBranch = normalBranch
-            val geositeBranch = if (RuleProvider.hasUnstableBranch(provider)) {
-                "rule-set-unstable"
-            } else {
-                normalBranch
-            }
+            // sing-box remote rule-sets must use published .srs paths. The unstable tree is
+            // incomplete (e.g. geosite-ru / category lists 404) while tags still reference stable names.
+            val geositeBranch = normalBranch
 
             when (provider) {
                 RuleProvider.OFFICIAL -> {
@@ -1370,12 +1393,33 @@ fun buildConfig(
                     geoipLink = "$pathPrefix/Chocolate4U/sing-geoip/$geoipBranch"
                 }
 
-                RuleProvider.CUSTOM -> {} // Can't generate.
+                RuleProvider.CUSTOM -> {
+                    if (forExport) {
+                        // Can't generate export URLs for arbitrary custom rule-set hosting.
+                    } else {
+                        // Route "Custom" only affects the asset downloader; sing-box still resolves
+                        // standard tags (geosite-ru, …) against community SRS. Use SagerNet raw URLs
+                        // so rules work when geo/ was never populated.
+                        geositeLink = "$pathPrefix/SagerNet/sing-geosite/$normalBranch"
+                        geoipLink = "$pathPrefix/SagerNet/sing-geoip/$normalBranch"
+                    }
+                }
+
+                else -> {
+                    // Stale/corrupt RULES_PROVIDER int (or future value): never fall through to bare
+                    // geo/*.srs — that breaks connect with "parse rule-set: no such file" (see logs).
+                    geositeLink = "$pathPrefix/SagerNet/sing-geosite/$geositeBranch"
+                    geoipLink = "$pathPrefix/SagerNet/sing-geoip/$geoipBranch"
+                }
             }
         }
-        if (geositeLink == null) {
+        // Local geo/ is only for URL tests and export when remote bases are unavailable.
+        if (geositeLink == null && (forTest || forExport)) {
             ruleSetResource = repository.externalAssetsDir.resolve("geo").invariantPathString()
         }
+        ruleSetMergeGeoIp = geoipLink
+        ruleSetMergeGeoSite = geositeLink
+        ruleSetMergeLocalPath = ruleSetResource
         buildRuleSets(geoipLink, geositeLink, ruleSetResource)
         partitionEndpoints()
     }.let {
@@ -1383,6 +1427,12 @@ fun buildConfig(
             optionsToMerge.blankAsNull()?.toJsonMapKxs()?.let { jsonMap ->
                 mergeJson(jsonMap, this)
             }
+            refreshRuleSetsAfterCustomMerge(
+                forTest = forTest,
+                ipURL = ruleSetMergeGeoIp,
+                domainURL = ruleSetMergeGeoSite,
+                localPath = ruleSetMergeLocalPath,
+            )
         }
         ConfigBuildResult(
             mainTag,

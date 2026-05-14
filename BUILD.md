@@ -4,6 +4,8 @@
 
 **CI (GitHub):** при пуше, где меняется не только документация, в [`.github/workflows/build.yml`](.github/workflows/build.yml) собираются **четыре** Play debug APK (arm64-v8a, armeabi-v7a, x86_64, x86) и публикуется pre-release. Файлы во **вложениях (Assets)** на **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)** — скачивайте оттуда, не из клонирования репо. См. [README](README.md).
 
+**Linux desktop (отдельный тестовый канал):** [`.github/workflows/desktop-linux-test.yml`](.github/workflows/desktop-linux-test.yml) — пакеты deb/rpm/pacman для `linux/amd64`, pre-release с тегами вида `linux-desktop-test-<run_id>` (не смешивается с rolling APK). Синхронизация с апстримом: [docs/UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md).
+
 ## Как выбирается ABI
 
 В `buildSrc` функция `requireTargetAbi()` смотрит на **ровно одну** задачу из командной строки Gradle. В имени задачи (без учёта регистра) ищутся подстроки **в таком порядке**:

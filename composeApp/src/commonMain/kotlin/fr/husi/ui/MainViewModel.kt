@@ -53,6 +53,11 @@ data class AlertButton(
     val onClick: () -> Unit,
 )
 
+enum class SimpleModeAllServersDeadChoice {
+    WaitForGoogle,
+    ExitApp,
+}
+
 @Immutable
 sealed interface MainViewModelUiEvent {
     class Snackbar(val message: StringOrRes) : MainViewModelUiEvent
@@ -312,6 +317,26 @@ class MainViewModel(
                 },
                 onDismiss = {
                     deferred.complete(false)
+                },
+            ),
+        )
+        return deferred.await()
+    }
+
+    suspend fun promptSimpleModeAllServersDead(): SimpleModeAllServersDeadChoice {
+        val deferred = CompletableDeferred<SimpleModeAllServersDeadChoice>()
+        _uiEvent.emit(
+            MainViewModelUiEvent.AlertDialog(
+                title = StringOrRes.Res(Res.string.simple_mode_all_servers_dead_title),
+                message = StringOrRes.Res(Res.string.simple_mode_all_servers_dead_message),
+                confirmButton = AlertButton(StringOrRes.Res(Res.string.simple_mode_wait_for_google_action)) {
+                    deferred.complete(SimpleModeAllServersDeadChoice.WaitForGoogle)
+                },
+                dismissButton = AlertButton(StringOrRes.Res(Res.string.simple_mode_exit_app_action)) {
+                    deferred.complete(SimpleModeAllServersDeadChoice.ExitApp)
+                },
+                onDismiss = {
+                    deferred.complete(SimpleModeAllServersDeadChoice.WaitForGoogle)
                 },
             ),
         )

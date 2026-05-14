@@ -5,6 +5,7 @@ import fr.husi.SubscriptionType
 import fr.husi.bg.SubscriptionUpdater
 import fr.husi.database.DataStore
 import fr.husi.database.GroupManager
+import fr.husi.database.ProfileManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
@@ -44,6 +45,8 @@ object DefaultUserBootstrap {
     suspend fun bootstrapAll() {
         bootstrapDefaultSubscriptions()
         bootstrapPerAppDefaults()
+        ProfileManager.ensureBootstrapRoutingDefaults()
+        WhitelistBuiltinBootstrap.ensureGroupAndProfiles()
     }
 
     private suspend fun bootstrapDefaultSubscriptions() {

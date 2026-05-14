@@ -107,7 +107,7 @@ internal class AppManagerViewModel(
     }
 
     fun scanRussianApps() {
-        scanApps { packageName, _ -> AppScanner.isRussianApp(packageName) }
+        scanApps { packageName, _ -> AppScanner.isRussianApp(packageName, packageManager) }
     }
 
     private fun scanApps(predicate: (String, String) -> Boolean) {

@@ -35,3 +35,8 @@ docs/AUTO_SERVER_SELECTION_PROMPT.md
 
 # submodules
 /external
+
+# Repo-root scratch (debug / one-off; do not ship)
+/_helper.kt
+/_run_scanner_patch.py
+/_profile_*.txt

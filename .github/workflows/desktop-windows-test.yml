@@ -1,0 +1,19 @@
+name: Windows desktop (phase 2 stub)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    name: Phase 2 — см. docs/DESKTOP_WINDOWS_CI.md
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Статус
+        run: |
+          echo "Полная сборка windows/amd64 в CI не включена (фаза 2)."
+          echo "Ориентир: release/windows/package.sh + make desktop_package_windows DESKTOP_TARGET=windows/amd64"
+          echo "Документация: docs/DESKTOP_WINDOWS_CI.md"
