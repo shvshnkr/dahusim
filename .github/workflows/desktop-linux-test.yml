@@ -154,6 +154,8 @@ jobs:
             echo
             echo "**Платформа:** \`linux/amd64\` (сборка DESKTOP_TARGET=linux/amd64)."
             echo
+            echo "**Среда выполнения:** uber JAR и нативный лаунчер рассчитаны на **Java 21+** на машине пользователя (в deb это отражено в зависимостях пакета)."
+            echo
             echo "**Версия:** \`${VER}\` **Коммит:** \`$(git rev-parse --short HEAD)\` **Тег:** \`${TAG}\`"
             echo
             echo "**Где скачать:** репозиторий → вкладка **Releases** (не артефакты Actions) → этот пре-релиз → внизу **Assets**."
@@ -163,6 +165,8 @@ jobs:
             echo "Отдельный тестовый канал (не смешивается с rolling APK pre-release из \`build.yml\`)."
             echo
             echo "**Форматы в Assets:** deb, rpm, pacman (.pkg.tar.zst), uber JAR."
+            echo
+            echo "**Примечание:** uber JAR крупный из‑за JNI и вложенных нативных библиотек; контекст у upstream: [husi#9](https://codeberg.org/xchacha20-poly1305/husi/issues/9)."
             echo
             echo "## Коммит"
             echo

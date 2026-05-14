@@ -138,6 +138,8 @@ jobs:
             echo
             echo "**Форматы в Assets:** portable zip, NSIS installer (.exe), uber JAR."
             echo
+            echo "**Требование:** на целевой машине **Java 21+** (JRE не входит в zip/installer/JAR). Симптом «UAC и тишина» при старой Java: [husi#30](https://codeberg.org/xchacha20-poly1305/husi/issues/30). Кракозябры в трее/уведомлениях: [husi#79](https://codeberg.org/xchacha20-poly1305/husi/issues/79), [husi#81](https://codeberg.org/xchacha20-poly1305/husi/issues/81)."
+            echo
             echo "## Коммит"
             echo
             git log -1 --oneline

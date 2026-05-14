@@ -8,6 +8,8 @@
 
 **Где взять готовый APK (GitHub).** Собранные установщики публикуются **на GitHub** в виде вложений (assets) к pre-release. **Скачать последнюю версию** = открыть страницу **последнего релиза** и взять файлы из блока *Assets*, не из исходников. Прямая ссылка: **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)**. В релизе **четыре** debug-APK по ABI: `dahusim_<версия>_play_debug_arm64_v8a.apk`, `..._armeabi_v7a.apk`, `..._x86_64.apk`, `..._x86.apk` (суффикс в имени — целевая архитектура; на устройстве обычно нужен **arm64**).
 
+**Desktop (Linux / Windows) на GitHub.** Отдельные ручные pre-release собираются workflows **Linux desktop** и **Windows desktop** (вкладка Actions → выбрать workflow → *Run workflow*). Артефакты — в **Releases → соответствующий pre-release → Assets**. На компьютере пользователя нужен **JRE или JDK 21+** (в сборку **не** входит встроенный JRE); старая «Java 8» не подойдёт — см. обсуждение [husi#30](https://codeberg.org/xchacha20-poly1305/husi/issues/30).
+
 **КВН вместо «VPN».** В текстах этого форка мы пишем **«КВН»** (шутливое, договорённое обозначение **вместо** привычного **«VPN»** — отсылка к известной аббревиатуре, **не** к шоу в первую очередь) так, чтобы **не** путать сборку с рекламой «официального VPN» и не обещать «сервис как в рекламе». Это **клиент** для **исследовательского и любительского** сценария, без гарантий, что это «именно VPN» в юридическом/маркетинговом смысле.
 
 **Открытые сервера и автовыбор.** Возможен **автовыбор** (или полуавтоматический выбор) точки на **публичных, открытых серверах энтузиастов/сообщества** — в зависимости от логики клиента. Это **не** обязательно быстрее/безопаснее «ваш» сервер: вы сами оцениваете риск доверия к чужим площадкам и **соблюдаете законы** вашей страны.
@@ -16,7 +18,7 @@
 
 **Vibecode.** Значимая часть кода сделана в стиле **vibecoding** — быстрые итерации с нейроассистом (например Cursor) плюс ручные правки. Это **не** формальная ревизия и не аудит безопасности; исходники смотрите сами, как в неоценённом pull request.
 
-*English (short).*: [GitHub Releases (latest)](https://github.com/shvshnkr/dahusim/releases/latest) ships **four** per-ABI debug APKs as **assets**; no warranty; “KVN” is a tongue-in-cheek stand-in for “VPN”; public/community endpoints and auto-pick are at your own risk.
+*English (short).*: [GitHub Releases (latest)](https://github.com/shvshnkr/dahusim/releases/latest) ships **four** per-ABI debug APKs as **assets**; no warranty; “KVN” is a tongue-in-cheek stand-in for “VPN”; public/community endpoints and auto-pick are at your own risk. **Desktop** Linux/Windows builds are separate manual pre-releases and require **Java 21+** on the host (no bundled JRE).
 
 ## Disclaimer (this repository)
 
@@ -383,6 +385,8 @@ Outputs:
 The installer is a per-user NSIS installer that installs into `%LOCALAPPDATA%\Programs\Husi`,
 creates a Start Menu shortcut, and registers the configured URL schemes for the current user.
 The Windows launcher embeds an application manifest and requests administrator elevation via UAC at launch time.
+
+**Runtime:** install **Temurin / OpenJDK 21+** (or another Java 21+ distribution) and ensure `java -version` reports 21 or newer. Portable zip, installer, and uber JAR do **not** bundle a JRE. If the process exits right after UAC with no window, an outdated Java is a common cause ([husi#30](https://codeberg.org/xchacha20-poly1305/husi/issues/30)).
 
 #### 🌈 Plugins
 

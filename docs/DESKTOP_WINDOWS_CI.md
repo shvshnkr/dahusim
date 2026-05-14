@@ -12,3 +12,9 @@ Windows desktop test channel реализован в [`.github/workflows/desktop
 - Публикация: отдельный GitHub pre-release с тегом `windows-desktop-windows-amd64-<run_id>`.
 - В summary workflow выводится ссылка на созданный release (скачивание через блок Assets).
 - Автоочистка старых тестовых Windows pre-release: хранится последние 15.
+
+## При синке с upstream Husi
+
+- **Zig:** в workflow зафиксирована версия Zig (см. `setup-zig` в `.github/workflows/desktop-windows-test.yml` и зеркально Linux). После обновления `launcher/` в upstream сверить с [README.md](../README.md) (раздел Desktop: *zig 0.15*) и при смене минимальной версии — поднять шаг CI и README в одном коммите.
+- **Кодировка UI на Windows:** upstream обсуждает «квадратики» в трее/тостах ([husi#79](https://codeberg.org/xchacha20-poly1305/husi/issues/79), [husi#81](https://codeberg.org/xchacha20-poly1305/husi/issues/81)); возможны дефолтные JVM-опции в `release/.../desktop-java-opts.conf` или аналог. После мержа сравнить дефолтные опции Windows-упаковки с upstream `release/linux/desktop/desktop-java-opts.conf` / Windows-веткой.
+- **Планировщик задач Windows:** при изменениях в `DesktopTaskScheduler.kt` проверить формат даты для `schtasks` (upstream [husi#91](https://codeberg.org/xchacha20-poly1305/husi/issues/91)); в текущем коде дата задаётся паттерном `MM/dd/yyyy`.
