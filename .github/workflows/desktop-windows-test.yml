@@ -1,22 +1,183 @@
-name: Windows desktop (phase 2 stub)
+name: Windows desktop (windows/amd64, test channel)
 
+# Temporarily manual-only: run from Actions tab when you want Windows packages pre-release.
 on:
   workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-permissions:
-  contents: read
+concurrency:
+  group: desktop-windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  placeholder:
-    name: Phase 2 — см. docs/DESKTOP_WINDOWS_CI.md
+  windows-desktop-packages:
+    name: Package windows/amd64 + smoke
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
-      - name: Статус
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Packaging tools
         run: |
-          echo "Полная сборка windows/amd64 в CI не включена (фаза 2)."
-          echo "Ориентир: release/windows/package.sh + make desktop_package_windows DESKTOP_TARGET=windows/amd64"
-          echo "Документация: docs/DESKTOP_WINDOWS_CI.md"
+          sudo apt-get update
+          sudo apt-get install -y nsis
+
+      - name: Go version
+        id: goversion
+        run: |
+          source buildScript/init/version.sh
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ steps.goversion.outputs.go_version }}
+          cache-dependency-path: libcore/go.sum
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Build libcore (desktop windows/amd64)
+        env:
+          BUILD_PLUGIN: none
+        run: |
+          ./run lib core --desktop --desktoptargets windows/amd64
+
+      - name: Verify libcore jar
+        run: |
+          test -f composeApp/libs/libcore-desktop-windows-amd64.jar
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Geo / Gradle init assets
+        run: ./run init action gradle
+
+      - name: Ensure version tag for packaging
+        run: |
+          set -euo pipefail
+          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          if git rev-parse -q --verify "refs/tags/v${VER}" >/dev/null; then
+            echo "Tag v${VER} already present."
+          else
+            git config user.email "actions@github.com"
+            git config user.name "github-actions"
+            git tag -a "v${VER}" -m "ci: packaging tag for v${VER}" "${GITHUB_SHA}"
+          fi
+
+      - name: Uber jar + launcher + Windows packages
+        env:
+          BUILD_PLUGIN: none
+        run: |
+          set -euo pipefail
+          make desktop_package_windows DESKTOP_TARGET=windows/amd64
+
+      - name: Smoke (artifacts + metadata)
+        run: |
+          set -euo pipefail
+          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          PKG=$(grep '^PACKAGE_NAME=' husi.properties | cut -d= -f2-)
+          test -f "composeApp/build/compose/packages/windows/${PKG}-${VER}-windows-amd64.zip"
+          test -f "composeApp/build/compose/packages/windows/${PKG}-${VER}-windows-amd64-installer.exe"
+          ls -la composeApp/build/compose/packages/windows
+
+      - name: Stage release assets
+        id: assets
+        run: |
+          set -euo pipefail
+          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          PKG=$(grep '^PACKAGE_NAME=' husi.properties | cut -d= -f2-)
+          SHORT=$(git rev-parse --short HEAD)
+          mkdir -p release_assets
+          shopt -s nullglob
+          for f in composeApp/build/compose/packages/windows/*.zip; do
+            [ -f "$f" ] || continue
+            cp -v "$f" "release_assets/${PKG}_${VER}_windows_amd64_${SHORT}.zip"
+          done
+          for f in composeApp/build/compose/packages/windows/*-installer.exe; do
+            [ -f "$f" ] || continue
+            cp -v "$f" "release_assets/${PKG}_${VER}_windows_amd64_${SHORT}_installer.exe"
+          done
+          for f in composeApp/build/compose/jars/${PKG}-windows-x64-*.jar; do
+            [ -f "$f" ] || continue
+            cp -v "$f" "release_assets/${PKG}_${VER}_windows_amd64_${SHORT}.jar"
+          done
+          ls -la release_assets
+          test "$(find release_assets -type f | wc -l)" -ge 3
+
+      - name: Release body
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          TAG="windows-desktop-windows-amd64-${{ github.run_id }}"
+          {
+            echo "## Windows desktop · **windows/amd64**"
+            echo
+            echo "**Платформа:** \`windows/amd64\` (сборка DESKTOP_TARGET=windows/amd64)."
+            echo
+            echo "**Версия:** \`${VER}\` **Коммит:** \`$(git rev-parse --short HEAD)\` **Тег:** \`${TAG}\`"
+            echo
+            echo "**Где скачать:** репозиторий → вкладка **Releases** (не артефакты Actions) → этот пре-релиз → внизу **Assets**."
+            echo
+            echo "[Все релизы репозитория](${REPO_URL}/releases)"
+            echo
+            echo "Отдельный тестовый канал (не смешивается с rolling APK pre-release из \`build.yml\`)."
+            echo
+            echo "**Форматы в Assets:** portable zip, NSIS installer (.exe), uber JAR."
+            echo
+            echo "## Коммит"
+            echo
+            git log -1 --oneline
+          } > release_body.md
+
+      - uses: softprops/action-gh-release@v3
+        id: gh_release
+        with:
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+          tag_name: windows-desktop-windows-amd64-${{ github.run_id }}
+          target_commitish: ${{ github.sha }}
+          name: Windows desktop · windows/amd64 · test ${{ github.run_number }}
+          body_path: release_body.md
+          files: |
+            release_assets/*
+
+      - name: Release link (workflow summary)
+        run: |
+          {
+            echo "## Пре-релиз опубликован · windows/amd64"
+            echo
+            echo "Скачивание: откройте ссылку ниже → прокрутите до **Assets**."
+            echo
+            echo "${{ steps.gh_release.outputs.url }}"
+            echo
+            echo "Фильтр по тегам: ${{ github.server_url }}/${{ github.repository }}/releases?q=windows-desktop-windows-amd64+prerelease%3Atrue"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prune old windows-desktop-windows-amd64 releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          keep=15
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq '.[] | .tag_name | select(test("^windows-desktop-windows-amd64-[0-9]+$"))' |
+            sed -n 's/^windows-desktop-windows-amd64-//p' | sort -rn | tail -n +"$((keep + 1))" |
+            while read -r rid; do
+              echo ">> delete release windows-desktop-windows-amd64-${rid}"
+              gh release delete "windows-desktop-windows-amd64-${rid}" --yes || true
+            done
