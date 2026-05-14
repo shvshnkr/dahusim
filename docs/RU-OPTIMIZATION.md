@@ -2,6 +2,10 @@
 
 Defaults for Russia and nearby (RU/BY/KZ): routing, assets, and inbound hardening. No protocol stack changes.
 
+## Source of truth
+
+This profile is **maintained only in this project** (your fork and branches such as `feature/ru-optimization`). There is no separate upstream line that “owns” it anymore: the old upstream branch for this work is dead, and **the canonical behaviour is whatever you ship here**.
+
 ## What changes
 
 1. **Default route rules (RU locale).** First launch with locale `RU`, `BY`, or `KZ` seeds
@@ -19,8 +23,8 @@ Defaults for Russia and nearby (RU/BY/KZ): routing, assets, and inbound hardenin
    so presets work without a filled `geo/` folder.
 
 2. **Per-app bypass — "Scan Russian apps".** Same idea as the China scanner: package-name
-   prefixes **and** manifest/DEX checks for RU-related class names (aligned with upstream
-   feedback on SDK-style detection).
+   prefixes **and** manifest/DEX checks for RU-related class names (vendor/SDK-style
+   heuristics).
 
 3. **"Apply Russia preset" / "Apply China preset".** If the rule table is **empty**, full
    seed as above. If rules already exist, **merge** only missing geosite/geoip (and CN Play
