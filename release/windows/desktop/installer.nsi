@@ -7,7 +7,6 @@ Unicode true
 !include "FileFunc.nsh"
 !include "nsDialogs.nsh"
 !include "WinMessages.nsh"
-!include "NSISdl.nsh"
 
 ; --- Metadata ---
 !define PACKAGE_NAME    "__HUSI_PACKAGE_NAME__"

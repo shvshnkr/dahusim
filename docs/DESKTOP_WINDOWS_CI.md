@@ -10,7 +10,7 @@ Windows desktop test channel реализован в [`.github/workflows/desktop
 - Сборка `libcore` для `windows/amd64`: `./run lib core --desktop --desktoptargets windows/amd64 --jniinclude "$JNI_INCLUDE"` (переменная задаётся скриптом выше).
 - Упаковка: `make desktop_package_windows DESKTOP_TARGET=windows/amd64`.
 - Форматы: `zip` (portable), `-installer.exe` (NSIS), и uber JAR.
-- Опционально на странице установщика: скачивание MSI **Eclipse Temurin 21** через `NSISdl` и установка **только при явной галочке**, **`msiexec /qn`** (без изменения `JAVA_HOME`, если пользователь не выбрал опцию).
+- Опционально на странице установщика: скачивание MSI **Eclipse Temurin 21** через плагин **NSISdl** (`NSISdl::download`, без отдельного `NSISdl.nsh` — заголовок не входит в апстрим NSIS 3.10) и установка **только при явной галочке**, **`msiexec /qn`** (без изменения `JAVA_HOME`, если пользователь не выбрал опцию).
 - Публикация: отдельный GitHub pre-release с тегом `windows-desktop-windows-amd64-<run_id>`.
 - В summary workflow выводится ссылка на созданный release (скачивание через блок Assets).
 - Автоочистка старых тестовых Windows pre-release: хранится последние 15.
