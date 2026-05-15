@@ -1,5 +1,10 @@
 name: Linux desktop (linux/amd64, test channel)
 
+# GITHUB_TOKEN must be able to create releases (repo Settings → Actions → Workflow permissions;
+# org may cap token read-only — then add secret GH_RELEASE_TOKEN with repo scope).
+permissions:
+  contents: write
+
 # Temporarily manual-only: run from Actions tab when you want Linux packages pre-release.
 on:
   workflow_dispatch:
@@ -15,8 +20,6 @@ jobs:
   linux-desktop-packages:
     name: Package linux/amd64 + smoke
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -176,6 +179,7 @@ jobs:
       - uses: softprops/action-gh-release@v3
         id: gh_release
         with:
+          token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
           prerelease: true
           make_latest: false
           fail_on_unmatched_files: true
@@ -200,7 +204,7 @@ jobs:
 
       - name: Prune old linux-desktop-linux-amd64 releases
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           keep=15

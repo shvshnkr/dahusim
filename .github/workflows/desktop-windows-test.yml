@@ -1,5 +1,10 @@
 name: Windows desktop (windows/amd64, test channel)
 
+# GITHUB_TOKEN must be able to create releases (repo Settings → Actions → Workflow permissions:
+# "Read and write", unless the org caps the token at read-only — then add secret GH_RELEASE_TOKEN).
+permissions:
+  contents: write
+
 # Temporarily manual-only: run from Actions tab when you want Windows packages pre-release.
 on:
   workflow_dispatch:
@@ -15,8 +20,6 @@ jobs:
   windows-desktop-packages:
     name: Package windows/amd64 + smoke
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -151,6 +154,7 @@ jobs:
       - uses: softprops/action-gh-release@v3
         id: gh_release
         with:
+          token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
           prerelease: true
           make_latest: false
           fail_on_unmatched_files: true
@@ -175,7 +179,7 @@ jobs:
 
       - name: Prune old windows-desktop-windows-amd64 releases
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           keep=15

@@ -15,6 +15,11 @@ Windows desktop test channel реализован в [`.github/workflows/desktop
 - В summary workflow выводится ссылка на созданный release (скачивание через блок Assets).
 - Автоочистка старых тестовых Windows pre-release: хранится последние 15.
 
+## Если `softprops/action-gh-release` падает с `403 Resource not accessible by integration`
+
+1. В репозитории GitHub: **Settings → Actions → General → Workflow permissions** — включить **Read and write permissions** (и при необходимости «Allow GitHub Actions to create and approve pull requests», если политика org это допускает).
+2. Если на уровне **организации** для `GITHUB_TOKEN` жёстко задан только read — в **Settings → Secrets and variables → Actions** добавить классический PAT с правом **`repo`** под именем **`GH_RELEASE_TOKEN`**; workflow уже передаёт в релиз и в `gh release delete` выражение `secrets.GH_RELEASE_TOKEN || github.token`.
+
 ## При синке с upstream Husi
 
 - **Zig:** в workflow зафиксирована версия Zig (см. `setup-zig` в `.github/workflows/desktop-windows-test.yml` и зеркально Linux). После обновления `launcher/` в upstream сверить с [README.md](../README.md) (раздел Desktop: *zig 0.15*) и при смене минимальной версии — поднять шаг CI и README в одном коммите.
