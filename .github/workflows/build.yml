@@ -17,30 +17,10 @@ permissions:
   contents: read
 
 jobs:
-  changes:
-    name: Code change (not docs-only)
-    runs-on: ubuntu-latest
-    outputs:
-      code: ${{ steps.filter.outputs.code }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            code:
-              - '**'
-              - '!**/*.md'
-              - '!docs/**'
-              - '!LICENSE*'
-              - '!CONTRIBUTING*'
-
   libcore:
     name: Libcore (Android AAR)
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -100,8 +80,7 @@ jobs:
     name: Play debug APK (все ABI)
     runs-on: ubuntu-latest
     timeout-minutes: 180
-    needs: [changes, libcore]
-    if: needs.changes.outputs.code == 'true'
+    needs: libcore
     steps:
       - uses: actions/checkout@v6
         with:
