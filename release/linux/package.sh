@@ -459,7 +459,7 @@ build_deb() {
     cat >"$changelog_plain" <<EOF
 $PACKAGE_NAME ($VERSION_NAME-$PKGREL) unstable; urgency=medium
 
-  * Package desktop app with system Java runtime dependency
+  * Package desktop app with system Java 21–26 runtime alternatives (deb Depends)
 
  -- $MAINTAINER  $deb_changelog_date
 EOF

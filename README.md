@@ -272,7 +272,7 @@ Run it with system Java (JDK/JRE 21+):
 java -jar composeApp/build/compose/jars/fr.husi-<platform>-<arch>-<version>.jar
 ```
 
-Build Linux native packages (`deb/rpm/pacman`) with Java 21 dependency metadata:
+Build Linux native packages (`deb/rpm/pacman`) with Java 21+ dependency metadata (deb lists OpenJDK 21–26 alternatives; see `docs/DESKTOP_LINUX_CI.md`):
 
 ```shell
 make desktop_package_linux

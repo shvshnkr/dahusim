@@ -58,7 +58,16 @@ if command -v dpkg-deb >/dev/null 2>&1; then
 			echo "smoke: dpkg-deb -I failed for $deb" >&2
 			fail=1
 		else
-			echo "smoke: dpkg-deb metadata ok"
+			depends="$(dpkg-deb -f "$deb" Depends 2>/dev/null || true)"
+			if [[ -z "$depends" ]]; then
+				echo "smoke: deb Depends field missing" >&2
+				fail=1
+			elif [[ "$depends" != *openjdk-21-jre* ]] || [[ "$depends" != *openjdk-26-jre* ]]; then
+				echo "smoke: deb Depends missing OpenJDK 21–26 alternatives: $depends" >&2
+				fail=1
+			else
+				echo "smoke: dpkg-deb metadata ok (Java 21–26 Depends)"
+			fi
 		fi
 	fi
 fi

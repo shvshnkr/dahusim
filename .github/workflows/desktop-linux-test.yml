@@ -157,7 +157,8 @@ jobs:
             echo
             echo "**Платформа:** \`linux/amd64\` (сборка DESKTOP_TARGET=linux/amd64)."
             echo
-            echo "**Среда выполнения:** uber JAR и нативный лаунчер рассчитаны на **Java 21+** на машине пользователя (в deb это отражено в зависимостях пакета)."
+            echo "**Среда выполнения:** uber JAR и нативный лаунчер — **Java 21+** (CI: Temurin 21–26, workflow \`jdk-matrix-test.yml\`)."
+            echo "В **deb** в \`Depends\` перечислены \`javaNN-runtime\` / \`openjdk-NN-jre\` для N=21…26 (достаточно одного); rpm/pacman — \`>= 21\`."
             echo
             echo "**Версия:** \`${VER}\` **Коммит:** \`$(git rev-parse --short HEAD)\` **Тег:** \`${TAG}\`"
             echo
