@@ -94,8 +94,10 @@ jobs:
           set -euo pipefail
           VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
           PKG=$(grep '^PACKAGE_NAME=' husi.properties | cut -d= -f2-)
-          test -f "composeApp/build/compose/packages/windows/${PKG}-${VER}-windows-amd64.zip"
+          ZIP="composeApp/build/compose/packages/windows/${PKG}-${VER}-windows-amd64.zip"
+          test -f "$ZIP"
           test -f "composeApp/build/compose/packages/windows/${PKG}-${VER}-windows-amd64-installer.exe"
+          unzip -l "$ZIP" | grep -F "app/${PKG}.jar"
           ls -la composeApp/build/compose/packages/windows
 
       - name: Stage release assets
