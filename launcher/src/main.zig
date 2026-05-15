@@ -14,6 +14,7 @@ comptime {
 }
 
 const config = @import("config");
+const jresolve = @import("java_resolve.zig");
 const husi_package_name = config.package_name;
 const husi_config_dir_name = "husi";
 const husi_exit_restart = 50;
@@ -331,6 +332,7 @@ fn resolveMacOSAppBundleOptions(allocator: mem.Allocator, runtime: RuntimePaths)
 }
 
 const UserConfigPaths = struct {
+    java_home_conf_path: []u8,
     java_opts_path: []u8,
     app_args_path: []u8,
 };
@@ -367,80 +369,18 @@ fn resolveUserConfigPaths(allocator: mem.Allocator) !UserConfigPaths {
 
     try fs.cwd().makePath(config_dir);
 
+    const java_home_conf_path = try std.fmt.allocPrint(allocator, "{s}/desktop-java-home.conf", .{config_dir});
+    errdefer allocator.free(java_home_conf_path);
     const java_opts_path = try std.fmt.allocPrint(allocator, "{s}/desktop-java-opts.conf", .{config_dir});
     errdefer allocator.free(java_opts_path);
     const app_args_path = try std.fmt.allocPrint(allocator, "{s}/desktop-app-args.conf", .{config_dir});
+    errdefer allocator.free(app_args_path);
 
     return UserConfigPaths{
+        .java_home_conf_path = java_home_conf_path,
         .java_opts_path = java_opts_path,
         .app_args_path = app_args_path,
     };
-}
-
-fn resolveMacOSJavaHome(allocator: mem.Allocator) !?[]const u8 {
-    if (native_os != .macos) return null;
-
-    const java_version = "21";
-    const result = process.Child.run(.{
-        .allocator = allocator,
-        .argv = &.{ "/usr/libexec/java_home", "-v", java_version },
-    }) catch |err| switch (err) {
-        error.FileNotFound => return null,
-        else => |e| return e,
-    };
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
-
-    switch (result.term) {
-        .Exited => |code| {
-            if (code != 0) return null;
-        },
-        else => return null,
-    }
-
-    const java_home = mem.trim(u8, result.stdout, &std.ascii.whitespace);
-    if (java_home.len == 0) return null;
-
-    const java_bin = try std.fmt.allocPrint(allocator, "{s}/bin/java", .{java_home});
-    if (fileExists(java_bin)) return java_bin;
-
-    allocator.free(java_bin);
-    return null;
-}
-
-fn resolveJavaHomeCommand(allocator: mem.Allocator, java_home: []const u8) !?[]const u8 {
-    if (java_home.len == 0) return null;
-
-    const candidate_names = if (native_os == .windows)
-        [_][]const u8{ "javaw.exe", "java.exe" }
-    else
-        [_][]const u8{"java"};
-
-    for (candidate_names) |candidate_name| {
-        const candidate = try fs.path.join(allocator, &.{ java_home, "bin", candidate_name });
-        if (fs.accessAbsolute(candidate, .{})) |_| {
-            return candidate;
-        } else |_| {
-            allocator.free(candidate);
-        }
-    }
-
-    return null;
-}
-
-fn selectJavaCommand(allocator: mem.Allocator) ![]const u8 {
-    if (process.getEnvVarOwned(allocator, "JAVA_HOME") catch null) |java_home| {
-        defer allocator.free(java_home);
-        if (try resolveJavaHomeCommand(allocator, java_home)) |bin| return bin;
-    }
-    if (process.getEnvVarOwned(allocator, "JAVA") catch null) |java_env| {
-        if (java_env.len > 0) return java_env;
-        allocator.free(java_env);
-    }
-    if (try resolveMacOSJavaHome(allocator)) |java_bin| {
-        return java_bin;
-    }
-    return allocator.dupe(u8, "java");
 }
 
 pub fn main() !u8 {
@@ -461,6 +401,7 @@ pub fn main() !u8 {
         return 1;
     };
 
+    const java_home_template = try std.fmt.allocPrint(allocator, "{s}/desktop-java-home.conf.template", .{runtime.launcher_dir});
     const java_opts_template = try std.fmt.allocPrint(allocator, "{s}/desktop-java-opts.conf.template", .{runtime.launcher_dir});
     const app_args_template = try std.fmt.allocPrint(allocator, "{s}/desktop-app-args.conf.template", .{runtime.launcher_dir});
 
@@ -469,6 +410,10 @@ pub fn main() !u8 {
         return 1;
     };
 
+    ensureUserConfigFile(user_config.java_home_conf_path, java_home_template) catch |err| {
+        std.debug.print("ensure desktop-java-home.conf failed: {}\n", .{err});
+        return 1;
+    };
     ensureUserConfigFile(user_config.java_opts_path, java_opts_template) catch |err| {
         std.debug.print("ensure java opts config failed: {}\n", .{err});
         return 1;
@@ -490,8 +435,8 @@ pub fn main() !u8 {
         return 1;
     };
 
-    const java_command = selectJavaCommand(allocator) catch |err| {
-        std.debug.print("select_java_command failed: {}\n", .{err});
+    const java_command = jresolve.resolveJavaExecutable(allocator, user_config.java_home_conf_path) catch |err| {
+        std.debug.print("resolve_java_executable failed: {}\n", .{err});
         return 1;
     };
 

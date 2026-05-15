@@ -8,7 +8,7 @@
 
 **Где взять готовый APK (GitHub).** Собранные установщики публикуются **на GitHub** в виде вложений (assets) к pre-release. **Скачать последнюю версию** = открыть страницу **последнего релиза** и взять файлы из блока *Assets*, не из исходников. Прямая ссылка: **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)**. В релизе **четыре** debug-APK по ABI: `dahusim_<версия>_play_debug_arm64_v8a.apk`, `..._armeabi_v7a.apk`, `..._x86_64.apk`, `..._x86.apk` (суффикс в имени — целевая архитектура; на устройстве обычно нужен **arm64**).
 
-**Desktop (Linux / Windows) на GitHub.** Отдельные ручные pre-release собираются workflows **Linux desktop** и **Windows desktop** (вкладка Actions → выбрать workflow → *Run workflow*). Артефакты — в **Releases → соответствующий pre-release → Assets**. На компьютере пользователя нужен **JRE или JDK 21+** (в сборку **не** входит встроенный JRE); старая «Java 8» не подойдёт — см. обсуждение [husi#30](https://codeberg.org/xchacha20-poly1305/husi/issues/30).
+**Desktop (Linux / Windows) на GitHub.** Отдельные ручные pre-release собираются workflows **Linux desktop** и **Windows desktop** (вкладка Actions → выбрать workflow → *Run workflow*). Артефакты — в **Releases → соответствующий pre-release → Assets**. На компьютере пользователя нужен **JRE или JDK 21+** (в сборку **не** входит встроенный JRE); старая «Java 8» не подойдёт — см. обсуждение [husi#30](https://codeberg.org/xchacha20-poly1305/husi/issues/30). На **Windows** лаунчер ищет подходящую Java 21+ в `%APPDATA%\husi\desktop-java-home.conf` (первая строка: каталог JDK или полный путь к `java.exe`/`javaw.exe`) **раньше**, чем `JAVA_HOME` и `PATH`, сканирует типовые каталоги установки и при необходимости откроет страницу Temurin или диалог выбора файла.
 
 **КВН вместо «VPN».** В текстах этого форка мы пишем **«КВН»** (шутливое, договорённое обозначение **вместо** привычного **«VPN»** — отсылка к известной аббревиатуре, **не** к шоу в первую очередь) так, чтобы **не** путать сборку с рекламой «официального VPN» и не обещать «сервис как в рекламе». Это **клиент** для **исследовательского и любительского** сценария, без гарантий, что это «именно VPN» в юридическом/маркетинговом смысле.
 
@@ -387,6 +387,8 @@ creates a Start Menu shortcut, and registers the configured URL schemes for the 
 The Windows launcher embeds an application manifest and requests administrator elevation via UAC at launch time.
 
 **Runtime:** install **Temurin / OpenJDK 21+** (or another Java 21+ distribution) and ensure `java -version` reports 21 or newer. Portable zip, installer, and uber JAR do **not** bundle a JRE. If the process exits right after UAC with no window, an outdated Java is a common cause ([husi#30](https://codeberg.org/xchacha20-poly1305/husi/issues/30)).
+
+**Windows JVM path:** the launcher checks `%APPDATA%\husi\desktop-java-home.conf` (first non-comment line: `JAVA_HOME` or full path to `java.exe`/`javaw.exe`) **before** `JAVA_HOME` / `PATH`, scans common install folders for JDK 21+, and can open Temurin download or a file picker if nothing suitable is found.
 
 #### 🌈 Plugins
 

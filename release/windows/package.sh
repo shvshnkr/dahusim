@@ -421,6 +421,7 @@ prepare_rootfs() {
     chmod 755 "$launcher_path"
     cp "$ROOT_DIR/release/linux/desktop/desktop-java-opts.conf" "$root/desktop-java-opts.conf.template"
     cp "$ROOT_DIR/release/linux/desktop/desktop-app-args.conf" "$root/desktop-app-args.conf.template"
+    cp "$ROOT_DIR/release/linux/desktop/desktop-java-home.conf.template" "$root/desktop-java-home.conf.template"
     cp "$ROOT_DIR/LICENSE" "$root/LICENSE"
     touch_path_tree "$root"
 }
@@ -487,6 +488,7 @@ build_nsis() {
         "__HUSI_LAUNCHER_FILE__" "$INPUT_LAUNCHER_BIN" \
         "__HUSI_JAR_FILE__" "$INPUT_JAR" \
         "__HUSI_JAVA_OPTS_FILE__" "$ROOT_DIR/release/linux/desktop/desktop-java-opts.conf" \
+        "__HUSI_JAVA_HOME_FILE__" "$ROOT_DIR/release/linux/desktop/desktop-java-home.conf.template" \
         "__HUSI_APP_ARGS_FILE__" "$ROOT_DIR/release/linux/desktop/desktop-app-args.conf" \
         "__HUSI_URL_SCHEME_REGISTRY__" "$url_scheme_registry" \
         "__HUSI_URL_SCHEME_UNREGISTRY__" "$url_scheme_unregistry"

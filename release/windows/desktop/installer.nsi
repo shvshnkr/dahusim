@@ -7,6 +7,7 @@ Unicode true
 !include "FileFunc.nsh"
 !include "nsDialogs.nsh"
 !include "WinMessages.nsh"
+!include "NSISdl.nsh"
 
 ; --- Metadata ---
 !define PACKAGE_NAME    "__HUSI_PACKAGE_NAME__"
@@ -39,9 +40,12 @@ Var CreateDesktopShortcut
 Var CreateStartMenuShortcut
 Var CheckboxDesktopShortcut
 Var CheckboxStartMenuShortcut
+Var InstallTemurin21
+Var CheckboxInstallJava
 
 ; --- Pages ---
 !insertmacro MUI_PAGE_LICENSE "__HUSI_LICENSE_FILE__"
+Page custom javaRuntimePageCreate javaRuntimePageLeave
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 Page custom shortcutsPageCreate shortcutsPageLeave
@@ -71,11 +75,58 @@ LangString UninstallSectionName ${LANG_ENGLISH} "Uninstall"
 LangString UninstallSectionName ${LANG_SIMPCHINESE} "卸载"
 LangString UninstallShortcutName ${LANG_ENGLISH} "Uninstall"
 LangString UninstallShortcutName ${LANG_SIMPCHINESE} "卸载"
+LangString JavaRuntimePageTitle ${LANG_ENGLISH} "Java 21 runtime"
+LangString JavaRuntimePageTitle ${LANG_SIMPCHINESE} "Java 21 运行环境"
+LangString JavaRuntimePageSubtitle ${LANG_ENGLISH} "Optional: install Eclipse Temurin JDK 21 if you do not have Java 21 yet."
+LangString JavaRuntimePageSubtitle ${LANG_SIMPCHINESE} "可选：若尚未安装 Java 21，可安装 Eclipse Temurin JDK 21。"
+LangString JavaRuntimePageDescription ${LANG_ENGLISH} "The application needs Java 21 or newer. You can install Temurin now (download + passive MSI), or install it later from adoptium.net."
+LangString JavaRuntimePageDescription ${LANG_SIMPCHINESE} "本应用需要 Java 21 或更高版本。可立即安装 Temurin（下载并静默 MSI），或稍后在 adoptium.net 安装。"
+LangString InstallTemurin21Label ${LANG_ENGLISH} "Download and install Eclipse Temurin JDK 21 (optional, requires network; may prompt UAC)"
+LangString InstallTemurin21Label ${LANG_SIMPCHINESE} "下载并安装 Eclipse Temurin JDK 21（可选，需联网；可能弹出 UAC）"
 
 Function .onInit
     StrCpy $CreateDesktopShortcut ${BST_CHECKED}
     StrCpy $CreateStartMenuShortcut ${BST_CHECKED}
+    StrCpy $InstallTemurin21 ${BST_UNCHECKED}
 FunctionEnd
+
+Function javaRuntimePageCreate
+    !insertmacro MUI_HEADER_TEXT "$(JavaRuntimePageTitle)" "$(JavaRuntimePageSubtitle)"
+
+    nsDialogs::Create 1018
+    Pop $0
+    StrCmp $0 error 0 +2
+    Abort
+
+    ${NSD_CreateLabel} 0 0 100% 48u "$(JavaRuntimePageDescription)"
+    Pop $0
+
+    ${NSD_CreateCheckbox} 0 56u 100% 16u "$(InstallTemurin21Label)"
+    Pop $CheckboxInstallJava
+    ${NSD_SetState} $CheckboxInstallJava $InstallTemurin21
+
+    nsDialogs::Show
+FunctionEnd
+
+Function javaRuntimePageLeave
+    ${NSD_GetState} $CheckboxInstallJava $InstallTemurin21
+FunctionEnd
+
+Section "-TemurinJDK21"
+    StrCmp $InstallTemurin21 ${BST_CHECKED} 0 temurin_done
+    DetailPrint "Downloading Eclipse Temurin JDK 21 installer..."
+    NSISdl::download /TIMEOUT=300000 "https://api.adoptium.net/v3/installer/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk" "$TEMP\EclipseTemurinJDK21.msi"
+    Pop $0
+    StrCmp $0 success temurin_dl_ok temurin_dl_fail
+temurin_dl_ok:
+    DetailPrint "Installing Temurin JDK 21 (passive; UAC may appear)..."
+    ExecWait 'msiexec /i "$TEMP\EclipseTemurinJDK21.msi" INSTALLLEVEL=1 /passive /norestart'
+    Delete "$TEMP\EclipseTemurinJDK21.msi"
+    Goto temurin_done
+temurin_dl_fail:
+    MessageBox MB_OK "Temurin JDK 21 download failed. Install Java 21 manually from https://adoptium.net/temurin/releases/?version=21"
+temurin_done:
+SectionEnd
 
 ; --- Install section ---
 Section "$(InstallSectionName)"
@@ -83,6 +134,7 @@ Section "$(InstallSectionName)"
     File "/oname=${APP_NAME}.exe" "__HUSI_LAUNCHER_FILE__"
     File "/oname=LICENSE" "__HUSI_LICENSE_FILE__"
     File "/oname=desktop-java-opts.conf.template" "__HUSI_JAVA_OPTS_FILE__"
+    File "/oname=desktop-java-home.conf.template" "__HUSI_JAVA_HOME_FILE__"
     File "/oname=desktop-app-args.conf.template" "__HUSI_APP_ARGS_FILE__"
 
     SetOutPath "$INSTDIR\app"
@@ -185,6 +237,7 @@ Section "un.$(UninstallSectionName)"
     Delete "$INSTDIR\${APP_NAME}.exe"
     Delete "$INSTDIR\LICENSE"
     Delete "$INSTDIR\desktop-java-opts.conf.template"
+    Delete "$INSTDIR\desktop-java-home.conf.template"
     Delete "$INSTDIR\desktop-app-args.conf.template"
     Delete "$INSTDIR\app\${PACKAGE_NAME}.jar"
     RMDir "$INSTDIR\app"

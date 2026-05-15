@@ -391,6 +391,7 @@ prepare_rootfs() {
 
     cp "$java_opts_template" "$bin_dir/desktop-java-opts.conf.template"
     cp "$app_args_template" "$bin_dir/desktop-app-args.conf.template"
+    cp "$ROOT_DIR/release/linux/desktop/desktop-java-home.conf.template" "$bin_dir/desktop-java-home.conf.template"
     ln -s "../lib/$PACKAGE_NAME/bin/$PACKAGE_NAME" "$system_launcher"
 
     render_template \

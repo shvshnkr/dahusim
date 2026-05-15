@@ -1,0 +1,3 @@
+# One line (no quotes): full path to java.exe or javaw.exe, OR a JDK/JRE home directory.
+# Must be Java 21 or newer. Example:
+# C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot
