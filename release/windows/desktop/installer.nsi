@@ -79,10 +79,10 @@ LangString JavaRuntimePageTitle ${LANG_ENGLISH} "Java 21 runtime"
 LangString JavaRuntimePageTitle ${LANG_SIMPCHINESE} "Java 21 运行环境"
 LangString JavaRuntimePageSubtitle ${LANG_ENGLISH} "Optional: install Eclipse Temurin JDK 21 if you do not have Java 21 yet."
 LangString JavaRuntimePageSubtitle ${LANG_SIMPCHINESE} "可选：若尚未安装 Java 21，可安装 Eclipse Temurin JDK 21。"
-LangString JavaRuntimePageDescription ${LANG_ENGLISH} "The application needs Java 21 or newer. You can install Temurin now (download + passive MSI), or install it later from adoptium.net."
-LangString JavaRuntimePageDescription ${LANG_SIMPCHINESE} "本应用需要 Java 21 或更高版本。可立即安装 Temurin（下载并静默 MSI），或稍后在 adoptium.net 安装。"
-LangString InstallTemurin21Label ${LANG_ENGLISH} "Download and install Eclipse Temurin JDK 21 (optional, requires network; may prompt UAC)"
-LangString InstallTemurin21Label ${LANG_SIMPCHINESE} "下载并安装 Eclipse Temurin JDK 21（可选，需联网；可能弹出 UAC）"
+LangString JavaRuntimePageDescription ${LANG_ENGLISH} "The application needs Java 21 or newer. Temurin is installed only if you tick the box below (silent MSI, /qn); it does not replace or override your existing JAVA_HOME unless you choose this option."
+LangString JavaRuntimePageDescription ${LANG_SIMPCHINESE} "本应用需要 Java 21 或更高版本。仅当您勾选下方选项时才安装 Temurin（静默 MSI /qn）；不会替换您现有的 JAVA_HOME，除非您主动选择。"
+LangString InstallTemurin21Label ${LANG_ENGLISH} "Download and install Eclipse Temurin JDK 21 (optional, explicit opt-in; silent MSI /qn; network + UAC may apply)"
+LangString InstallTemurin21Label ${LANG_SIMPCHINESE} "下载并安装 Eclipse Temurin JDK 21（可选，需手动勾选；静默 MSI /qn；联网且可能 UAC）"
 
 Function .onInit
     StrCpy $CreateDesktopShortcut ${BST_CHECKED}
@@ -119,8 +119,8 @@ Section "-TemurinJDK21"
     Pop $0
     StrCmp $0 success temurin_dl_ok temurin_dl_fail
 temurin_dl_ok:
-    DetailPrint "Installing Temurin JDK 21 (passive; UAC may appear)..."
-    ExecWait 'msiexec /i "$TEMP\EclipseTemurinJDK21.msi" INSTALLLEVEL=1 /passive /norestart'
+    DetailPrint "Installing Temurin JDK 21 (silent /qn; UAC may still apply)..."
+    ExecWait 'msiexec /i "$TEMP\EclipseTemurinJDK21.msi" INSTALLLEVEL=1 /qn /norestart'
     Delete "$TEMP\EclipseTemurinJDK21.msi"
     Goto temurin_done
 temurin_dl_fail:

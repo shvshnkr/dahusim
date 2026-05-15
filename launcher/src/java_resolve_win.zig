@@ -81,12 +81,14 @@ pub fn interactiveJavaSetup(allocator: mem.Allocator, conf_path: []const u8) err
     const text =
         \\Java 21 or newer is required.
         \\
+        \\If JAVA_HOME points to an older JDK, it is skipped and the launcher keeps searching.
+        \\
         \\YES = open Temurin 21 download page (browser)
         \\NO = pick java.exe / javaw.exe on disk
         \\CANCEL = exit
         \\
         \\After installing from the website, run this app again.
-        \\You can also set one line in:
+        \\This app never changes your system JAVA_HOME; optional path is saved only in:
         \\%APPDATA%\\husi\\desktop-java-home.conf
     ;
     const caption = "Java runtime";

@@ -161,18 +161,26 @@ fn tryWindowsHeuristic(allocator: mem.Allocator) !?[]const u8 {
         "C:\\Program Files\\Java",
         "C:\\Program Files\\Microsoft",
         "C:\\Program Files\\Zulu",
+        "C:\\Program Files (x86)\\Java",
+        "C:\\Program Files (x86)\\Eclipse Adoptium",
+        "C:\\Program Files (x86)\\Microsoft",
+        "C:\\Program Files (x86)\\Zulu",
     };
 
-    var env_bases: [2]?[]const u8 = .{ null, null };
+    var env_bases: [3]?[]const u8 = .{ null, null, null };
     if (process.getEnvVarOwned(allocator, "ProgramW6432") catch null) |p| {
         env_bases[0] = p;
     }
     if (process.getEnvVarOwned(allocator, "ProgramFiles") catch null) |p| {
         env_bases[1] = p;
     }
+    if (process.getEnvVarOwned(allocator, "ProgramFiles(x86)") catch null) |p| {
+        env_bases[2] = p;
+    }
     defer {
         if (env_bases[0]) |s| allocator.free(s);
         if (env_bases[1]) |s| allocator.free(s);
+        if (env_bases[2]) |s| allocator.free(s);
     }
 
     for (env_bases) |maybe| {
