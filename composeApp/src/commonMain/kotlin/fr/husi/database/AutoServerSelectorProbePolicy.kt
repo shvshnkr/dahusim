@@ -19,6 +19,7 @@ internal object AutoServerSelectorProbePolicy {
     fun forceFullProbeReason(
         proxies: List<ProxyEntity>,
         whitelistBuiltinOnly: Boolean,
+        networkHandoff: Boolean = false,
     ): String? {
         val reasons = mutableListOf<String>()
         val now = System.currentTimeMillis()
@@ -28,11 +29,13 @@ internal object AutoServerSelectorProbePolicy {
         }
         val hash = computeProxyIdSetHash(proxies)
         val storedHash = DataStore.autoSelectProxyIdSetHash
-        if (storedHash != 0L && hash != storedHash) {
-            reasons += "proxy_set_changed"
-        }
-        if (DataStore.autoSelectLastProbeWhitelistOnly && !whitelistBuiltinOnly) {
-            reasons += "wl_to_open"
+        if (!networkHandoff) {
+            if (storedHash != 0L && hash != storedHash) {
+                reasons += "proxy_set_changed"
+            }
+            if (DataStore.autoSelectLastProbeWhitelistOnly && !whitelistBuiltinOnly) {
+                reasons += "wl_to_open"
+            }
         }
         val goodId = DataStore.autoSelectLastKnownGood
         if (goodId > 0L) {

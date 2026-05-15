@@ -11,7 +11,10 @@ import fr.husi.bg.proto.TrafficLooper
 import fr.husi.database.DataStore
 import fr.husi.database.ProfileManager
 import fr.husi.ktx.Logs
+import fr.husi.ktx.ensureMixedPortAvailable
+import fr.husi.ktx.isMixedPortBindFailure
 import fr.husi.ktx.readableMessage
+import fr.husi.utils.simpleModeLog
 import fr.husi.libcore.Service
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.resources.Res
@@ -95,48 +98,65 @@ internal class DesktopServiceRuntime(
         changeState(ServiceState.Connecting)
         BackendState.setConnected(false)
 
-        try {
-            val config = fr.husi.fmt.buildConfig(profile)
-            cacheFiles.clear()
-            val pluginConfigs = initPlugins(
-                config = config,
-                isVPN = DataStore.serviceMode == Key.MODE_VPN,
-                cacheFiles = cacheFiles,
-            )
-            val pool = GuardedProcessPool { throwable ->
-                handleFatal(throwable)
-            }
-            processes = pool
-            launchPlugins(
-                config = config,
-                pluginConfigs = pluginConfigs,
-                processes = pool,
-                cacheFiles = cacheFiles,
-            )
-
-            service.newInstance(config.config)
-            service.startInstance()
-
-            trafficLooper = TrafficLooper(
-                box = service,
-                config = config,
-                scope = scope,
-            )
-            trafficLooper?.start()
-
-            DataStore.currentProfile = profile.id
-            runningProfileName = profile.displayNameForService()
-            changeState(ServiceState.Connected, runningProfileName)
-            BackendState.setConnected(true)
-        } catch (e: Throwable) {
-            when (e) {
-                is UnknownHostException -> stopLocked(resolveRepository().getString(Res.string.invalid_server))
-                is PluginNotFoundException ->
-                    stopLocked(e.readableMessage, AlertType.MISSING_PLUGIN, e.plugin)
-
-                else -> stopLocked(
-                    "${resolveRepository().getString(Res.string.service_failed)}: ${e.readableMessage}",
+        var bindRetries = 0
+        while (true) {
+            try {
+                ensureMixedPortAvailable()
+                val config = fr.husi.fmt.buildConfig(profile)
+                cacheFiles.clear()
+                val pluginConfigs = initPlugins(
+                    config = config,
+                    isVPN = DataStore.serviceMode == Key.MODE_VPN,
+                    cacheFiles = cacheFiles,
                 )
+                val pool = GuardedProcessPool { throwable ->
+                    handleFatal(throwable)
+                }
+                processes = pool
+                launchPlugins(
+                    config = config,
+                    pluginConfigs = pluginConfigs,
+                    processes = pool,
+                    cacheFiles = cacheFiles,
+                )
+
+                service.newInstance(config.config)
+                service.startInstance()
+
+                trafficLooper = TrafficLooper(
+                    box = service,
+                    config = config,
+                    scope = scope,
+                )
+                trafficLooper?.start()
+
+                DataStore.currentProfile = profile.id
+                runningProfileName = profile.displayNameForService()
+                changeState(ServiceState.Connected, runningProfileName)
+                BackendState.setConnected(true)
+                return
+            } catch (e: Throwable) {
+                if (bindRetries < 1 && isMixedPortBindFailure(e)) {
+                    bindRetries++
+                    val nextPort = DataStore.mixedPort + 1
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H32 mixed_port_bind_retry from=${DataStore.mixedPort} to=$nextPort err=${e.readableMessage}",
+                    )
+                    DataStore.mixedPort = nextPort
+                    cleanupLocked()
+                    continue
+                }
+                when (e) {
+                    is UnknownHostException -> stopLocked(resolveRepository().getString(Res.string.invalid_server))
+                    is PluginNotFoundException ->
+                        stopLocked(e.readableMessage, AlertType.MISSING_PLUGIN, e.plugin)
+
+                    else -> stopLocked(
+                        "${resolveRepository().getString(Res.string.service_failed)}: ${e.readableMessage}",
+                    )
+                }
+                return
             }
         }
     }

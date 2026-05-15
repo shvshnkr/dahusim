@@ -9,8 +9,11 @@ import fr.husi.database.PrepareForConnectResult
  */
 object SimpleModeNetworkAdaptation {
 
-    suspend fun reselectForNetwork(whitelistBuiltinOnly: Boolean): PrepareForConnectResult {
+    suspend fun reselectForNetwork(
+        whitelistBuiltinOnly: Boolean,
+        networkHandoff: Boolean = false,
+    ): PrepareForConnectResult {
         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = whitelistBuiltinOnly
-        return AutoServerSelector.prepareForConnect()
+        return AutoServerSelector.prepareForConnect(networkHandoff = networkHandoff)
     }
 }

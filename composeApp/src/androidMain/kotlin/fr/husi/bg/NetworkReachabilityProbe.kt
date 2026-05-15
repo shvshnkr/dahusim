@@ -34,8 +34,9 @@ internal object NetworkReachabilityProbe {
         "https://storage.yandexcloud.net/wall-breaker-c0de-a666/config.txt",
     )
     private const val TIMEOUT_MS = 1800
+    private const val FAST_TIMEOUT_MS = 1200
 
-    suspend fun probe(): NetworkReachability = coroutineScope {
+    suspend fun probe(fast: Boolean = false): NetworkReachability = coroutineScope {
         if (resolveAndroidRepository().connectivity.activeNetwork == null) {
             return@coroutineScope NetworkReachability(
                 googleReachable = false,
@@ -44,9 +45,13 @@ internal object NetworkReachabilityProbe {
                 whitelistSourceReachable = false,
             )
         }
-        val google = async(Dispatchers.IO) { probeUrl(GOOGLE_PROBE_URL) }
-        val dzen = async(Dispatchers.IO) { probeUrl(DZEN_PROBE_URL) }
-        val ya = async(Dispatchers.IO) { probeUrl(YA_PROBE_URL) }
+        val timeoutMs = if (fast) FAST_TIMEOUT_MS else TIMEOUT_MS
+        val google = async(Dispatchers.IO) { probeUrl(GOOGLE_PROBE_URL, timeoutMs) }
+        val dzen = async(Dispatchers.IO) { probeUrl(DZEN_PROBE_URL, timeoutMs) }
+        val ya = async(Dispatchers.IO) { probeUrl(YA_PROBE_URL, timeoutMs) }
+        val whitelist = async(Dispatchers.IO) {
+            anyWhitelistSourceReachable(timeoutMs, fast)
+        }
         if (google.await()) {
             return@coroutineScope NetworkReachability(
                 googleReachable = true,
@@ -57,7 +62,7 @@ internal object NetworkReachabilityProbe {
         }
         val dzenOk = dzen.await()
         val yaOk = ya.await()
-        val whitelistSourceReachable = anyWhitelistSourceReachable()
+        val whitelistSourceReachable = whitelist.await()
         NetworkReachability(
             googleReachable = false,
             dzenReachable = dzenOk,
@@ -66,18 +71,26 @@ internal object NetworkReachabilityProbe {
         )
     }
 
-    private suspend fun anyWhitelistSourceReachable(): Boolean = coroutineScope {
-        WHITELIST_PROBE_URLS
-            .map { url -> async(Dispatchers.IO) { probeUrl(url) } }
+    private suspend fun anyWhitelistSourceReachable(
+        timeoutMs: Int,
+        fast: Boolean,
+    ): Boolean = coroutineScope {
+        val urls = if (fast) {
+            WHITELIST_PROBE_URLS.take(2)
+        } else {
+            WHITELIST_PROBE_URLS
+        }
+        urls
+            .map { url -> async(Dispatchers.IO) { probeUrl(url, timeoutMs) } }
             .awaitAll()
             .any { it }
     }
 
-    private suspend fun probeUrl(url: String): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun probeUrl(url: String, timeoutMs: Int): Boolean = withContext(Dispatchers.IO) {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
             instanceFollowRedirects = false
             setRequestProperty("User-Agent", "Mozilla/5.0")
         }

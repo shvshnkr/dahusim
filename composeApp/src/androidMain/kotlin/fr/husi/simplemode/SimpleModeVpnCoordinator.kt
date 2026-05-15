@@ -20,6 +20,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * When simple-mode VPN is up and the underlying network or WL/open class changes,
@@ -31,16 +32,23 @@ internal object SimpleModeVpnCoordinator {
 
     private val adaptScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val adaptMutex = Mutex()
+    private val adaptGeneration = AtomicInteger(0)
     private var adaptJob: Job? = null
     private var lastAdaptAt = 0L
 
     fun cancelAdaptation() {
+        adaptGeneration.incrementAndGet()
+        AutoServerSelector.cancelInFlightPrepare()
         adaptJob?.cancel()
         adaptJob = null
     }
 
     fun scheduleAdaptation(reason: String) {
         if (!DataStore.simpleMode) return
+        if (adaptJob?.isActive == true) {
+            adaptGeneration.incrementAndGet()
+            AutoServerSelector.cancelInFlightPrepare()
+        }
         adaptJob?.cancel()
         adaptJob = adaptScope.launch {
             try {
@@ -52,7 +60,8 @@ internal object SimpleModeVpnCoordinator {
                         return@withLock
                     }
                     lastAdaptAt = now
-                    adaptLocked(reason)
+                    val adaptGen = adaptGeneration.incrementAndGet()
+                    adaptLocked(reason, adaptGen)
                 }
             } catch (_: CancellationException) {
                 simpleModeLog("SimpleMode", "H30 wl_adapt_cancelled trigger=$reason")
@@ -79,7 +88,9 @@ internal object SimpleModeVpnCoordinator {
             "SimpleMode",
             "H30 wl_post_connect_recover start failedProfileId=$failedProfileId",
         )
-        if (applyReselectAndRestart("post_connect_unhealthy", whitelistOnly, failedProfileId)) {
+        val recoverGen = adaptGeneration.incrementAndGet()
+        AutoServerSelector.cancelInFlightPrepare()
+        if (applyReselectAndRestart("post_connect_unhealthy", whitelistOnly, failedProfileId, recoverGen)) {
             return true
         }
         val fallback = AutoServerSelector.tryMoveToFallback(failedProfileId)
@@ -94,13 +105,15 @@ internal object SimpleModeVpnCoordinator {
         return false
     }
 
-    private suspend fun adaptLocked(reason: String) {
+    private suspend fun adaptLocked(reason: String, adaptGen: Int) {
         if (!DataStore.simpleMode) return
         if (!DataStore.serviceState.connected) {
             simpleModeLog("SimpleMode", "H30 wl_adapt_skipped reason=not_connected trigger=$reason")
             return
         }
-        val reachability = NetworkReachabilityProbe.probe()
+        if (!isAdaptCurrent(adaptGen)) return
+        val reachability = NetworkReachabilityProbe.probe(fast = true)
+        if (!isAdaptCurrent(adaptGen)) return
         DataStore.activeWhitelistRestrictedNetwork = reachability.whitelistOnly
         if (reachability.whitelistOnly) {
             DataStore.autoConnectPausedUntilGoogle = false
@@ -115,22 +128,35 @@ internal object SimpleModeVpnCoordinator {
             reachability,
             requestReloadOnChange = false,
         )
-        if (!currentCoroutineContext().isActive) return
+        if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) return
         AutoServerSelector.cancelInFlightPrepare()
         val previousId = DataStore.selectedProxy
-        applyReselectAndRestart(reason, reachability.whitelistOnly, previousId)
+        applyReselectAndRestart(reason, reachability.whitelistOnly, previousId, adaptGen)
     }
+
+    private fun isAdaptCurrent(adaptGen: Int): Boolean = adaptGen == adaptGeneration.get()
 
     private suspend fun applyReselectAndRestart(
         reason: String,
         whitelistOnly: Boolean,
         previousProfileId: Long,
+        adaptGen: Int,
     ): Boolean {
-        if (!currentCoroutineContext().isActive) return false
+        if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) {
+            simpleModeLog("SimpleMode", "H30 wl_adapt_superseded before_prepare gen=$adaptGen reason=$reason")
+            return false
+        }
         val prep = try {
-            SimpleModeNetworkAdaptation.reselectForNetwork(whitelistOnly)
+            SimpleModeNetworkAdaptation.reselectForNetwork(
+                whitelistBuiltinOnly = whitelistOnly,
+                networkHandoff = reason == "network_handoff" || reason == "reachability_flip",
+            )
         } catch (_: CancellationException) {
-            simpleModeLog("SimpleMode", "H30 wl_adapt_prepare_cancelled reason=$reason")
+            simpleModeLog("SimpleMode", "H30 wl_adapt_prepare_cancelled reason=$reason gen=$adaptGen")
+            return false
+        }
+        if (!isAdaptCurrent(adaptGen)) {
+            simpleModeLog("SimpleMode", "H30 wl_adapt_superseded after_prepare gen=$adaptGen reason=$reason")
             return false
         }
         when (prep) {
@@ -149,12 +175,23 @@ internal object SimpleModeVpnCoordinator {
                 return true
             }
             is PrepareForConnectResult.Success -> {
-                if (!currentCoroutineContext().isActive) return false
+                if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) {
+                    simpleModeLog("SimpleMode", "H30 wl_adapt_superseded before_reload gen=$adaptGen reason=$reason")
+                    return false
+                }
                 val newId = prep.profileId
+                if (newId == previousProfileId) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H30 wl_adapt_unchanged reason=$reason profileId=$newId",
+                    )
+                    DataStore.simpleModeActivity = ""
+                    return true
+                }
                 DataStore.selectedProxy = newId
                 simpleModeLog(
                     "SimpleMode",
-                    "H30 wl_adapt_restart reason=$reason wl=$whitelistOnly prev=$previousProfileId new=$newId",
+                    "H30 wl_adapt_restart reason=$reason wl=$whitelistOnly prev=$previousProfileId new=$newId gen=$adaptGen",
                 )
                 if (!DataStore.serviceState.connected) {
                     return true

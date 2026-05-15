@@ -98,13 +98,13 @@ object AutoServerSelector {
         return (priority + rest).distinctBy { it.id }
     }
 
-    suspend fun prepareForConnect(): PrepareForConnectResult {
+    suspend fun prepareForConnect(networkHandoff: Boolean = false): PrepareForConnectResult {
         val generation = prepareGeneration.incrementAndGet()
         return prepareMutex.withLock {
             probeUiActive = true
             try {
                 ensurePrepareCurrent(generation)
-                val result = prepareForConnectLocked(generation)
+                val result = prepareForConnectLocked(generation, networkHandoff)
                 ensurePrepareCurrent(generation)
                 result
             } catch (e: CancellationException) {
@@ -116,7 +116,10 @@ object AutoServerSelector {
         }
     }
 
-    private suspend fun prepareForConnectLocked(generation: Int): PrepareForConnectResult {
+    private suspend fun prepareForConnectLocked(
+        generation: Int,
+        networkHandoff: Boolean,
+    ): PrepareForConnectResult {
         val selectedBefore = DataStore.selectedProxy
         val whitelistBuiltinOnly = DataStore.simpleModeUseWhitelistBuiltinPoolOnly
         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = false
@@ -130,22 +133,29 @@ object AutoServerSelector {
         val builtinFour = WhitelistBuiltinBootstrap.whitelistPoolProxies()
         val builtinFourIds = builtinFour.map { it.id }.toSet()
 
+        val handoffPriorityIds = if (networkHandoff) {
+            buildHandoffPriorityIds(selectedBefore)
+        } else {
+            emptySet()
+        }
+
         val priorityFirstIds: Set<Long>
         val proxies: List<ProxyEntity>
         if (whitelistBuiltinOnly) {
-            priorityFirstIds = builtinFourIds + subscriptionWhitelistIds
+            priorityFirstIds = (builtinFourIds + subscriptionWhitelistIds + handoffPriorityIds).toSet()
             val priorityHead = (builtinFour + subscriptionWhitelistMarked.sortedBy { it.userOrder })
                 .distinctBy { it.id }
             val rest = allProxies.filter { it.id !in priorityFirstIds }
             proxies = priorityHead + rest
         } else {
-            priorityFirstIds = emptySet()
+            priorityFirstIds = handoffPriorityIds
             proxies = allProxies.filter { it.id !in subscriptionWhitelistIds }
         }
         simpleModeLog(
             "SimpleMode",
-            "H24 autoselect_pool wlNet=$whitelistBuiltinOnly subsWlMarked=${subscriptionWhitelistMarked.size} " +
-                "pool=${proxies.size} priorityFirst=${priorityFirstIds.size}",
+            "H24 autoselect_pool wlNet=$whitelistBuiltinOnly handoff=$networkHandoff " +
+                "subsWlMarked=${subscriptionWhitelistMarked.size} pool=${proxies.size} " +
+                "priorityFirst=${priorityFirstIds.size}",
         )
         if (proxies.isEmpty()) {
             // #region agent log
@@ -181,21 +191,33 @@ object AutoServerSelector {
         val forceFullProbeReason = AutoServerSelectorProbePolicy.forceFullProbeReason(
             proxies = proxies,
             whitelistBuiltinOnly = whitelistBuiltinOnly,
+            networkHandoff = networkHandoff,
         )
-        val shouldQuickProbe = initialCount == proxies.size ||
+        val shouldQuickProbe = networkHandoff ||
+            initialCount == proxies.size ||
             availableCount == 0 ||
             forceFullProbeReason != null
         if (forceFullProbeReason != null) {
             simpleModeLog(
                 "SimpleMode",
-                "H25 full_probe_forced reason=$forceFullProbeReason initial=$initialCount avail=$availableCount",
+                "H25 full_probe_forced reason=$forceFullProbeReason handoff=$networkHandoff " +
+                    "initial=$initialCount avail=$availableCount",
+            )
+        } else if (networkHandoff) {
+            simpleModeLog(
+                "SimpleMode",
+                "H33 handoff_probe_compact initial=$initialCount avail=$availableCount",
             )
         }
-        val urlTestCap = (probeConcurrency(whitelistBuiltinOnly) * 2).coerceIn(12, 32)
-        val extraUrlTestByTcp = 8
+        val urlTestCap = if (networkHandoff) {
+            12
+        } else {
+            (probeConcurrency(whitelistBuiltinOnly) * 2).coerceIn(12, 32)
+        }
+        val extraUrlTestByTcp = if (networkHandoff) 4 else 8
         val parallelUrlPoolSize = (urlTestCap + extraUrlTestByTcp).coerceAtMost(proxies.size)
-        val urlSupplementCap = 10
-        val compactTcpProbe = whitelistBuiltinOnly
+        val urlSupplementCap = if (networkHandoff) 6 else 10
+        val compactTcpProbe = whitelistBuiltinOnly || networkHandoff
         val tcpProbeTargets = if (compactTcpProbe) {
             buildCompactTcpProbePool(proxies, priorityFirstIds, maxTotal = 128)
         } else {
@@ -220,7 +242,7 @@ object AutoServerSelector {
                 "SimpleMode",
                 "H14 quick_probe_started tcp=${tcpProbeTargets.size} pool=${proxies.size} " +
                     "parallel_url_pool=${parallelUrlPool.size} compactTcp=$compactTcpProbe " +
-                    "tcpConc=$tcpConcurrency urlConc=$urlConcurrency",
+                    "handoff=$networkHandoff tcpConc=$tcpConcurrency urlConc=$urlConcurrency",
             )
             coroutineScope {
                 val tcpJob = async(Dispatchers.IO) {
@@ -459,10 +481,23 @@ object AutoServerSelector {
             "SimpleMode",
             "H4 queue_prepared before=$selectedBefore best=$best size=${ranked.size} avail=$availableCount initial=$initialCount bad=$badCount probeAlive=$quickProbeAlive urlOk=${urlTestDelays.size} head=$rankedHead",
         )
-        if (shouldQuickProbe) {
+        if (shouldQuickProbe && !networkHandoff) {
             AutoServerSelectorProbePolicy.recordFullProbe(proxies, whitelistBuiltinOnly)
         }
         return PrepareForConnectResult.Success(best)
+    }
+
+    private fun buildHandoffPriorityIds(selectedBefore: Long): Set<Long> {
+        val ids = LinkedHashSet<Long>()
+        if (selectedBefore > 0L) ids += selectedBefore
+        val lastGood = DataStore.autoSelectLastKnownGood
+        if (lastGood > 0L) ids += lastGood
+        DataStore.autoSelectFallbackQueue
+            .split(",")
+            .mapNotNull { it.trim().toLongOrNull() }
+            .take(12)
+            .forEach { ids += it }
+        return ids
     }
 
     fun tryMoveToFallback(currentId: Long): Long? {

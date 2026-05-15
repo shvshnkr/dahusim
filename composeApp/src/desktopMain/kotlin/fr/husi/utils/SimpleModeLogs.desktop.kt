@@ -1,6 +1,11 @@
 package fr.husi.utils
 
-internal actual fun simpleModeLog(tag: String, message: String) = Unit
+import fr.husi.ktx.openFilePath
+import fr.husi.repository.resolveRepository
+
+internal actual fun simpleModeLog(tag: String, message: String) {
+    SimpleModeLogStore.log(tag, message)
+}
 
 internal actual fun simpleModeDebugEvent(
     runId: String,
@@ -10,6 +15,16 @@ internal actual fun simpleModeDebugEvent(
     data: Map<String, String>,
 ) = Unit
 
-internal actual fun canShareSimpleModeLogs(): Boolean = false
+internal actual fun canShareSimpleModeLogs(): Boolean = true
 
-internal actual suspend fun shareSimpleModeLogs() = Unit
+internal actual suspend fun shareSimpleModeLogs() {
+    val shareFile = SimpleModeLogStore.buildExportCopy()
+    val appendix = buildString {
+        appendLine()
+        appendLine("=== Logcat / platform ===")
+        appendLine()
+        append(SendLog.buildLog(resolveRepository().externalAssetsDir))
+    }
+    shareFile.appendText(appendix, Charsets.UTF_8)
+    openFilePath(shareFile.absolutePath)
+}
