@@ -14,7 +14,7 @@ Linux desktop test channel: [`.github/workflows/desktop-linux-test.yml`](../.git
 
 - Минимум: **Java 21** (bytecode и API).
 - CI: workflow [**JDK matrix**](../.github/workflows/jdk-matrix-test.yml) гоняет `composeApp:desktopTest` на Temurin **21–26** (Xvfb).
-- **deb** (`release/linux/desktop/deb.control`): `Depends` перечисляет альтернативы `javaNN-runtime` и `openjdk-NN-jre` для **21–26** (достаточно одного пакета из цепочки `|`).
+- **deb** (`release/linux/desktop/deb.control`): `Depends` перечисляет альтернативы `javaNN-runtime` и `openjdk-NN-jre` (полный JRE с AWT), **без** `*-jre-headless`: headless-пакет не содержит `libawt_xawt.so` и ломает запуск окна (`UnsatisfiedLinkError`).
 - **rpm**: `Requires: java >= 21`.
 - **pacman**: `depend = java-runtime>=21`.
 

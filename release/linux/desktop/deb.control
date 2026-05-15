@@ -4,5 +4,5 @@ Section: net
 Priority: optional
 Architecture: __HUSI_DEB_ARCH__
 Maintainer: __HUSI_MAINTAINER__
-Depends: java21-runtime | openjdk-21-jre | openjdk-21-jre-headless | java22-runtime | openjdk-22-jre | openjdk-22-jre-headless | java23-runtime | openjdk-23-jre | openjdk-23-jre-headless | java24-runtime | openjdk-24-jre | openjdk-24-jre-headless | java25-runtime | openjdk-25-jre | openjdk-25-jre-headless | java26-runtime | openjdk-26-jre | openjdk-26-jre-headless, libcap2-bin, ca-certificates, nftables
+Depends: java21-runtime | openjdk-21-jre | java22-runtime | openjdk-22-jre | java23-runtime | openjdk-23-jre | java24-runtime | openjdk-24-jre | java25-runtime | openjdk-25-jre | java26-runtime | openjdk-26-jre, libcap2-bin, ca-certificates, nftables
 Description: __HUSI_APP_DESCRIPTION__
