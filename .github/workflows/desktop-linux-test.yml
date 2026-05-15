@@ -165,7 +165,7 @@ jobs:
             echo
             echo "[Все релизы репозитория](${REPO_URL}/releases)"
             echo
-            echo "Отдельный тестовый канал (не смешивается с rolling APK pre-release из \`build.yml\`)."
+            echo "Отдельный тестовый канал (не смешивается с Android APK pre-release workflow \`build.yml\`)."
             echo
             echo "**Форматы в Assets:** deb, rpm, pacman (.pkg.tar.zst), uber JAR."
             echo

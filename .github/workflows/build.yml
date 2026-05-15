@@ -1,6 +1,6 @@
-name: Build and pre-release
+name: Android (Play debug, all ABI, pre-release)
 
-# Temporarily manual-only: run from Actions tab when you want APK pre-release.
+# Temporarily manual-only: run from Actions tab when you want Android APK pre-release.
 on:
   workflow_dispatch:
 
@@ -10,7 +10,7 @@ env:
 # Do not cancel in-progress: Android assemblePlayDebugAllAbi is long; a follow-up push
 # would otherwise kill Gradle mid-task ("Error: The operation was canceled").
 concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
+  group: android-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -137,7 +137,7 @@ jobs:
           if-no-files-found: error
 
   rolling-release:
-    name: GitHub pre-release (APK)
+    name: GitHub pre-release (Android APK)
     needs: [android-play-all-abi]
     runs-on: ubuntu-latest
     if: success()
@@ -198,6 +198,6 @@ jobs:
         with:
           prerelease: true
           tag_name: rolling-${{ github.run_id }}
-          name: "dahusim ${{ steps.rel.outputs.version_name }} (сборка ${{ github.run_number }})"
+          name: "dahusim ${{ steps.rel.outputs.version_name }} Android (сборка ${{ github.run_number }})"
           body_path: release_body.md
           files: release_assets/*.apk
