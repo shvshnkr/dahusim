@@ -12,7 +12,7 @@ internal object DesktopLegacySchedulerCleanup {
     private const val LEGACY_WINDOWS_PREFIX = "Husi-"
     private const val LEGACY_LINUX_UNIT_PREFIX = "fr.husi.desktop"
     private const val LEGACY_MAC_PREFIX = "fr.husi.desktop"
-    private const val LEGACY_TASK_IDS = listOf(
+    private val legacyTaskIds = listOf(
         "subscription-auto-update",
         "route-asset-auto-update",
     )
@@ -27,7 +27,7 @@ internal object DesktopLegacySchedulerCleanup {
     }
 
     private fun cleanupWindows() {
-        for (taskId in LEGACY_TASK_IDS) {
+        for (taskId in legacyTaskIds) {
             val taskName = LEGACY_WINDOWS_PREFIX + taskId
             runCatching {
                 runCommand(
@@ -41,7 +41,7 @@ internal object DesktopLegacySchedulerCleanup {
 
     private fun cleanupLinux() {
         val unitDir = linuxSystemdUserDir()
-        for (taskId in LEGACY_TASK_IDS) {
+        for (taskId in legacyTaskIds) {
             val base = "$LEGACY_LINUX_UNIT_PREFIX.$taskId"
             val timerName = "$base.timer"
             runCatching {
@@ -61,7 +61,7 @@ internal object DesktopLegacySchedulerCleanup {
 
     private fun cleanupMac() {
         val agentsDir = File(System.getProperty("user.home"), "Library/LaunchAgents")
-        for (taskId in LEGACY_TASK_IDS) {
+        for (taskId in legacyTaskIds) {
             val label = "$LEGACY_MAC_PREFIX.$taskId"
             val agentFile = agentsDir.resolve("$label.plist")
             runCatching {

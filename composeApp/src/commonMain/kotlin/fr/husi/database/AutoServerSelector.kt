@@ -107,7 +107,19 @@ object AutoServerSelector {
                 it.status == ProxyEntity.STATUS_UNAVAILABLE ||
                 it.status == ProxyEntity.STATUS_INVALID
         }
-        val shouldQuickProbe = initialCount == proxies.size || availableCount == 0
+        val forceFullProbeReason = AutoServerSelectorProbePolicy.forceFullProbeReason(
+            proxies = proxies,
+            whitelistBuiltinOnly = whitelistBuiltinOnly,
+        )
+        val shouldQuickProbe = initialCount == proxies.size ||
+            availableCount == 0 ||
+            forceFullProbeReason != null
+        if (forceFullProbeReason != null) {
+            simpleModeLog(
+                "SimpleMode",
+                "H25 full_probe_forced reason=$forceFullProbeReason initial=$initialCount avail=$availableCount",
+            )
+        }
         val urlTestCap = (DataStore.connectionTestConcurrent * 2).coerceIn(12, 32)
         val extraUrlTestByTcp = 8
         val parallelUrlPoolSize = (urlTestCap + extraUrlTestByTcp).coerceAtMost(proxies.size)
@@ -119,13 +131,14 @@ object AutoServerSelector {
 
         if (shouldQuickProbe) {
             setSimpleModeActivityUnlessConnected("Quick testing servers...")
-            val parallelUrlPool = proxies
-                .sortedWith(heuristicPreTcpOrder(priorityFirstIds))
-                .take(parallelUrlPoolSize)
-                .distinctBy { it.id }
+            val parallelUrlPool = buildStratifiedUrlPool(
+                proxies = proxies,
+                cap = parallelUrlPoolSize,
+                priorityFirstIds = priorityFirstIds,
+            )
             simpleModeLog(
                 "SimpleMode",
-                "H14 quick_probe_started count=${proxies.size} parallel_url_pool=${parallelUrlPool.size}",
+                "H14 quick_probe_started count=${proxies.size} parallel_url_pool=${parallelUrlPool.size} stratified=true",
             )
             coroutineScope {
                 val tcpJob = async(Dispatchers.IO) { quickTcpProbe(proxies) }
@@ -136,7 +149,7 @@ object AutoServerSelector {
                         setSimpleModeActivityUnlessConnected("Testing servers (URL)...")
                         simpleModeLog(
                             "SimpleMode",
-                            "H17 urltest_started candidates=${parallelUrlPool.size} baseCap=$urlTestCap extraTcp=$extraUrlTestByTcp mode=parallel_heuristic",
+                            "H17 urltest_started candidates=${parallelUrlPool.size} baseCap=$urlTestCap extraTcp=$extraUrlTestByTcp mode=parallel_stratified",
                         )
                         urlTestTopCandidates(parallelUrlPool)
                     }
@@ -160,7 +173,11 @@ object AutoServerSelector {
                         .thenBy { pingRank(it.ping) }
                         .thenByDescending { throughputRank(it) },
                 )
-                val baseUrlTest = preUrlSorted.take(urlTestCap)
+                val baseUrlTest = buildStratifiedUrlPool(
+                    proxies = preUrlSorted,
+                    cap = urlTestCap,
+                    priorityFirstIds = priorityFirstIds,
+                )
                 val baseIds = baseUrlTest.map { it.id }.toSet()
                 val extraTcpForUrlTest = if (quickProbePings.isNotEmpty()) {
                     proxies
@@ -196,7 +213,11 @@ object AutoServerSelector {
                     .thenBy { pingRank(it.ping) }
                     .thenByDescending { throughputRank(it) },
             )
-            val baseUrlTest = preUrlSorted.take(urlTestCap)
+            val baseUrlTest = buildStratifiedUrlPool(
+                proxies = preUrlSorted,
+                cap = urlTestCap,
+                priorityFirstIds = priorityFirstIds,
+            )
             urlTestCandidates = baseUrlTest
             urlTestDelays = if (urlTestCandidates.isNotEmpty()) {
                 setSimpleModeActivityUnlessConnected("Testing servers (URL)...")
@@ -342,6 +363,9 @@ object AutoServerSelector {
             "SimpleMode",
             "H4 queue_prepared before=$selectedBefore best=$best size=${ranked.size} avail=$availableCount initial=$initialCount bad=$badCount probeAlive=$quickProbeAlive urlOk=${urlTestDelays.size} head=$rankedHead",
         )
+        if (shouldQuickProbe) {
+            AutoServerSelectorProbePolicy.recordFullProbe(proxies, whitelistBuiltinOnly)
+        }
         return PrepareForConnectResult.Success(best)
     }
 
@@ -414,8 +438,45 @@ object AutoServerSelector {
 
     fun markConnected(profileId: Long) {
         DataStore.autoSelectLastKnownGood = profileId
+        AutoServerSelectorProbePolicy.recordPostConnectUrlVerified(profileId)
         DataStore.autoSelectFallbackQueue = ""
         DataStore.autoSelectFallbackIndex = 0
+    }
+
+    /**
+     * Picks URL-test candidates round-robin across subscription groups so one group
+     * does not monopolize the probe budget.
+     */
+    private fun buildStratifiedUrlPool(
+        proxies: List<ProxyEntity>,
+        cap: Int,
+        priorityFirstIds: Set<Long>,
+    ): List<ProxyEntity> {
+        if (proxies.isEmpty() || cap <= 0) return emptyList()
+        val byGroup = proxies.groupBy { it.groupId }
+        val groupQueues = byGroup.mapValues { (_, list) ->
+            list.sortedWith(heuristicPreTcpOrder(priorityFirstIds)).toMutableList()
+        }
+        val groupOrder = groupQueues.keys.sorted()
+        val picked = ArrayList<ProxyEntity>(cap.coerceAtMost(proxies.size))
+        val used = HashSet<Long>()
+        var madeProgress = true
+        while (picked.size < cap && madeProgress) {
+            madeProgress = false
+            for (gid in groupOrder) {
+                if (picked.size >= cap) break
+                val queue = groupQueues.getValue(gid)
+                while (queue.isNotEmpty() && queue.first().id in used) {
+                    queue.removeAt(0)
+                }
+                val next = queue.firstOrNull() ?: continue
+                queue.removeAt(0)
+                picked += next
+                used += next.id
+                madeProgress = true
+            }
+        }
+        return picked
     }
 
     private fun statusRank(status: Int): Int = when (status) {

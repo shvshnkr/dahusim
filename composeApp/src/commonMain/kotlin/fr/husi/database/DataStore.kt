@@ -268,6 +268,12 @@ object DataStore {
     var autoSelectFallbackQueue by configurationStore.string(Key.AUTO_SELECT_FALLBACK_QUEUE) { "" }
     var autoSelectFallbackIndex by configurationStore.int(Key.AUTO_SELECT_FALLBACK_INDEX) { 0 }
     var autoSelectLastKnownGood by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD) { 0L }
+    var autoSelectLastFullProbeAt by configurationStore.long(Key.AUTO_SELECT_LAST_FULL_PROBE_AT) { 0L }
+    var autoSelectProxyIdSetHash by configurationStore.long(Key.AUTO_SELECT_PROXY_ID_SET_HASH) { 0L }
+    var autoSelectLastProbeWhitelistOnly by configurationStore.boolean(Key.AUTO_SELECT_LAST_PROBE_WHITELIST_ONLY) { false }
+    var autoSelectLastKnownGoodUrlAt by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_AT) { 0L }
+    var autoSelectLastKnownGoodUrlProfileId by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_PROFILE_ID) { 0L }
+    var simpleModeLastBackgroundSubRefreshAt by configurationStore.long(Key.SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT) { 0L }
     var autoConnectPausedUntilGoogle by configurationStore.boolean(Key.AUTO_CONNECT_PAUSED_UNTIL_GOOGLE) { false }
     var simpleModeActivity by configurationStore.string(Key.SIMPLE_MODE_ACTIVITY) { "" }
     var subscriptionUpdateParallelismForeground by configurationStore.int(Key.SUBSCRIPTION_UPDATE_PARALLELISM_FOREGROUND) {

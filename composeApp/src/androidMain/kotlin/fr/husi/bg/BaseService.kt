@@ -35,6 +35,7 @@ import fr.husi.ktx.showToast
 import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
+import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.resources.*
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
@@ -355,6 +356,7 @@ class BaseService {
 
                 // change the state
                 data.changeState(ServiceState.Stopped, msg)
+                SimpleModeConnectedMaintenance.cancel()
                 WhitelistNetworkRoutingState.reset()
                 DataStore.simpleModeActivity = ""
                 if (!msg.isNullOrBlank()) {
@@ -554,6 +556,7 @@ class BaseService {
                     simpleModeLog("SimpleMode", "H9 connected_profile id=${profile.id}")
                     DataStore.simpleModeActivity = "Verifying internet access..."
                     var postConnectHealthy = true
+                    var postConnectLatencyMs = 0
                     val baseTimeoutMs = DataStore.connectionTestTimeout
                     val postConnectTimeoutMs = (baseTimeoutMs * 2).coerceIn(5000, 20_000)
                     val outboundTag = data.proxy?.config?.mainTag.orEmpty()
@@ -599,6 +602,7 @@ class BaseService {
                             ),
                         )
                         // #endregion
+                        postConnectLatencyMs = latencyMs.toInt().coerceAtLeast(0)
                         simpleModeLog("SimpleMode", "H3 post_connect_url_test_success profileId=${profile.id} delayMs=$latencyMs")
                         DataStore.simpleModeActivity = ""
                     }.onFailure { err ->
@@ -670,6 +674,13 @@ class BaseService {
                     }
                     AutoServerSelector.markConnected(profile.id)
                     simpleModeLog("SimpleMode", "H10 post_connect_healthy_mark_connected profileId=${profile.id}")
+                    SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
+                        profileId = profile.id,
+                        postConnectLatencyMs = postConnectLatencyMs,
+                        connectWhitelistOnly = reachability.whitelistOnly,
+                        googleReachable = reachability.googleReachable,
+                        whitelistSourceReachable = reachability.whitelistSourceReachable,
+                    )
 
                     if (reachability.whitelistOnly && outboundTag.isNotBlank()) {
                         val routingBefore = fr.husi.routing.WhitelistRuRouting

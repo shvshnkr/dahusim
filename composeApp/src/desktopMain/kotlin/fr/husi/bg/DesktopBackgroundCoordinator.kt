@@ -6,7 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.coroutineContext
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -50,10 +50,10 @@ internal object DesktopBackgroundCoordinator {
     }
 
     private suspend fun subscriptionLoop() {
-        while (coroutineContext.isActive) {
+        while (currentCoroutineContext().isActive) {
             val plan = SubscriptionAutoUpdatePlanner.plan() ?: return
             delay(plan.initialDelaySeconds * 1000L)
-            if (!coroutineContext.isActive) return
+            if (!currentCoroutineContext().isActive) return
             runCatching {
                 SubscriptionAutoUpdateRunner.run(mode = SubscriptionUpdateMode.BackgroundEco)
             }.onFailure {
@@ -64,10 +64,10 @@ internal object DesktopBackgroundCoordinator {
     }
 
     private suspend fun routeAssetLoop() {
-        while (coroutineContext.isActive) {
+        while (currentCoroutineContext().isActive) {
             val plan = RouteAssetAutoUpdatePlanner.plan() ?: return
             delay(plan.initialDelaySeconds * 1000L)
-            if (!coroutineContext.isActive) return
+            if (!currentCoroutineContext().isActive) return
             runCatching {
                 RouteAssetAutoUpdateRunner.run()
             }.onFailure {
