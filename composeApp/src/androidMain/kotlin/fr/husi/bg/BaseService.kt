@@ -36,6 +36,7 @@ import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
+import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.resources.*
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
@@ -482,7 +483,10 @@ class BaseService {
                         "SimpleMode",
                         "H7 reachability google=${reachability.googleReachable} dzen=${reachability.dzenReachable} ya=${reachability.yaReachable} whitelistSource=${reachability.whitelistSourceReachable} paused=${DataStore.autoConnectPausedUntilGoogle}",
                     )
-                    if (DataStore.autoConnectPausedUntilGoogle && !reachability.googleReachable) {
+                    if (DataStore.autoConnectPausedUntilGoogle &&
+                        !reachability.googleReachable &&
+                        !reachability.whitelistOnly
+                    ) {
                         simpleModeLog(
                             "SimpleMode",
                             "H8 pause_blocked_wait_google google=${reachability.googleReachable} " +
@@ -633,6 +637,17 @@ class BaseService {
                         postConnectHealthy = false
                     }
                     if (!postConnectHealthy) {
+                        val wlOnly = reachability.whitelistOnly ||
+                            DataStore.activeWhitelistRestrictedNetwork
+                        if (DataStore.simpleMode && wlOnly) {
+                            val recovered = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthyPostConnect(
+                                failedProfileId = profile.id,
+                                whitelistOnly = true,
+                            )
+                            if (recovered) {
+                                return@runOnDefaultDispatcher
+                            }
+                        }
                         runCatching {
                             val fallbackRefreshBudgetMs =
                                 DataStore.subscriptionFallbackRefreshBudgetMs.coerceIn(200L, 5000L)
@@ -661,10 +676,12 @@ class BaseService {
                             // #endregion
                             stopRunner(restart = true)
                         } else {
-                            setPausedUntilGoogle(
-                                reason = "post_connect_unhealthy_exhausted",
-                                profileId = profile.id,
-                            )
+                            if (!wlOnly) {
+                                setPausedUntilGoogle(
+                                    reason = "post_connect_unhealthy_exhausted",
+                                    profileId = profile.id,
+                                )
+                            }
                             simpleModeLog(
                                 "SimpleMode",
                                 "H10 post_connect_unhealthy_exhausted profileId=${profile.id}",

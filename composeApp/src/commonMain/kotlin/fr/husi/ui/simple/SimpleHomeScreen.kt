@@ -232,6 +232,9 @@ fun SimpleHomeScreen(
                         }
                         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = net.whitelistOnly
                         DataStore.activeWhitelistRestrictedNetwork = net.whitelistOnly
+                        if (net.whitelistOnly) {
+                            DataStore.autoConnectPausedUntilGoogle = false
+                        }
                         DataStore.simpleModeActivity = "Refreshing subscriptions..."
                         preconnectStage = "subscription_refresh"
                         if (net.whitelistOnly) {

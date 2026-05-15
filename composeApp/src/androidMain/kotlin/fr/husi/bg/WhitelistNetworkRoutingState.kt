@@ -3,6 +3,7 @@ package fr.husi.bg
 import fr.husi.database.DataStore
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.repository.resolveRepository
+import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.utils.simpleModeLog
 
 /**
@@ -29,7 +30,11 @@ internal object WhitelistNetworkRoutingState {
                 "wlSrc=${reachability.whitelistSourceReachable} connected=${DataStore.serviceState.connected}",
         )
         if (requestReloadOnChange) {
-            requestReloadIfConnected("reachability_flip")
+            if (DataStore.simpleMode) {
+                SimpleModeVpnCoordinator.scheduleAdaptation("reachability_flip")
+            } else {
+                requestReloadIfConnected("reachability_flip")
+            }
         }
     }
 
@@ -40,13 +45,15 @@ internal object WhitelistNetworkRoutingState {
 
     fun onUnderlyingInterfaceHandoff(iface: String?) {
         if (!DataStore.serviceState.connected) return
-        if (DataStore.simpleMode) {
-            DataStore.simpleModeActivity = "Network changed, reconnecting…"
-        }
         simpleModeLog(
             "SimpleMode",
             "H27 network_handoff iface=${iface ?: "unknown"}",
         )
+        if (DataStore.simpleMode) {
+            DataStore.simpleModeActivity = "Network changed, reconnecting…"
+            SimpleModeVpnCoordinator.scheduleAdaptation("network_handoff")
+            return
+        }
         ServiceRegistry.baseService?.data?.resetNetwork()
         runOnDefaultDispatcher {
             if (!DataStore.serviceState.connected) return@runOnDefaultDispatcher
@@ -54,7 +61,6 @@ internal object WhitelistNetworkRoutingState {
                 NetworkReachabilityProbe.probe(),
                 requestReloadOnChange = true,
             )
-            requestReloadIfConnected("network_handoff")
         }
     }
 
