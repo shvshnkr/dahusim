@@ -87,11 +87,19 @@ fun SimpleHomeScreen(
     }
     LaunchedEffect(status.state) {
         simpleModeLog("SimpleMode", "state=${status.state.name}")
-        if (status.state != ServiceState.Stopped) {
-            permissionPending = false
+        when (status.state) {
+            ServiceState.Connected,
+            ServiceState.Stopped,
+            ServiceState.Idle,
+            -> permissionPending = false
+            else -> Unit
         }
-        if (status.state == ServiceState.Connected) {
-            DataStore.simpleModeActivity = ""
+    }
+    LaunchedEffect(status.state, connectInFlight?.isActive) {
+        when {
+            status.state == ServiceState.Connected -> DataStore.simpleModeActivity = ""
+            (status.state == ServiceState.Stopped || status.state == ServiceState.Idle) &&
+                connectInFlight?.isActive != true -> DataStore.simpleModeActivity = ""
         }
     }
     LaunchedEffect(activityText) {

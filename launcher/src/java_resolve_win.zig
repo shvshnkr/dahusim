@@ -89,7 +89,7 @@ pub fn interactiveJavaSetup(allocator: mem.Allocator, conf_path: []const u8) err
         \\
         \\After installing from the website, run this app again.
         \\This app never changes your system JAVA_HOME; optional path is saved only in:
-        \\%APPDATA%\\husi\\desktop-java-home.conf
+        \\%APPDATA%\\dahusim\\desktop-java-home.conf
     ;
     const caption = "Java runtime";
 

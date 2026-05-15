@@ -24,9 +24,11 @@ import com.github.ajalt.clikt.parameters.types.file
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.clikt.parameters.types.restrictTo
 import fr.husi.bg.BackendState
+import fr.husi.bootstrap.DefaultUserBootstrap
 import fr.husi.bg.DeepLinkDispatcher
+import fr.husi.bg.DesktopBackgroundCoordinator
+import fr.husi.bg.DesktopLegacySchedulerCleanup
 import fr.husi.bg.DesktopTaskRegistry
-import fr.husi.bg.DesktopTaskScheduler
 import fr.husi.bg.RouteAssetUpdater
 import fr.husi.bg.ServiceState
 import fr.husi.bg.SubscriptionUpdater
@@ -161,6 +163,7 @@ private class DesktopMain : CliktCommand(APP_NAME) {
             }
 
             fun exitGracefully() {
+                DesktopBackgroundCoordinator.stop()
                 runCatching {
                     runBlocking {
                         repository.stopService()
@@ -330,7 +333,7 @@ private class DesktopMain : CliktCommand(APP_NAME) {
     }
 
     private fun createDesktopRepository(): DesktopRepository {
-        val baseDir = baseDir ?: File(System.getProperty("user.home"), ".config").resolve("husi")
+        val baseDir = baseDir ?: File(System.getProperty("user.home"), ".config").resolve("dahusim")
         baseDir.mkdirs()
         return DesktopRepository(baseDir)
     }
@@ -340,7 +343,6 @@ private class DesktopMain : CliktCommand(APP_NAME) {
         startCommandServer: Boolean,
     ) {
         DesktopAutoStart.initialize()
-        DesktopTaskScheduler.initialize()
         initHusiKoin(repository)
         Thread.setDefaultUncaughtExceptionHandler(CrashHandler)
 
@@ -366,8 +368,13 @@ private class DesktopMain : CliktCommand(APP_NAME) {
             DataStore.isExpert,
         )
         loadCA(DataStore.certProvider)
+        runBlocking {
+            DefaultUserBootstrap.bootstrapAll()
+        }
+        DesktopLegacySchedulerCleanup.run()
         if (startCommandServer) {
             repository.boxService?.start()
+            DesktopBackgroundCoordinator.start()
         }
     }
 }

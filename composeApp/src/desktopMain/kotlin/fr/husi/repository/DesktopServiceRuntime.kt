@@ -88,6 +88,10 @@ internal class DesktopServiceRuntime(
             return
         }
 
+        if (service.hasInstance()) {
+            cleanupLocked()
+        }
+
         changeState(ServiceState.Connecting)
         BackendState.setConnected(false)
 

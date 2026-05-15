@@ -22,10 +22,10 @@ private class DesktopAutoStartManager(
     private val startupCommand: List<String>,
 ) {
     companion object {
-        private const val DESKTOP_ENTRY_NAME = "fr.husi.desktop"
-        private const val LAUNCHER_AGENT_NAME = "fr.husi.desktop.autostart"
+        private const val DESKTOP_ENTRY_NAME = "fr.dahusim.desktop"
+        private const val LAUNCHER_AGENT_NAME = "fr.dahusim.desktop.autostart"
         private const val WINDOWS_RUN_KEY = """HKCU\Software\Microsoft\Windows\CurrentVersion\Run"""
-        private const val WINDOWS_VALUE_NAME = "Husi"
+        private const val WINDOWS_VALUE_NAME = "daHusiM"
     }
 
     fun setEnabled(enabled: Boolean): Boolean {
@@ -75,8 +75,8 @@ private class DesktopAutoStartManager(
             [Desktop Entry]
             Type=Application
             Version=1.0
-            Name=Husi
-            Comment=Launch Husi at login and connect automatically
+            Name=daHusiM
+            Comment=Launch daHusiM at login and connect automatically
             Exec=$execLine
             Terminal=false
             StartupNotify=false

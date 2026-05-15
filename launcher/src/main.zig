@@ -16,7 +16,7 @@ comptime {
 const config = @import("config");
 const jresolve = @import("java_resolve.zig");
 const husi_package_name = config.package_name;
-const husi_config_dir_name = "husi";
+const husi_config_dir_name = "dahusim";
 const husi_exit_restart = 50;
 
 /// `prepare` returns a boolean about wheather restart or not.

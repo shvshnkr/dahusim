@@ -1,13 +1,14 @@
-APP_NAME="Husi"
-APP_NAME_ZH_CN="虎兕"
-APP_NAME_ZH_TW="虎兕"
+APP_NAME="daHusiM"
+APP_NAME_ZH_CN="daHusiM"
+APP_NAME_ZH_TW="daHusiM"
 APP_DESCRIPTION="A non-professional and recreational proxy tool integration."
 APP_DESCRIPTION_ZH_CN="一个非专业和娱乐性的代理工具集。"
 APP_DESCRIPTION_ZH_TW="一個非專業和娛樂性的代理工具集。"
-APP_URL="https://codeberg.org/xchacha20-poly1305/husi"
-MAINTAINER="Husi contributors"
+APP_URL="https://github.com/shvshnkr/dahusim"
+MAINTAINER="daHusiM contributors"
 DESKTOP_URL_TYPE_NAME="Import URL"
 DESKTOP_URL_SCHEMES=(
+    dahusim
     husi
     sing-box
     ss

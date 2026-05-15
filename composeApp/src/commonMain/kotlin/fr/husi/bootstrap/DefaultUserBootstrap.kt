@@ -15,7 +15,6 @@ import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.ktx.parseProxies
-import fr.husi.repository.resolveAndroidRepository
 import kotlinx.coroutines.flow.first
 
 object DefaultUserBootstrap {
@@ -40,17 +39,6 @@ object DefaultUserBootstrap {
     )
     private val obsoleteQuickSubscriptionLinks = setOf(
         "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/githubmirror/clean/vless.txt",
-    )
-    private val targetPackages = linkedSetOf(
-        "org.telegram.messenger",
-        "org.telegram.messenger.web",
-        "org.thunderdog.challegram",
-        "com.whatsapp",
-        "com.google.android.youtube",
-    )
-    private val optionalRevancedPackages = listOf(
-        "app.revanced.android.youtube",
-        "app.rvx.android.youtube",
     )
 
     suspend fun bootstrapAll() {
@@ -145,39 +133,6 @@ object DefaultUserBootstrap {
             Logs.d("DefaultUserBootstrap: migrated group id=${group.id} from broken Swordware.txt to vless reserve")
         }
     }
-
-    private suspend fun bootstrapPerAppDefaults() {
-        if (DataStore.defaultPerAppBootstrapped) {
-            ensureTelegramVariantsIncluded()
-            return
-        }
-
-        val packageManager = resolveAndroidRepository().packageManager
-        val packages = targetPackages.toMutableSet()
-        optionalRevancedPackages
-            .firstOrNull { packageName ->
-                runCatching { packageManager.getPackageInfo(packageName, 0) }.isSuccess
-            }
-            ?.let { packages.add(it) }
-
-        DataStore.proxyApps = true
-        DataStore.bypassMode = false
-        DataStore.packages = packages
-        DataStore.defaultPerAppBootstrapped = true
-    }
-
-    private fun ensureTelegramVariantsIncluded() {
-        val current = DataStore.packages
-        if (current.isEmpty()) return
-        val hasTelegram = current.any {
-            it == "org.telegram.messenger" || it == "org.telegram.messenger.web"
-        }
-        if (!hasTelegram) return
-        val merged = current.toMutableSet()
-        merged.add("org.telegram.messenger")
-        merged.add("org.telegram.messenger.web")
-        if (merged.size != current.size) {
-            DataStore.packages = merged
-        }
-    }
 }
+
+internal expect suspend fun bootstrapPerAppDefaults()
