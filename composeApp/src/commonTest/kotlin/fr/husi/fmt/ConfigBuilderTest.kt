@@ -378,7 +378,7 @@ class ConfigBuilderTest : HusiKoinTest() {
             ),
         )
 
-        val dnsRules = parseDnsRules(buildConfig(proxy))
+        val dnsRules = parseDnsRules(buildConfig(proxy, forTest = true))
         val evaluateIndex = dnsRules.indexOfFirst {
             it["action"]?.jsonPrimitive?.content == SingBoxOptions.ACTION_EVALUATE
         }

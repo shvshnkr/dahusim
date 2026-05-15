@@ -137,6 +137,11 @@ jobs:
       - name: Geo / Gradle init assets
         run: ./run init action gradle
 
+      - name: Packaging tools (headless desktop tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
       - name: Write local.properties
         run: |
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
@@ -147,4 +152,5 @@ jobs:
           BUILD_PLUGIN: none
           GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
         run: |
-          ./gradlew :composeApp:exportLibraryDefinitions :composeApp:desktopTest --no-daemon
+          xvfb-run -a --server-args="-screen 0 1280x720x24" \
+            ./gradlew :composeApp:exportLibraryDefinitions :composeApp:desktopTest --no-daemon
