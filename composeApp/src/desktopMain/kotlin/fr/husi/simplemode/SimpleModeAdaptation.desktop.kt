@@ -1,3 +1,7 @@
 package fr.husi.simplemode
 
-internal actual fun cancelSimpleModeNetworkAdaptation() = Unit
+import fr.husi.database.AutoServerSelector
+
+internal actual fun cancelSimpleModeNetworkAdaptation() {
+    AutoServerSelector.cancelInFlightPrepare()
+}

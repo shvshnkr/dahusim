@@ -6,11 +6,11 @@ import fr.husi.bg.ServiceRegistry
 import fr.husi.bg.ServiceState
 import fr.husi.bg.WhitelistNetworkRoutingState
 import fr.husi.database.AutoServerSelector
+import kotlinx.coroutines.CancellationException
 import fr.husi.database.DataStore
 import fr.husi.database.PrepareForConnectResult
 import fr.husi.repository.resolveRepository
 import fr.husi.utils.simpleModeLog
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -116,6 +116,7 @@ internal object SimpleModeVpnCoordinator {
             requestReloadOnChange = false,
         )
         if (!currentCoroutineContext().isActive) return
+        AutoServerSelector.cancelInFlightPrepare()
         val previousId = DataStore.selectedProxy
         applyReselectAndRestart(reason, reachability.whitelistOnly, previousId)
     }
@@ -126,7 +127,13 @@ internal object SimpleModeVpnCoordinator {
         previousProfileId: Long,
     ): Boolean {
         if (!currentCoroutineContext().isActive) return false
-        when (val prep = SimpleModeNetworkAdaptation.reselectForNetwork(whitelistOnly)) {
+        val prep = try {
+            SimpleModeNetworkAdaptation.reselectForNetwork(whitelistOnly)
+        } catch (_: CancellationException) {
+            simpleModeLog("SimpleMode", "H30 wl_adapt_prepare_cancelled reason=$reason")
+            return false
+        }
+        when (prep) {
             PrepareForConnectResult.NoProfiles -> {
                 simpleModeLog("SimpleMode", "H30 wl_adapt_no_profiles reason=$reason")
                 DataStore.simpleModeActivity = ""

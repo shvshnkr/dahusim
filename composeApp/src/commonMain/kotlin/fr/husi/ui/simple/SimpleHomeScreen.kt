@@ -204,6 +204,7 @@ fun SimpleHomeScreen(
                     simpleModeLog("SimpleMode", "connect_cancel_previous_inflight")
                 }
                 connectInFlight?.cancel()
+                cancelSimpleModeNetworkAdaptation()
                 DataStore.simpleModeActivity = "Checking network…"
                 connectInFlight = scope.launch {
                     val clickStartedAt = System.currentTimeMillis()
@@ -264,7 +265,6 @@ fun SimpleHomeScreen(
                                     "whitelistOnly=${net.whitelistOnly}"
                             },
                         )
-                        DataStore.simpleModeActivity = "Selecting best server..."
                         preconnectStage = "prepare_for_connect"
                         // #region agent log
                         simpleModeDebugEvent(
