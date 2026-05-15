@@ -45,7 +45,11 @@ internal object DesktopLegacySchedulerCleanup {
             val base = "$LEGACY_LINUX_UNIT_PREFIX.$taskId"
             val timerName = "$base.timer"
             runCatching {
-                runCommand("systemctl", "--user", "disable", "--now", timerName)
+                runCommand(
+                    listOf("systemctl", "--user", "disable", "--now", timerName),
+                ) { exitCode, output ->
+                    exitCode == 0 || linuxSystemctlUnitMissing(exitCode, output)
+                }
             }.onFailure {
                 Logs.w("disable legacy systemd timer $timerName", it)
             }
@@ -86,6 +90,14 @@ internal object DesktopLegacySchedulerCleanup {
     }
 
     private fun windowsSchtasksDeleteNotFound(exitCode: Int): Boolean = exitCode == 1
+
+    private fun linuxSystemctlUnitMissing(exitCode: Int, output: String): Boolean {
+        if (exitCode == 0) return false
+        val o = output.lowercase()
+        return o.contains("not loaded") ||
+            o.contains("does not exist") ||
+            o.contains("no such unit")
+    }
 
     private fun runCommand(vararg args: String): String {
         return runCommand(args.toList())

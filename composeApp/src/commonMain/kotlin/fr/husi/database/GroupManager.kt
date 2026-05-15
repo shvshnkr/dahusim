@@ -25,10 +25,13 @@ object GroupManager {
         }
     }
 
-    suspend fun createGroup(group: ProxyGroup): ProxyGroup {
+    suspend fun createGroup(
+        group: ProxyGroup,
+        notifySubscriptionScheduler: Boolean = true,
+    ): ProxyGroup {
         group.userOrder = SagerDatabase.groupDao.nextOrder() ?: 1
         group.id = SagerDatabase.groupDao.createGroup(group.applyDefaultValues())
-        if (group.type == GroupType.SUBSCRIPTION) {
+        if (notifySubscriptionScheduler && group.type == GroupType.SUBSCRIPTION) {
             SubscriptionUpdater.reconfigureUpdater()
         }
         return group

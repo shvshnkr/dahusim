@@ -1,6 +1,7 @@
 package fr.husi.bg
 
 import fr.husi.ktx.Logs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -57,6 +58,7 @@ internal object DesktopBackgroundCoordinator {
             runCatching {
                 SubscriptionAutoUpdateRunner.run(mode = SubscriptionUpdateMode.BackgroundEco)
             }.onFailure {
+                if (it.isCoroutineCancellation()) return@onFailure
                 Logs.e("desktop subscription auto update", it)
             }
             delay(plan.repeatIntervalMinutes * 60_000L)
@@ -71,9 +73,19 @@ internal object DesktopBackgroundCoordinator {
             runCatching {
                 RouteAssetAutoUpdateRunner.run()
             }.onFailure {
+                if (it.isCoroutineCancellation()) return@onFailure
                 Logs.e("desktop route asset auto update", it)
             }
             delay(plan.repeatIntervalMinutes * 60_000L)
         }
+    }
+
+    private fun Throwable.isCoroutineCancellation(): Boolean {
+        var t: Throwable? = this
+        while (t != null) {
+            if (t is CancellationException) return true
+            t = t.cause
+        }
+        return false
     }
 }

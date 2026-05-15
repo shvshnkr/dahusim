@@ -2,7 +2,6 @@ package fr.husi.bootstrap
 
 import fr.husi.GroupType
 import fr.husi.SubscriptionType
-import fr.husi.bg.SubscriptionUpdater
 import fr.husi.database.DataStore
 import fr.husi.database.GroupManager
 import fr.husi.database.ProfileManager
@@ -73,6 +72,7 @@ object DefaultUserBootstrap {
                         updateWhenConnectedOnly = false
                     }
                 },
+                notifySubscriptionScheduler = false,
             )
             GroupUpdater.executeUpdate(created, byUser = false)
             createdAny = true
@@ -90,7 +90,6 @@ object DefaultUserBootstrap {
         }
 
         DataStore.defaultSubscriptionsBootstrapped = true
-        SubscriptionUpdater.reconfigureUpdater()
         Logs.d(
             "Default subscriptions bootstrap completed, createdAny=$createdAny, removedLegacy=${obsoleteIds.size}",
         )

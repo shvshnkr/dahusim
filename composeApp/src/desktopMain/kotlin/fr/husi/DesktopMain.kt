@@ -42,6 +42,7 @@ import fr.husi.ktx.toStringIterator
 import fr.husi.libcore.Client
 import fr.husi.libcore.Libcore
 import fr.husi.libcore.loadCA
+import fr.husi.platform.Platform
 import fr.husi.platform.PlatformInfo
 import fr.husi.repository.DesktopRepository
 import fr.husi.repository.resolveDesktopRepository
@@ -146,6 +147,8 @@ private class DesktopMain : CliktCommand(APP_NAME) {
         for (link in deepLinks) {
             DeepLinkDispatcher.emit(link)
         }
+
+        abortIfLinuxUiWithoutDisplay()
 
         application {
             val repository = resolveDesktopRepository()
@@ -271,6 +274,19 @@ private class DesktopMain : CliktCommand(APP_NAME) {
                 }
             }
         }
+    }
+
+    private fun abortIfLinuxUiWithoutDisplay() {
+        if (background) return
+        if (PlatformInfo.platform != Platform.Linux) return
+        val display = System.getenv("DISPLAY")?.trim().orEmpty()
+        val wayland = System.getenv("WAYLAND_DISPLAY")?.trim().orEmpty()
+        if (display.isNotEmpty() || wayland.isNotEmpty()) return
+        Logs.e(
+            "Linux UI needs DISPLAY or WAYLAND_DISPLAY (WSL: enable WSLg or set DISPLAY). " +
+                "Use --background only if your setup supports tray without a display.",
+        )
+        exitProcess(1)
     }
 
     private fun shouldAutoConnectOnLaunch(): Boolean {
