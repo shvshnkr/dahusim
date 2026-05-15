@@ -49,11 +49,14 @@ jobs:
           java-version: "21"
           distribution: "temurin"
 
+      - name: Windows JDK 21 (JNI headers for Linux→windows cross-compile)
+        run: bash buildScript/ci/prepare_windows_jdk_jni_include.sh
+
       - name: Build libcore (desktop windows/amd64)
         env:
           BUILD_PLUGIN: none
         run: |
-          ./run lib core --desktop --desktoptargets windows/amd64
+          ./run lib core --desktop --desktoptargets windows/amd64 --jniinclude "$JNI_INCLUDE"
 
       - name: Verify libcore jar
         run: |

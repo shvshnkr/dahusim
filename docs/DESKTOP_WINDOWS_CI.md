@@ -6,7 +6,8 @@ Windows desktop test channel реализован в [`.github/workflows/desktop
 
 - Триггер: только ручной `workflow_dispatch`.
 - Runner: `ubuntu-latest`.
-- Сборка `libcore` для `windows/amd64`: `./run lib core --desktop --desktoptargets windows/amd64`.
+- Перед `libcore`: скачивается **Windows** Temurin 21 x64 (только для `include`/`include/win32`), потому что хостовый `JAVA_HOME` — Linux JDK, а `anja` для `windows/*` требует `win32/jni_md.h` (см. `buildScript/ci/prepare_windows_jdk_jni_include.sh`).
+- Сборка `libcore` для `windows/amd64`: `./run lib core --desktop --desktoptargets windows/amd64 --jniinclude "$JNI_INCLUDE"` (переменная задаётся скриптом выше).
 - Упаковка: `make desktop_package_windows DESKTOP_TARGET=windows/amd64`.
 - Форматы: `zip` (portable), `-installer.exe` (NSIS), и uber JAR.
 - Опционально на странице установщика: скачивание MSI **Eclipse Temurin 21** через `NSISdl` и установка **только при явной галочке**, **`msiexec /qn`** (без изменения `JAVA_HOME`, если пользователь не выбрал опцию).

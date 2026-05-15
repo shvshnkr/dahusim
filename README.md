@@ -114,11 +114,14 @@ Or for specific targets:
 make libcore_desktop DESKTOP_TARGETS=linux/amd64,darwin/arm64
 ```
 
-If desktop build needs an explicit JNI headers directory, pass `JNI_INCLUDE`:
+If desktop build needs an explicit JNI headers directory, pass `JNI_INCLUDE`
+(the directory that contains `jni.h`, with a platform subdir such as `linux/` or `win32/`):
 
 ```shell
 make libcore_desktop DESKTOP_TARGETS=linux/amd64 JNI_INCLUDE=/path/to/jni
 ```
+
+On **Linux**, cross-building `windows/amd64` needs **Windows** JDK headers (host `JAVA_HOME` is not enough). CI uses `buildScript/ci/prepare_windows_jdk_jni_include.sh`; locally pass `--jniinclude` / `JNI_INCLUDE` to that JDK’s `include` path.
 
 For Darwin targets on non-Darwin hosts, also pass the macOS SDK explicitly:
 
