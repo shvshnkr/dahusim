@@ -32,6 +32,9 @@ class ConfigBuilderTest : HusiKoinTest() {
         SagerDatabase.rulesDao.reset()
         SagerDatabase.assetDao.reset()
         SagerDatabase.pluginDao.reset()
+        DataStore.activeWhitelistRestrictedNetwork = false
+        DataStore.vpnExitIsRussia = null
+        DataStore.vpnExitProbeProfileId = 0L
     }
 
     @Test
@@ -360,6 +363,7 @@ class ConfigBuilderTest : HusiKoinTest() {
 
     @Test
     fun `buildConfig should migrate response-based proxy DNS rules to evaluate then respond`() = runBlocking {
+        DataStore.enableFakeDns = false
         val group = ProxyGroup(name = "group").applyDefaultValues()
         group.id = SagerDatabase.groupDao.createGroup(group)
         val proxy = createSocksProxy(
@@ -378,7 +382,7 @@ class ConfigBuilderTest : HusiKoinTest() {
             ),
         )
 
-        val dnsRules = parseDnsRules(buildConfig(proxy, forTest = true))
+        val dnsRules = parseDnsRules(buildConfig(proxy))
         val evaluateIndex = dnsRules.indexOfFirst {
             it["action"]?.jsonPrimitive?.content == SingBoxOptions.ACTION_EVALUATE
         }
