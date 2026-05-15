@@ -252,14 +252,17 @@ private class DesktopTaskSchedulerManager {
         runCatching {
             runCommand(
                 listOf("schtasks", "/delete", "/tn", taskName, "/f"),
-            ) { _, output -> windowsSchtasksDeleteNotFound(output) }
+            ) { exitCode, output -> windowsSchtasksDeleteNotFound(exitCode, output) }
         }.onFailure {
             Logs.w("delete scheduled task $taskName", it)
         }
     }
 
     /** schtasks /delete when the task was never created (fresh install, prior cleanup). */
-    private fun windowsSchtasksDeleteNotFound(output: String): Boolean {
+    private fun windowsSchtasksDeleteNotFound(exitCode: Int, output: String): Boolean {
+        if (exitCode == 0) return false
+        // Typical "task not found" on ru/en Windows; JVM console may mangle Cyrillic output.
+        if (exitCode == 1) return true
         val text = output.lowercase()
         return "cannot find the specified file" in text ||
             "cannot find" in text ||
