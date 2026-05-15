@@ -248,17 +248,24 @@ private class DesktopTaskSchedulerManager {
     }
 
     private fun removeWindowsTask(taskId: String) {
+        val taskName = windowsTaskName(taskId)
         runCatching {
             runCommand(
-                "schtasks",
-                "/delete",
-                "/tn",
-                windowsTaskName(taskId),
-                "/f",
-            )
+                listOf("schtasks", "/delete", "/tn", taskName, "/f"),
+            ) { _, output -> windowsSchtasksDeleteNotFound(output) }
         }.onFailure {
-            Logs.w("delete scheduled task ${windowsTaskName(taskId)}", it)
+            Logs.w("delete scheduled task $taskName", it)
         }
+    }
+
+    /** schtasks /delete when the task was never created (fresh install, prior cleanup). */
+    private fun windowsSchtasksDeleteNotFound(output: String): Boolean {
+        val text = output.lowercase()
+        return "cannot find the specified file" in text ||
+            "cannot find" in text ||
+            "не удается найти" in text ||
+            "не удаётся найти" in text ||
+            "не найден" in text
     }
 
     private fun windowsTaskName(taskId: String): String = WINDOWS_TASK_PREFIX + taskId
@@ -276,18 +283,23 @@ private class DesktopTaskSchedulerManager {
         return runCommand(args.toList())
     }
 
-    private fun runCommand(args: List<String>): String {
+    private fun runCommand(
+        args: List<String>,
+        acceptNonZero: ((exitCode: Int, output: String) -> Boolean)? = null,
+    ): String {
         val process = ProcessBuilder(args)
             .redirectErrorStream(true)
             .start()
         val output = process.inputStream.bufferedReader().use { it.readText().trim() }
         val exitCode = process.waitFor()
-        check(exitCode == 0) {
+        if (exitCode == 0 || acceptNonZero?.invoke(exitCode, output) == true) {
+            return output
+        }
+        check(false) {
             output.ifBlank {
                 "${args.joinToString(" ")} failed with exit code $exitCode"
             }
         }
-        return output
     }
 
     private fun deleteFileIfPresent(file: File) {
