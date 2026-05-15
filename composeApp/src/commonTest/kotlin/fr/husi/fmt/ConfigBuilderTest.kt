@@ -640,10 +640,9 @@ class ConfigBuilderTest : HusiKoinTest() {
             val rule = element.jsonObject
             val rs = rule["rule_set"]?.jsonArray ?: continue
             if (rs.any {
-                    val tag = it.jsonPrimitive.content
-                    tag == "geosite-category-ru" || tag == "geosite-ru"
-                },
-            ) {
+                val tag = it.jsonPrimitive.content
+                tag == "geosite-category-ru" || tag == "geosite-ru"
+            }) {
                 return rule["outbound"]?.jsonPrimitive?.content
             }
         }
