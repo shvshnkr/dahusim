@@ -2,6 +2,7 @@ package fr.husi.bg
 
 import android.net.Network
 import fr.husi.database.DataStore
+import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.libcore.InterfaceUpdateListener
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.utils.simpleModeDebugEvent
@@ -90,7 +91,13 @@ object DefaultNetworkMonitor {
                     Thread.sleep(100)
                     continue
                 }
-                if (interfaceName != lastInterfaceName || interfaceIndex != lastInterfaceIndex) {
+                val ifaceChanged =
+                    interfaceName != lastInterfaceName || interfaceIndex != lastInterfaceIndex
+                if (ifaceChanged) {
+                    val handoffWhileConnected =
+                        DataStore.serviceState.connected &&
+                            lastInterfaceName != null &&
+                            lastInterfaceIndex >= 0
                     // #region agent log
                     simpleModeLog(
                         "SimpleMode",
@@ -111,6 +118,9 @@ object DefaultNetworkMonitor {
                         ),
                     )
                     // #endregion
+                    if (handoffWhileConnected) {
+                        WhitelistNetworkRoutingState.onUnderlyingInterfaceHandoff(interfaceName)
+                    }
                 }
                 lastInterfaceName = interfaceName
                 lastInterfaceIndex = interfaceIndex

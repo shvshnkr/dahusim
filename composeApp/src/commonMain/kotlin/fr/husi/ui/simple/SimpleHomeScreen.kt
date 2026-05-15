@@ -222,9 +222,17 @@ fun SimpleHomeScreen(
                             return@launch
                         }
                         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = net.whitelistOnly
+                        DataStore.activeWhitelistRestrictedNetwork = net.whitelistOnly
                         DataStore.simpleModeActivity = "Refreshing subscriptions..."
                         preconnectStage = "subscription_refresh"
-                        val refreshBudgetMs = DataStore.subscriptionConnectRefreshBudgetMs.coerceIn(200L, 8000L)
+                        if (net.whitelistOnly) {
+                            simpleModeLog(
+                                "SimpleMode",
+                                "H28 preconnect_subscription_refresh whitelist_net mirror=github_via_yandex",
+                            )
+                        }
+                        val refreshBudgetMs =
+                            DataStore.subscriptionConnectRefreshBudgetMs.coerceIn(200L, 8000L)
                         val refreshOutcome = onDefaultDispatcher {
                             SubscriptionAutoUpdateRunner.refreshDueWithBudget(
                                 mode = SubscriptionUpdateMode.ForegroundInteractive,
@@ -234,10 +242,12 @@ fun SimpleHomeScreen(
                         simpleModeLog(
                             "SimpleMode",
                             if (refreshOutcome == null) {
-                                "H21 preconnect_subscription_refresh timeout budgetMs=$refreshBudgetMs"
+                                "H21 preconnect_subscription_refresh timeout budgetMs=$refreshBudgetMs " +
+                                    "whitelistOnly=${net.whitelistOnly}"
                             } else {
                                 "H21 preconnect_subscription_refresh done allSucceeded=${refreshOutcome.allSucceeded} " +
-                                    "staleFails=${refreshOutcome.transportFailuresWhileVpnConnected}"
+                                    "staleFails=${refreshOutcome.transportFailuresWhileVpnConnected} " +
+                                    "whitelistOnly=${net.whitelistOnly}"
                             },
                         )
                         DataStore.simpleModeActivity = "Selecting best server..."

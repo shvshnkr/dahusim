@@ -17,6 +17,7 @@ const (
 	commandSubscribeClashMode
 	commandSetClashMode
 	commandUrlTest
+	commandUrlFetch
 	commandNewInstanceURLTest
 	commandGroupURLTest
 	commandSelectOutbound

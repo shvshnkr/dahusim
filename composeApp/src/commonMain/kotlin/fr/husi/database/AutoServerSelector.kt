@@ -52,15 +52,30 @@ object AutoServerSelector {
 
         WhitelistBuiltinBootstrap.ensureGroupAndProfiles()
 
+        val allProxies = SagerDatabase.proxyDao.getAll()
+        val subscriptionWhitelistMarked = allProxies.filter { it.isSubscriptionWhitelistMarked() }
+        val subscriptionWhitelistIds = subscriptionWhitelistMarked.map { it.id }.toSet()
+
         val builtinFour = WhitelistBuiltinBootstrap.whitelistPoolProxies()
         val builtinFourIds = builtinFour.map { it.id }.toSet()
-        val priorityFirstIds: Set<Long> = if (whitelistBuiltinOnly) builtinFourIds else emptySet()
-        val proxies = if (whitelistBuiltinOnly) {
-            val rest = SagerDatabase.proxyDao.getAll().filter { it.id !in builtinFourIds }
-            builtinFour + rest
+
+        val priorityFirstIds: Set<Long>
+        val proxies: List<ProxyEntity>
+        if (whitelistBuiltinOnly) {
+            priorityFirstIds = builtinFourIds + subscriptionWhitelistIds
+            val priorityHead = (builtinFour + subscriptionWhitelistMarked.sortedBy { it.userOrder })
+                .distinctBy { it.id }
+            val rest = allProxies.filter { it.id !in priorityFirstIds }
+            proxies = priorityHead + rest
         } else {
-            SagerDatabase.proxyDao.getAll()
+            priorityFirstIds = emptySet()
+            proxies = allProxies.filter { it.id !in subscriptionWhitelistIds }
         }
+        simpleModeLog(
+            "SimpleMode",
+            "H24 autoselect_pool wlNet=$whitelistBuiltinOnly subsWlMarked=${subscriptionWhitelistMarked.size} " +
+                "pool=${proxies.size} priorityFirst=${priorityFirstIds.size}",
+        )
         if (proxies.isEmpty()) {
             // #region agent log
             simpleModeDebugEvent(
@@ -441,6 +456,15 @@ object AutoServerSelector {
             }
             else -> Int.MAX_VALUE / 4
         }
+    }
+
+    /**
+     * Subscription nodes for whitelist-restricted networks (e.g. Aetris «White lists …»).
+     * Not used for normal (Google-OK) auto-select; prioritized with built-in helpers on wl-only net.
+     */
+    private fun ProxyEntity.isSubscriptionWhitelistMarked(): Boolean {
+        val n = displayName().lowercase()
+        return n.contains("white lists") || n.contains("white list") || n.contains("whitelist")
     }
 
     /** Order used to start URL tests in parallel with TCP (no TCP results yet). */

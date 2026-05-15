@@ -68,6 +68,18 @@ object RawUpdater : GroupUpdater() {
             )
             // #endregion
         } else {
+            val fetchLink = WhitelistSubscriptionFetch.resolveFetchLink(
+                link = subscription.link,
+                whitelistRestricted = DataStore.activeWhitelistRestrictedNetwork,
+                vpnConnected = DataStore.serviceState.connected,
+            )
+            val viaYandexMirror = fetchLink != subscription.link
+            if (viaYandexMirror) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H29 subscription_fetch_mirror yandex host=${subscription.link.substringBefore('?')}",
+                )
+            }
 
             val response = Libcore.newHttpClient().apply {
                 if (DataStore.serviceState.connected) {
@@ -78,15 +90,16 @@ object RawUpdater : GroupUpdater() {
                     )
                 }
             }.newRequest().apply {
-                setURL(subscription.link)
+                setURL(fetchLink)
                 setUserAgent(generateUserAgent(subscription.customUserAgent))
             }.execute()
-            proxies = parseRaw(response.contentString) ?: errNotFound()
+            val body = WhitelistSubscriptionFetch.extractSubscriptionBody(response.contentString)
+            proxies = parseRaw(body) ?: errNotFound()
             // #region agent log
             simpleModeLog(
                 "SimpleMode",
                 "H16 raw_parse_http group=${proxyGroup.displayName()} parsed=${proxies.size} " +
-                    "bytes=${response.contentString.length} link=${subscription.link}",
+                    "bytes=${body.length} link=${subscription.link} mirror=$viaYandexMirror",
             )
             simpleModeDebugEvent(
                 runId = "sub-update",

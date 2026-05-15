@@ -548,6 +548,104 @@ class ConfigBuilderTest : HusiKoinTest() {
         )
     }
 
+    @Test
+    fun `buildConfig routes ru geosite via proxy on whitelist network with russian exit`() = runBlocking {
+        DataStore.activeWhitelistRestrictedNetwork = true
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "any-exit",
+            host = "1.1.1.1",
+            port = 1080,
+        )
+        DataStore.vpnExitIsRussia = true
+        DataStore.vpnExitProbeProfileId = proxy.id
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU bypass",
+                domains = "set+dns:geosite-category-ru",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val result = buildConfig(proxy)
+        assertEquals(result.mainTag, routeRuGeositeOutbound(result))
+    }
+
+    @Test
+    fun `buildConfig keeps ru geosite direct on normal network`() = runBlocking {
+        DataStore.activeWhitelistRestrictedNetwork = false
+        DataStore.vpnExitIsRussia = null
+        DataStore.vpnExitProbeProfileId = 0L
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU bypass",
+                domains = "set+dns:geosite-category-ru",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "Georgia",
+            host = "2.2.2.2",
+            port = 1080,
+        )
+
+        val result = buildConfig(proxy)
+        assertEquals("direct", routeRuGeositeOutbound(result))
+    }
+
+    @Test
+    fun `buildConfig keeps ru geosite direct on whitelist network with non-russian exit`() = runBlocking {
+        DataStore.activeWhitelistRestrictedNetwork = true
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "foreign-exit",
+            host = "2.2.2.2",
+            port = 1080,
+        )
+        DataStore.vpnExitIsRussia = false
+        DataStore.vpnExitProbeProfileId = proxy.id
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU bypass",
+                domains = "set+dns:geosite-category-ru",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val result = buildConfig(proxy)
+        assertEquals("direct", routeRuGeositeOutbound(result))
+    }
+
+    private fun routeRuGeositeOutbound(result: ConfigBuildResult): String? {
+        val routes = Json.parseToJsonElement(result.config).jsonObject["route"]
+            ?.jsonObject?.get("rules")?.jsonArray ?: return null
+        for (element in routes) {
+            val rule = element.jsonObject
+            val rs = rule["rule_set"]?.jsonArray ?: continue
+            if (rs.any {
+                    val tag = it.jsonPrimitive.content
+                    tag == "geosite-category-ru" || tag == "geosite-ru"
+                },
+            ) {
+                return rule["outbound"]?.jsonPrimitive?.content
+            }
+        }
+        return null
+    }
+
     private fun parseOutbounds(result: ConfigBuildResult) =
         Json.parseToJsonElement(result.config).jsonObject["outbounds"]!!
             .jsonArray

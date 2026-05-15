@@ -359,6 +359,18 @@ func (s *Service) handleRequest(conn net.Conn) error {
 			return E.Cause(err, "handle url test")
 		}
 		return nil
+	case commandUrlFetch:
+		s.access.RLock()
+		instance, err := s.requireInstance()
+		s.access.RUnlock()
+		if err != nil {
+			return err
+		}
+		err = s.handleUrlFetch(conn, instance)
+		if err != nil {
+			return E.Cause(err, "handle url fetch")
+		}
+		return nil
 	case commandImportDeepLink:
 		err := s.handleImportDeepLink(conn)
 		if err != nil {

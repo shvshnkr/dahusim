@@ -3,6 +3,7 @@ package fr.husi.bg.proto
 import fr.husi.database.DataStore
 import fr.husi.database.ProxyEntity
 import fr.husi.fmt.ConfigBuildResult
+import fr.husi.routing.WhitelistRuRouting
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import org.json.JSONObject
@@ -83,7 +84,8 @@ internal fun emitRouteBuildDebug(profile: ProxyEntity, result: ConfigBuildResult
 
         val hasRuRs = ruleSummaries.contains("geosite-category-ru") ||
             ruleSummaries.contains("geosite-ru")
-        val ruDirectIdx = run {
+        val ruGeoViaProxy = WhitelistRuRouting.shouldRouteRuGeoViaProxy(profile)
+        val ruGeoRuleIdx = run {
             if (rules == null) return@run -1
             for (i in 0 until rules.length()) {
                 val r = rules.optJSONObject(i) ?: continue
@@ -91,11 +93,16 @@ internal fun emitRouteBuildDebug(profile: ProxyEntity, result: ConfigBuildResult
                 for (j in 0 until rs.length()) {
                     val tag = rs.optString(j)
                     if (tag == "geosite-category-ru" || tag == "geosite-ru") {
-                        if (r.optString("outbound") == "direct") return@run i
+                        return@run i
                     }
                 }
             }
             -1
+        }
+        val ruGeoRuleOut = if (ruGeoRuleIdx >= 0 && rules != null) {
+            rules.optJSONObject(ruGeoRuleIdx)?.optString("outbound", "") ?: ""
+        } else {
+            ""
         }
 
         val perAppCatchAllRuleIndex = run {
@@ -119,7 +126,12 @@ internal fun emitRouteBuildDebug(profile: ProxyEntity, result: ConfigBuildResult
                 "routeFinal" to finalOut,
                 "rulesPreview" to ruleSummaries.toString().take(3800),
                 "hasRuRuleSetInPreview" to hasRuRs.toString(),
-                "firstRuDirectRuleIndex" to ruDirectIdx.toString(),
+                "ruGeoViaProxy" to ruGeoViaProxy.toString(),
+                "exitRu" to (DataStore.vpnExitIsRussia?.toString() ?: "null"),
+                "exitProbeProfileId" to DataStore.vpnExitProbeProfileId.toString(),
+                "wlNet" to DataStore.activeWhitelistRestrictedNetwork.toString(),
+                "firstRuGeoRuleIndex" to ruGeoRuleIdx.toString(),
+                "ruGeoRuleOutbound" to ruGeoRuleOut,
                 "perAppCatchAllRuleIndex" to perAppCatchAllRuleIndex.toString(),
                 "ruleSetTop" to rsTopSummary.toString().take(1200),
             ),
@@ -140,7 +152,10 @@ internal fun emitRouteBuildDebug(profile: ProxyEntity, result: ConfigBuildResult
         )
         simpleModeLog(
             "RouteDbg",
-            "final=$finalOut firstRuDirectIdx=$ruDirectIdx hasRuRs=$hasRuRs " +
+            "final=$finalOut ruGeoViaProxy=$ruGeoViaProxy ruGeoOut=$ruGeoRuleOut " +
+                "wlNet=${DataStore.activeWhitelistRestrictedNetwork} exitRu=${DataStore.vpnExitIsRussia} " +
+                "exitProbePid=${DataStore.vpnExitProbeProfileId} " +
+                "firstRuGeoIdx=$ruGeoRuleIdx hasRuRs=$hasRuRs " +
                 "pkgCatchIdx=$perAppCatchAllRuleIndex tunInc=$includePkg proxyApps=${DataStore.proxyApps} " +
                 "rulesHead=${ruleSummaries.take(900)}",
         )

@@ -10,6 +10,9 @@ import fr.husi.database.ProfileManager
 import fr.husi.database.ProxyEntity
 import fr.husi.database.ProxyEntity.Companion.TYPE_CONFIG
 import fr.husi.database.RuleEntity
+import fr.husi.routing.WhitelistRuRouting
+import fr.husi.routing.isRuGeoDirectBypassRule
+import fr.husi.routing.hasRuGeoDirectBypass
 import fr.husi.database.SagerDatabase
 import fr.husi.fmt.ConfigBuildResult.IndexEntity
 import fr.husi.fmt.SingBoxOptions.CacheFileOptions
@@ -739,16 +742,7 @@ fun buildConfig(
             tagMap[key] = buildChain(key, p)
         }
 
-        fun List<RuleEntity>.hasRuGeoDirectBypass(): Boolean = any { rule ->
-            if (!rule.enabled || rule.dnsOnly) return@any false
-            if (rule.action != SingBoxOptions.ACTION_ROUTE || rule.outbound != RuleEntity.OUTBOUND_DIRECT) {
-                return@any false
-            }
-            val d = rule.domains.lowercase()
-            val ip = rule.ip.lowercase()
-            d.contains("geosite-category-ru") || d.contains("geosite-ru") ||
-                ip.contains("geoip-ru")
-        }
+        val routeRuGeoViaProxy = !forTest && WhitelistRuRouting.shouldRouteRuGeoViaProxy(proxy)
         // Empty enabled-rules: never insert catch-all at index 0 — it jumps ahead of chain /
         // mapping route rules built above and breaks post-connect checks; append after chain like RU defer.
         val deferPerAppCatchAllAfterBypass =
@@ -945,17 +939,33 @@ fun buildConfig(
 
                         when (val outID = rule.outbound) {
                             RuleEntity.OUTBOUND_DIRECT -> {
-                                if (dnsRuleList == null) {
-                                    dnsRuleList = buildDnsRules(
-                                        action = SingBoxOptions.ACTION_ROUTE,
-                                        server = if (fakeDNSForAll) {
-                                            TAG_DNS_FAKE
-                                        } else {
-                                            TAG_DNS_DIRECT
-                                        },
-                                    )
+                                val ruViaProxy = routeRuGeoViaProxy && rule.isRuGeoDirectBypassRule()
+                                if (ruViaProxy) {
+                                    if (dnsRuleList == null) {
+                                        dnsRuleList = buildDnsRules(
+                                            action = SingBoxOptions.ACTION_ROUTE,
+                                            server = if (useFakeDns) {
+                                                TAG_DNS_FAKE
+                                            } else {
+                                                TAG_DNS_REMOTE
+                                            },
+                                            useFakeQueryScope = useFakeDns,
+                                        )
+                                    }
+                                    outbound = mainTag
+                                } else {
+                                    if (dnsRuleList == null) {
+                                        dnsRuleList = buildDnsRules(
+                                            action = SingBoxOptions.ACTION_ROUTE,
+                                            server = if (fakeDNSForAll) {
+                                                TAG_DNS_FAKE
+                                            } else {
+                                                TAG_DNS_DIRECT
+                                            },
+                                        )
+                                    }
+                                    outbound = TAG_DIRECT
                                 }
-                                outbound = TAG_DIRECT
                             }
 
                             RuleEntity.OUTBOUND_PROXY -> {

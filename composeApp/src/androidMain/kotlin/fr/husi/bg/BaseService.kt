@@ -355,6 +355,7 @@ class BaseService {
 
                 // change the state
                 data.changeState(ServiceState.Stopped, msg)
+                WhitelistNetworkRoutingState.reset()
                 DataStore.simpleModeActivity = ""
                 if (!msg.isNullOrBlank()) {
                     data.binder.notifyAlert(AlertType.COMMON, msg)
@@ -511,6 +512,10 @@ class BaseService {
                             resolveRepository().getString(Res.string.simple_mode_whitelist_warning),
                         )
                     }
+                    WhitelistNetworkRoutingState.applyReachability(
+                        reachability,
+                        requestReloadOnChange = false,
+                    )
                     simpleModeLog(
                         "SimpleMode",
                         "H9 connect_profile id=${profile.id} group=${profile.groupId} status=${profile.status} ping=${profile.ping} fallbackIndex=${DataStore.autoSelectFallbackIndex}",
@@ -536,6 +541,9 @@ class BaseService {
 
                     data.notification.onTitle(profile.displayNameForService())
 
+                    if (DataStore.vpnExitProbeProfileId != profile.id) {
+                        fr.husi.routing.VpnExitProbe.clearCache()
+                    }
                     Executable.killAll()    // clean up old processes
                     preInit()
                     data.backend.init(profile)
@@ -662,6 +670,25 @@ class BaseService {
                     }
                     AutoServerSelector.markConnected(profile.id)
                     simpleModeLog("SimpleMode", "H10 post_connect_healthy_mark_connected profileId=${profile.id}")
+
+                    if (reachability.whitelistOnly && outboundTag.isNotBlank()) {
+                        val routingBefore = fr.husi.routing.WhitelistRuRouting
+                            .shouldRouteRuGeoViaProxy(profile)
+                        val probed = fr.husi.routing.VpnExitProbe.probeAndStore(
+                            profile.id,
+                            outboundTag,
+                            postConnectTimeoutMs,
+                        )
+                        if (probed != null) {
+                            val routingAfter = fr.husi.routing.WhitelistRuRouting
+                                .shouldRouteRuGeoViaProxy(profile)
+                            if (routingBefore != routingAfter) {
+                                WhitelistNetworkRoutingState.requestReloadIfConnected(
+                                    "exit_country_ru_routing",
+                                )
+                            }
+                        }
+                    }
 
                     lateInit()
                 } catch (_: CancellationException) { // if the job was cancelled, it is canceller's responsibility to call stopRunner

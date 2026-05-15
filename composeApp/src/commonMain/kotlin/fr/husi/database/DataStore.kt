@@ -32,11 +32,27 @@ object DataStore {
     var serviceState = ServiceState.Idle
 
     /**
-     * When true, the next [AutoServerSelector.prepareForConnect] uses only the four built-in
-     * whitelist-helper profiles (simple mode, whitelist-only network). Cleared when read.
+     * When true, the next [AutoServerSelector.prepareForConnect] prioritizes built-in whitelist
+     * helpers and subscription nodes marked «White lists» (simple mode, whitelist-only network).
+     * Cleared when read.
      */
     @Volatile
     var simpleModeUseWhitelistBuiltinPoolOnly: Boolean = false
+
+    /**
+     * Live network is whitelist-restricted (Google/Cloudflare dead, dzen/whitelist lists OK).
+     * Drives RU geosite/geoip via-proxy when exit is Russia; updated on connect and net change.
+     */
+    @Volatile
+    var activeWhitelistRestrictedNetwork: Boolean = false
+
+    /** Last exit-country probe: true when tunnel exit is in RU ([fr.husi.routing.VpnExitProbe]). */
+    @Volatile
+    var vpnExitIsRussia: Boolean? = null
+
+    /** Profile id for which [vpnExitIsRussia] was measured; 0 = none. */
+    @Volatile
+    var vpnExitProbeProfileId: Long = 0L
 
     val configurationStore = DataStorePreferenceDataStore.create(createConfigurationDataStore())
 
