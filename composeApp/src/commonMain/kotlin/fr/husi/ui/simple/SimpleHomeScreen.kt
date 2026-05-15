@@ -202,6 +202,7 @@ fun SimpleHomeScreen(
                     simpleModeLog("SimpleMode", "connect_cancel_previous_inflight")
                 }
                 connectInFlight?.cancel()
+                DataStore.simpleModeActivity = "Checking network…"
                 connectInFlight = scope.launch {
                     val clickStartedAt = System.currentTimeMillis()
                     var preconnectStage = "checking_network"
@@ -317,6 +318,7 @@ fun SimpleHomeScreen(
                                     return@launch
                                 }
                                 preconnectStage = "permission_request"
+                                DataStore.simpleModeActivity = "Starting VPN…"
                                 simpleModeLog("SimpleMode", "connect_start_selected=$selected")
                                 permissionPending = true
                                 simpleModeLog(
@@ -331,6 +333,9 @@ fun SimpleHomeScreen(
                             "SimpleMode",
                             "H21 preconnect_cancelled stage=$preconnectStage elapsedMs=${System.currentTimeMillis() - clickStartedAt}",
                         )
+                        if (!BackendState.status.value.state.canStop && !permissionPending) {
+                            DataStore.simpleModeActivity = ""
+                        }
                         throw e
                     } catch (t: Throwable) {
                         simpleModeLog(

@@ -40,6 +40,9 @@ internal object WhitelistNetworkRoutingState {
 
     fun onUnderlyingInterfaceHandoff(iface: String?) {
         if (!DataStore.serviceState.connected) return
+        if (DataStore.simpleMode) {
+            DataStore.simpleModeActivity = "Network changed, reconnecting…"
+        }
         simpleModeLog(
             "SimpleMode",
             "H27 network_handoff iface=${iface ?: "unknown"}",

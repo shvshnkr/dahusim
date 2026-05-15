@@ -16,6 +16,8 @@ object DefaultNetworkMonitor {
     private var listener: InterfaceUpdateListener? = null
     private var lastInterfaceName: String? = null
     private var lastInterfaceIndex: Int = -2
+    /** Kept across brief default-network loss so Wi‑Fi→cellular handoff still runs while VPN is up. */
+    private var previousInterfaceForHandoff: String? = null
     private var lastConnectedState: Boolean = false
     private val access = Mutex()
     private var refCount = 0
@@ -94,15 +96,17 @@ object DefaultNetworkMonitor {
                 val ifaceChanged =
                     interfaceName != lastInterfaceName || interfaceIndex != lastInterfaceIndex
                 if (ifaceChanged) {
-                    val handoffWhileConnected =
-                        DataStore.serviceState.connected &&
-                            lastInterfaceName != null &&
-                            lastInterfaceIndex >= 0
+                    val prevHandoff = previousInterfaceForHandoff
+                    val handoffWhileConnected = DataStore.serviceState.connected &&
+                        prevHandoff != null &&
+                        interfaceName != null &&
+                        prevHandoff != interfaceName
                     // #region agent log
                     simpleModeLog(
                         "SimpleMode",
                         "H15 net_iface_changed old=${lastInterfaceName ?: "none"}:$lastInterfaceIndex " +
-                            "new=${interfaceName ?: "unknown"}:$interfaceIndex connected=${DataStore.serviceState.connected}",
+                            "new=${interfaceName ?: "unknown"}:$interfaceIndex connected=${DataStore.serviceState.connected} " +
+                            "handoffFrom=${prevHandoff ?: "none"} handoff=$handoffWhileConnected",
                     )
                     simpleModeDebugEvent(
                         runId = "network-switch",
@@ -119,8 +123,15 @@ object DefaultNetworkMonitor {
                     )
                     // #endregion
                     if (handoffWhileConnected) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H-D2 network_handoff_triggered from=$prevHandoff to=$interfaceName",
+                        )
                         WhitelistNetworkRoutingState.onUnderlyingInterfaceHandoff(interfaceName)
                     }
+                }
+                if (interfaceName != null) {
+                    previousInterfaceForHandoff = interfaceName
                 }
                 lastInterfaceName = interfaceName
                 lastInterfaceIndex = interfaceIndex
@@ -146,6 +157,9 @@ object DefaultNetworkMonitor {
                 ),
             )
             // #endregion
+            if (!DataStore.serviceState.connected) {
+                previousInterfaceForHandoff = null
+            }
             lastInterfaceName = null
             lastInterfaceIndex = -1
             lastConnectedState = DataStore.serviceState.connected

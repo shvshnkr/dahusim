@@ -469,10 +469,15 @@ class BaseService {
             }
 
             data.changeState(ServiceState.Connecting)
+            if (DataStore.simpleMode) {
+                DataStore.simpleModeActivity = "Checking network reachability…"
+            }
             data.connectingJob = runOnDefaultDispatcher {
                 try {
                     val reachability = NetworkReachabilityProbe.probe()
-                    DataStore.simpleModeActivity = "Preparing network checks..."
+                    if (DataStore.simpleMode) {
+                        DataStore.simpleModeActivity = "Preparing network checks…"
+                    }
                     simpleModeLog(
                         "SimpleMode",
                         "H7 reachability google=${reachability.googleReachable} dzen=${reachability.dzenReachable} ya=${reachability.yaReachable} whitelistSource=${reachability.whitelistSourceReachable} paused=${DataStore.autoConnectPausedUntilGoogle}",
