@@ -55,6 +55,7 @@ import fr.husi.ui.MainViewModel
 import fr.husi.ui.SimpleModeAllServersDeadChoice
 import fr.husi.ui.StringOrRes
 import fr.husi.utils.canShareSimpleModeLogs
+import fr.husi.simplemode.cancelSimpleModeNetworkAdaptation
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.shareSimpleModeLogs
 import fr.husi.simplemode.probeSimpleModeNetwork
@@ -186,6 +187,7 @@ fun SimpleHomeScreen(
             onClick = {
                 if (status.state.canStop) {
                     simpleModeLog("SimpleMode", "disconnect_clicked")
+                    cancelSimpleModeNetworkAdaptation()
                     resolveRepository().stopService()
                     return@Button
                 }
@@ -404,6 +406,7 @@ fun SimpleHomeScreen(
             TextButton(
                 modifier = Modifier.padding(bottom = 8.dp),
                 onClick = {
+                    cancelSimpleModeNetworkAdaptation()
                     DataStore.simpleMode = false
                     simpleModeLog("SimpleMode", "switch_to_full_mode_clicked")
                     onOpenFullMode()

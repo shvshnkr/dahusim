@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 sealed class PrepareForConnectResult {
     data class Success(val profileId: Long) : PrepareForConnectResult()
@@ -36,16 +37,57 @@ sealed class PrepareForConnectResult {
  */
 object AutoServerSelector {
 
-    /** Stale [prepareForConnect] runs (e.g. double tap) must not overwrite UI after tunnel is up. */
-    private fun setSimpleModeActivityUnlessConnected(text: String) {
-        if (BackendState.status.value.state == ServiceState.Connected) {
+    @Volatile
+    private var probeUiActive = false
+
+    /** Stale [prepareForConnect] runs must not overwrite UI after tunnel is up, except live probe progress. */
+    private fun setSimpleModeActivity(text: String) {
+        if (!probeUiActive && BackendState.status.value.state == ServiceState.Connected) {
             simpleModeLog("SimpleMode", "H19 activity_write_skipped_while_connected text=${text.take(48)}")
             return
         }
         DataStore.simpleModeActivity = text
     }
 
+    private fun probeConcurrency(whitelistBuiltinOnly: Boolean): Int {
+        val base = DataStore.connectionTestConcurrent
+        return if (whitelistBuiltinOnly) {
+            (base * 2).coerceIn(8, 16)
+        } else {
+            base.coerceIn(2, 12)
+        }
+    }
+
+    private fun tcpProbeConcurrency(whitelistBuiltinOnly: Boolean): Int {
+        val base = DataStore.connectionTestConcurrent
+        return if (whitelistBuiltinOnly) {
+            (base * 3).coerceIn(12, 32)
+        } else {
+            base.coerceIn(4, 24)
+        }
+    }
+
+    private fun buildCompactTcpProbePool(
+        proxies: List<ProxyEntity>,
+        priorityFirstIds: Set<Long>,
+        maxTotal: Int,
+    ): List<ProxyEntity> {
+        val priority = proxies.filter { it.id in priorityFirstIds }
+        val restCap = (maxTotal - priority.size).coerceAtLeast(0)
+        val rest = proxies.filter { it.id !in priorityFirstIds }.take(restCap)
+        return (priority + rest).distinctBy { it.id }
+    }
+
     suspend fun prepareForConnect(): PrepareForConnectResult {
+        probeUiActive = true
+        try {
+            return prepareForConnectLocked()
+        } finally {
+            probeUiActive = false
+        }
+    }
+
+    private suspend fun prepareForConnectLocked(): PrepareForConnectResult {
         val selectedBefore = DataStore.selectedProxy
         val whitelistBuiltinOnly = DataStore.simpleModeUseWhitelistBuiltinPoolOnly
         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = false
@@ -120,17 +162,26 @@ object AutoServerSelector {
                 "H25 full_probe_forced reason=$forceFullProbeReason initial=$initialCount avail=$availableCount",
             )
         }
-        val urlTestCap = (DataStore.connectionTestConcurrent * 2).coerceIn(12, 32)
+        val urlTestCap = (probeConcurrency(whitelistBuiltinOnly) * 2).coerceIn(12, 32)
         val extraUrlTestByTcp = 8
         val parallelUrlPoolSize = (urlTestCap + extraUrlTestByTcp).coerceAtMost(proxies.size)
         val urlSupplementCap = 10
+        val compactTcpProbe = whitelistBuiltinOnly &&
+            BackendState.status.value.state == ServiceState.Connected
+        val tcpProbeTargets = if (compactTcpProbe) {
+            buildCompactTcpProbePool(proxies, priorityFirstIds, maxTotal = 128)
+        } else {
+            proxies
+        }
+        val urlConcurrency = probeConcurrency(whitelistBuiltinOnly)
+        val tcpConcurrency = tcpProbeConcurrency(whitelistBuiltinOnly)
 
         var quickProbePings: Map<Long, Int> = emptyMap()
         var urlTestDelays: Map<Long, Int> = emptyMap()
         var urlTestCandidates: List<ProxyEntity> = emptyList()
 
         if (shouldQuickProbe) {
-            setSimpleModeActivityUnlessConnected("Quick testing servers...")
+            setSimpleModeActivity("Testing TCP 0/${tcpProbeTargets.size}")
             val parallelUrlPool = buildStratifiedUrlPool(
                 proxies = proxies,
                 cap = parallelUrlPoolSize,
@@ -138,20 +189,28 @@ object AutoServerSelector {
             )
             simpleModeLog(
                 "SimpleMode",
-                "H14 quick_probe_started count=${proxies.size} parallel_url_pool=${parallelUrlPool.size} stratified=true",
+                "H14 quick_probe_started tcp=${tcpProbeTargets.size} pool=${proxies.size} " +
+                    "parallel_url_pool=${parallelUrlPool.size} compactTcp=$compactTcpProbe " +
+                    "tcpConc=$tcpConcurrency urlConc=$urlConcurrency",
             )
             coroutineScope {
-                val tcpJob = async(Dispatchers.IO) { quickTcpProbe(proxies) }
+                val tcpJob = async(Dispatchers.IO) {
+                    quickTcpProbe(tcpProbeTargets, tcpConcurrency) { done, total ->
+                        setSimpleModeActivity("Testing TCP $done/$total")
+                    }
+                }
                 val urlJob = async(Dispatchers.IO) {
                     if (parallelUrlPool.isEmpty()) {
                         emptyMap()
                     } else {
-                        setSimpleModeActivityUnlessConnected("Testing servers (URL)...")
+                        setSimpleModeActivity("Testing URL 0/${parallelUrlPool.size}")
                         simpleModeLog(
                             "SimpleMode",
                             "H17 urltest_started candidates=${parallelUrlPool.size} baseCap=$urlTestCap extraTcp=$extraUrlTestByTcp mode=parallel_stratified",
                         )
-                        urlTestTopCandidates(parallelUrlPool)
+                        urlTestTopCandidates(parallelUrlPool, urlConcurrency) { done, total ->
+                            setSimpleModeActivity("Testing URL $done/$total")
+                        }
                     }
                 }
                 quickProbePings = tcpJob.await()
@@ -162,7 +221,7 @@ object AutoServerSelector {
                     .joinToString(";") { "${it.key}:${it.value}" }
                 simpleModeLog(
                     "SimpleMode",
-                    "H14 quick_probe_done alive=$quickProbeAlive tested=${proxies.size} best=$quickProbeHead",
+                    "H14 quick_probe_done alive=$quickProbeAlive tested=${tcpProbeTargets.size} best=$quickProbeHead",
                 )
                 var merged = urlJob.await().toMutableMap()
                 val preUrlSorted = proxies.sortedWith(
@@ -199,7 +258,11 @@ object AutoServerSelector {
                         "SimpleMode",
                         "H17 urltest_supplement candidates=${missing.size} cap=$urlSupplementCap",
                     )
-                    merged.putAll(urlTestTopCandidates(missing))
+                    merged.putAll(
+                        urlTestTopCandidates(missing, urlConcurrency) { done, total ->
+                            setSimpleModeActivity("Testing URL $done/$total")
+                        },
+                    )
                 }
                 urlTestDelays = merged
             }
@@ -220,12 +283,14 @@ object AutoServerSelector {
             )
             urlTestCandidates = baseUrlTest
             urlTestDelays = if (urlTestCandidates.isNotEmpty()) {
-                setSimpleModeActivityUnlessConnected("Testing servers (URL)...")
+                setSimpleModeActivity("Testing URL 0/${urlTestCandidates.size}")
                 simpleModeLog(
                     "SimpleMode",
                     "H17 urltest_started candidates=${urlTestCandidates.size} baseCap=$urlTestCap extraTcp=$extraUrlTestByTcp mode=sequential",
                 )
-                urlTestTopCandidates(urlTestCandidates)
+                urlTestTopCandidates(urlTestCandidates, urlConcurrency) { done, total ->
+                    setSimpleModeActivity("Testing URL $done/$total")
+                }
             } else {
                 emptyMap()
             }
@@ -333,7 +398,7 @@ object AutoServerSelector {
         DataStore.autoSelectFallbackQueue = ranked.joinToString(",")
         DataStore.autoSelectFallbackIndex = 0
         val best = ranked.first()
-        setSimpleModeActivityUnlessConnected("Selecting server 1/${ranked.size}")
+        setSimpleModeActivity("Selecting server 1/${ranked.size}")
         if (selectedBefore != best) {
             Logs.d("AutoSelect: switch selected profile $selectedBefore -> $best")
             DataStore.selectedProxy = best
@@ -413,7 +478,7 @@ object AutoServerSelector {
         val next = queue[nextIndex]
         DataStore.autoSelectFallbackIndex = nextIndex
         DataStore.selectedProxy = next
-        setSimpleModeActivityUnlessConnected("Trying next server ${nextIndex + 1}/${queue.size}")
+        setSimpleModeActivity("Trying next server ${nextIndex + 1}/${queue.size}")
         Logs.w("AutoSelect fallback: move to profile $next")
         // #region agent log
         simpleModeDebugEvent(
@@ -536,18 +601,37 @@ object AutoServerSelector {
             .thenByDescending { throughputRank(it) }
             .thenBy { it.userOrder }
 
-    private suspend fun urlTestTopCandidates(candidates: List<ProxyEntity>): Map<Long, Int> = coroutineScope {
-        val concurrency = DataStore.connectionTestConcurrent.coerceIn(2, 12)
+    private suspend fun urlTestTopCandidates(
+        candidates: List<ProxyEntity>,
+        concurrency: Int,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): Map<Long, Int> = coroutineScope {
+        val total = candidates.size
+        if (total == 0) return@coroutineScope emptyMap()
         val semaphore = Semaphore(concurrency)
         val result = HashMap<Long, Int>()
+        val done = AtomicInteger(0)
+        var lastReported = 0
+        fun reportProgress() {
+            val count = done.incrementAndGet()
+            if (count == total || count - lastReported >= 2) {
+                lastReported = count
+                onProgress(count, total)
+            }
+        }
+        onProgress(0, total)
         candidates.map { proxy ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
-                    val ms = profileUrlTestDelay(proxy)
-                    if (ms != null && ms > 0) {
-                        synchronized(result) {
-                            result[proxy.id] = ms
+                    try {
+                        val ms = profileUrlTestDelay(proxy)
+                        if (ms != null && ms > 0) {
+                            synchronized(result) {
+                                result[proxy.id] = ms
+                            }
                         }
+                    } finally {
+                        reportProgress()
                     }
                 }
             }
@@ -590,24 +674,43 @@ object AutoServerSelector {
         out
     }
 
-    private suspend fun quickTcpProbe(proxies: List<ProxyEntity>): Map<Long, Int> = coroutineScope {
-        val concurrency = DataStore.connectionTestConcurrent.coerceIn(4, 24)
+    private suspend fun quickTcpProbe(
+        proxies: List<ProxyEntity>,
+        concurrency: Int,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): Map<Long, Int> = coroutineScope {
+        val total = proxies.size
+        if (total == 0) return@coroutineScope emptyMap()
         val semaphore = Semaphore(concurrency)
         val result = HashMap<Long, Int>()
+        val done = AtomicInteger(0)
+        var lastReported = 0
+        fun reportProgress() {
+            val count = done.incrementAndGet()
+            if (count == total || count - lastReported >= 8) {
+                lastReported = count
+                onProgress(count, total)
+            }
+        }
+        onProgress(0, total)
         proxies.map { proxy ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
-                    val bean = runCatching { proxy.requireBean() }.getOrNull() ?: return@withPermit
-                    val address = bean.serverAddress.takeIf { it.isNotBlank() } ?: return@withPermit
-                    val port = bean.serverPort
-                    if (port <= 0) return@withPermit
-                    val ping = runCatching {
-                        Libcore.tcpPing(address, port.toString(), 1200)
-                    }.getOrNull() ?: return@withPermit
-                    if (ping > 0) {
-                        synchronized(result) {
-                            result[proxy.id] = ping
+                    try {
+                        val bean = runCatching { proxy.requireBean() }.getOrNull() ?: return@withPermit
+                        val address = bean.serverAddress.takeIf { it.isNotBlank() } ?: return@withPermit
+                        val port = bean.serverPort
+                        if (port <= 0) return@withPermit
+                        val ping = runCatching {
+                            Libcore.tcpPing(address, port.toString(), 1200)
+                        }.getOrNull() ?: return@withPermit
+                        if (ping > 0) {
+                            synchronized(result) {
+                                result[proxy.id] = ping
+                            }
                         }
+                    } finally {
+                        reportProgress()
                     }
                 }
             }

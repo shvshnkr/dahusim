@@ -8,9 +8,16 @@ import fr.husi.bg.WhitelistNetworkRoutingState
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
 import fr.husi.database.PrepareForConnectResult
-import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.repository.resolveRepository
 import fr.husi.utils.simpleModeLog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -22,20 +29,37 @@ internal object SimpleModeVpnCoordinator {
 
     private const val ADAPT_DEBOUNCE_MS = 2_500L
 
+    private val adaptScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val adaptMutex = Mutex()
+    private var adaptJob: Job? = null
     private var lastAdaptAt = 0L
+
+    fun cancelAdaptation() {
+        adaptJob?.cancel()
+        adaptJob = null
+    }
 
     fun scheduleAdaptation(reason: String) {
         if (!DataStore.simpleMode) return
-        runOnDefaultDispatcher {
-            adaptMutex.withLock {
-                val now = System.currentTimeMillis()
-                if (now - lastAdaptAt < ADAPT_DEBOUNCE_MS) {
-                    simpleModeLog("SimpleMode", "H30 wl_adapt_skipped reason=debounce trigger=$reason")
-                    return@withLock
+        adaptJob?.cancel()
+        adaptJob = adaptScope.launch {
+            try {
+                adaptMutex.withLock {
+                    if (!isActive) return@withLock
+                    val now = System.currentTimeMillis()
+                    if (now - lastAdaptAt < ADAPT_DEBOUNCE_MS) {
+                        simpleModeLog("SimpleMode", "H30 wl_adapt_skipped reason=debounce trigger=$reason")
+                        return@withLock
+                    }
+                    lastAdaptAt = now
+                    adaptLocked(reason)
                 }
-                lastAdaptAt = now
-                adaptLocked(reason)
+            } catch (_: CancellationException) {
+                simpleModeLog("SimpleMode", "H30 wl_adapt_cancelled trigger=$reason")
+            } finally {
+                if (adaptJob === coroutineContext[Job]) {
+                    adaptJob = null
+                }
             }
         }
     }
@@ -71,6 +95,7 @@ internal object SimpleModeVpnCoordinator {
     }
 
     private suspend fun adaptLocked(reason: String) {
+        if (!DataStore.simpleMode) return
         if (!DataStore.serviceState.connected) {
             simpleModeLog("SimpleMode", "H30 wl_adapt_skipped reason=not_connected trigger=$reason")
             return
@@ -90,6 +115,7 @@ internal object SimpleModeVpnCoordinator {
             reachability,
             requestReloadOnChange = false,
         )
+        if (!currentCoroutineContext().isActive) return
         val previousId = DataStore.selectedProxy
         applyReselectAndRestart(reason, reachability.whitelistOnly, previousId)
     }
@@ -99,6 +125,7 @@ internal object SimpleModeVpnCoordinator {
         whitelistOnly: Boolean,
         previousProfileId: Long,
     ): Boolean {
+        if (!currentCoroutineContext().isActive) return false
         when (val prep = SimpleModeNetworkAdaptation.reselectForNetwork(whitelistOnly)) {
             PrepareForConnectResult.NoProfiles -> {
                 simpleModeLog("SimpleMode", "H30 wl_adapt_no_profiles reason=$reason")
@@ -115,6 +142,7 @@ internal object SimpleModeVpnCoordinator {
                 return true
             }
             is PrepareForConnectResult.Success -> {
+                if (!currentCoroutineContext().isActive) return false
                 val newId = prep.profileId
                 DataStore.selectedProxy = newId
                 simpleModeLog(

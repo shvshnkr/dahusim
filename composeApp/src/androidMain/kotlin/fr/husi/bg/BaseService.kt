@@ -358,6 +358,7 @@ class BaseService {
                 // change the state
                 data.changeState(ServiceState.Stopped, msg)
                 SimpleModeConnectedMaintenance.cancel()
+                SimpleModeVpnCoordinator.cancelAdaptation()
                 WhitelistNetworkRoutingState.reset()
                 DataStore.simpleModeActivity = ""
                 if (!msg.isNullOrBlank()) {
