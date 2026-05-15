@@ -109,7 +109,8 @@ pub fn interactiveJavaSetup(allocator: mem.Allocator, conf_path: []const u8) err
     }
 
     if (answer == IDNO) {
-        if (try pickJavaWithPowerShell(allocator, conf_path)) return;
+        const picked = pickJavaWithPowerShell(allocator, conf_path) catch false;
+        if (picked) return;
         _ = MessageBoxA(null, "No valid Java 21 path was saved.", caption, MB_ICONWARNING);
         return error.NeedJava21;
     }
