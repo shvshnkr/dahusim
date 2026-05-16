@@ -20,6 +20,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -29,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger
 internal object SimpleModeVpnCoordinator {
 
     private const val ADAPT_DEBOUNCE_MS = 2_500L
+    private const val ADAPT_PREPARE_TIMEOUT_MS = 30_000L
 
     private val adaptScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val adaptMutex = Mutex()
@@ -147,10 +149,18 @@ internal object SimpleModeVpnCoordinator {
             return false
         }
         val prep = try {
-            SimpleModeNetworkAdaptation.reselectForNetwork(
-                whitelistBuiltinOnly = whitelistOnly,
-                networkHandoff = reason == "network_handoff" || reason == "reachability_flip",
-            )
+            withTimeoutOrNull(ADAPT_PREPARE_TIMEOUT_MS) {
+                SimpleModeNetworkAdaptation.reselectForNetwork(
+                    whitelistBuiltinOnly = whitelistOnly,
+                    networkHandoff = reason == "network_handoff" || reason == "reachability_flip",
+                )
+            } ?: run {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H30 wl_adapt_prepare_timeout reason=$reason gen=$adaptGen ms=$ADAPT_PREPARE_TIMEOUT_MS",
+                )
+                return false
+            }
         } catch (_: CancellationException) {
             simpleModeLog("SimpleMode", "H30 wl_adapt_prepare_cancelled reason=$reason gen=$adaptGen")
             return false

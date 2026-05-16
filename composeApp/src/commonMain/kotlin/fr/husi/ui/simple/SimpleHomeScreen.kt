@@ -61,9 +61,12 @@ import fr.husi.utils.shareSimpleModeLogs
 import fr.husi.simplemode.probeSimpleModeNetwork
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
@@ -216,6 +219,14 @@ fun SimpleHomeScreen(
                             "H21 preconnect_stall stage=$preconnectStage elapsedMs=${System.currentTimeMillis() - clickStartedAt} " +
                                 "activity=${DataStore.simpleModeActivity.ifBlank { "-" }}",
                         )
+                        if (BackendState.status.value.state != ServiceState.Connected) {
+                            DataStore.simpleModeActivity = when (preconnectStage) {
+                                "subscription_refresh" -> "Updating subscriptions (please wait)…"
+                                "prepare_for_connect", "prepare_result" -> "Finding best server…"
+                                "permission_request" -> "Starting VPN…"
+                                else -> DataStore.simpleModeActivity
+                            }
+                        }
                     }
                     try {
                         DataStore.simpleModeActivity = "Checking network..."
@@ -238,7 +249,6 @@ fun SimpleHomeScreen(
                         if (net.whitelistOnly) {
                             DataStore.autoConnectPausedUntilGoogle = false
                         }
-                        DataStore.simpleModeActivity = "Refreshing subscriptions..."
                         preconnectStage = "subscription_refresh"
                         if (net.whitelistOnly) {
                             simpleModeLog(
@@ -246,26 +256,11 @@ fun SimpleHomeScreen(
                                 "H28 preconnect_subscription_refresh whitelist_net mirror=github_via_yandex",
                             )
                         }
-                        val refreshBudgetMs =
+                        val refreshBudgetMs = if (net.whitelistOnly) {
                             DataStore.subscriptionConnectRefreshBudgetMs.coerceIn(200L, 8000L)
-                        val refreshOutcome = onDefaultDispatcher {
-                            SubscriptionAutoUpdateRunner.refreshDueWithBudget(
-                                mode = SubscriptionUpdateMode.ForegroundInteractive,
-                                budgetMs = refreshBudgetMs,
-                            )
+                        } else {
+                            DataStore.subscriptionConnectRefreshBudgetMs.coerceIn(200L, 2800L)
                         }
-                        simpleModeLog(
-                            "SimpleMode",
-                            if (refreshOutcome == null) {
-                                "H21 preconnect_subscription_refresh timeout budgetMs=$refreshBudgetMs " +
-                                    "whitelistOnly=${net.whitelistOnly}"
-                            } else {
-                                "H21 preconnect_subscription_refresh done allSucceeded=${refreshOutcome.allSucceeded} " +
-                                    "staleFails=${refreshOutcome.transportFailuresWhileVpnConnected} " +
-                                    "whitelistOnly=${net.whitelistOnly}"
-                            },
-                        )
-                        preconnectStage = "prepare_for_connect"
                         // #region agent log
                         simpleModeDebugEvent(
                             runId = "run1",
@@ -280,8 +275,39 @@ fun SimpleHomeScreen(
                             ),
                         )
                         // #endregion
+                        preconnectStage = "prepare_for_connect"
+                        DataStore.simpleModeActivity = "Finding best server…"
                         val prep = onDefaultDispatcher {
-                            AutoServerSelector.prepareForConnect()
+                            coroutineScope {
+                                val refreshJob = async {
+                                    DataStore.simpleModeActivity = "Refreshing subscriptions…"
+                                    withTimeoutOrNull(refreshBudgetMs) {
+                                        SubscriptionAutoUpdateRunner.refreshDueWithBudget(
+                                            mode = SubscriptionUpdateMode.ForegroundInteractive,
+                                            budgetMs = refreshBudgetMs,
+                                        )
+                                    }.also { outcome ->
+                                        simpleModeLog(
+                                            "SimpleMode",
+                                            if (outcome == null) {
+                                                "H21 preconnect_subscription_refresh timeout budgetMs=$refreshBudgetMs " +
+                                                    "whitelistOnly=${net.whitelistOnly}"
+                                            } else {
+                                                "H21 preconnect_subscription_refresh done " +
+                                                    "allSucceeded=${outcome.allSucceeded} " +
+                                                    "staleFails=${outcome.transportFailuresWhileVpnConnected} " +
+                                                    "whitelistOnly=${net.whitelistOnly}"
+                                            },
+                                        )
+                                    }
+                                }
+                                try {
+                                    DataStore.simpleModeActivity = "Finding best server…"
+                                    AutoServerSelector.prepareForConnect()
+                                } finally {
+                                    refreshJob.cancel()
+                                }
+                            }
                         }
                         preconnectStage = "prepare_result"
                         simpleModeLog("SimpleMode", "H21 preconnect_stage stage=prepare_result result=$prep")

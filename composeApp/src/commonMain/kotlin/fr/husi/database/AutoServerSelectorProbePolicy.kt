@@ -16,6 +16,16 @@ internal object AutoServerSelectorProbePolicy {
         return hash
     }
 
+    fun isLastKnownGoodUrlFresh(profileId: Long = DataStore.autoSelectLastKnownGood): Boolean {
+        if (profileId <= 0L) return false
+        val now = System.currentTimeMillis()
+        val verifiedAt = DataStore.autoSelectLastKnownGoodUrlAt
+        val verifiedProfile = DataStore.autoSelectLastKnownGoodUrlProfileId
+        return verifiedAt > 0L &&
+            verifiedProfile == profileId &&
+            now - verifiedAt < LAST_KNOWN_GOOD_URL_STALE_MS
+    }
+
     fun forceFullProbeReason(
         proxies: List<ProxyEntity>,
         whitelistBuiltinOnly: Boolean,
@@ -23,12 +33,17 @@ internal object AutoServerSelectorProbePolicy {
     ): String? {
         val reasons = mutableListOf<String>()
         val now = System.currentTimeMillis()
-        val lastProbeAt = DataStore.autoSelectLastFullProbeAt
-        if (lastProbeAt == 0L || now - lastProbeAt >= FULL_PROBE_INTERVAL_MS) {
-            reasons += "interval"
-        }
         val hash = computeProxyIdSetHash(proxies)
         val storedHash = DataStore.autoSelectProxyIdSetHash
+        val hashStable = storedHash == 0L || hash == storedHash
+        val goodId = DataStore.autoSelectLastKnownGood
+        val lkgFresh = goodId > 0L && isLastKnownGoodUrlFresh(goodId)
+        val lastProbeAt = DataStore.autoSelectLastFullProbeAt
+        if (lastProbeAt == 0L || now - lastProbeAt >= FULL_PROBE_INTERVAL_MS) {
+            if (!(lkgFresh && hashStable && !whitelistBuiltinOnly && !networkHandoff)) {
+                reasons += "interval"
+            }
+        }
         if (!networkHandoff) {
             if (storedHash != 0L && hash != storedHash) {
                 reasons += "proxy_set_changed"
@@ -37,16 +52,8 @@ internal object AutoServerSelectorProbePolicy {
                 reasons += "wl_to_open"
             }
         }
-        val goodId = DataStore.autoSelectLastKnownGood
-        if (goodId > 0L) {
-            val verifiedAt = DataStore.autoSelectLastKnownGoodUrlAt
-            val verifiedProfile = DataStore.autoSelectLastKnownGoodUrlProfileId
-            val staleVerification = verifiedAt == 0L ||
-                verifiedProfile != goodId ||
-                now - verifiedAt >= LAST_KNOWN_GOOD_URL_STALE_MS
-            if (staleVerification) {
-                reasons += "last_known_good_stale"
-            }
+        if (goodId > 0L && !lkgFresh) {
+            reasons += "last_known_good_stale"
         }
         return reasons.takeIf { it.isNotEmpty() }?.joinToString(",")
     }

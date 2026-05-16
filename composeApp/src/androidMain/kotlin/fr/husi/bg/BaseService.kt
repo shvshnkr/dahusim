@@ -36,6 +36,7 @@ import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
+import fr.husi.simplemode.SimpleModeSessionHealth
 import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.resources.*
 import fr.husi.utils.simpleModeDebugEvent
@@ -358,6 +359,7 @@ class BaseService {
                 // change the state
                 data.changeState(ServiceState.Stopped, msg)
                 SimpleModeConnectedMaintenance.cancel()
+                SimpleModeSessionHealth.cancel()
                 SimpleModeVpnCoordinator.cancelAdaptation()
                 WhitelistNetworkRoutingState.reset()
                 DataStore.simpleModeActivity = ""
@@ -636,6 +638,7 @@ class BaseService {
                         )
                         DataStore.simpleModeActivity = "Server unstable, switching..."
                         postConnectHealthy = false
+                        AutoServerSelector.recordProbeFailure(profile.id)
                     }
                     if (!postConnectHealthy) {
                         val wlOnly = reachability.whitelistOnly ||
@@ -697,6 +700,9 @@ class BaseService {
                     }
                     AutoServerSelector.markConnected(profile.id)
                     simpleModeLog("SimpleMode", "H10 post_connect_healthy_mark_connected profileId=${profile.id}")
+                    if (DataStore.simpleMode && outboundTag.isNotBlank()) {
+                        SimpleModeSessionHealth.schedule(profile.id, outboundTag)
+                    }
                     SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
                         profileId = profile.id,
                         postConnectLatencyMs = postConnectLatencyMs,
@@ -745,6 +751,7 @@ class BaseService {
                         "SimpleMode",
                         "H1 unknown_host profileId=${profile.id} error=${e.message ?: "unknown_host"}",
                     )
+                    AutoServerSelector.recordProbeFailure(profile.id)
                     runCatching {
                         val fallbackRefreshBudgetMs =
                             DataStore.subscriptionFallbackRefreshBudgetMs.coerceIn(200L, 5000L)

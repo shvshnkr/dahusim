@@ -2,6 +2,7 @@ package fr.husi.routing
 
 import fr.husi.database.DataStore
 import fr.husi.libcore.Libcore
+import fr.husi.libcore.urlFetchCompat
 import fr.husi.utils.closeQuietly
 import fr.husi.utils.simpleModeLog
 
@@ -71,9 +72,8 @@ internal object VpnExitProbe {
         outboundTag: String,
         url: String,
         timeoutMs: Int,
-    ): String? = runCatching {
-        client.urlFetch(outboundTag, url, timeoutMs, MAX_BODY)
-    }.getOrNull()?.takeIf { it.isNotBlank() }
+    ): String? = client.urlFetchCompat(outboundTag, url, timeoutMs, MAX_BODY)
+        ?.takeIf { it.isNotBlank() }
 
     private fun storeResult(profileId: Long, via: String, countryCode: String): Boolean {
         val isRu = countryCode.equals("RU", ignoreCase = true)
