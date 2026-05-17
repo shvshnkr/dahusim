@@ -3,14 +3,14 @@
 # libcore on Linux (anja needs win32/jni_md.h; host JAVA_HOME is Linux).
 set -euo pipefail
 ROOT="${GITHUB_WORKSPACE:-$PWD}"
+# shellcheck source=../temurin21-pinned.urls
+source "$ROOT/buildScript/temurin21-pinned.urls"
 CACHE="${WIN_JDK_JNI_CACHE:-$ROOT/.cache/win-jdk21-jni}"
 ZIP="$CACHE/jdk-win-x64.zip"
 EXTRACT="$CACHE/extract"
 mkdir -p "$CACHE"
 if [ ! -f "$ZIP" ]; then
-	curl -fsSL \
-		"https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk" \
-		-o "$ZIP.part"
+	curl -fsSL "$TEMURIN21_WIN_X64_ZIP" -o "$ZIP.part"
 	mv "$ZIP.part" "$ZIP"
 fi
 rm -rf "$EXTRACT"

@@ -1,0 +1,9 @@
+# Pinned Eclipse Temurin 21 (Windows x64) — GitHub mirror of adoptium/temurin21-binaries.
+# Bump tag + OpenJDK21U-* filenames when adopting a newer 21.x security build.
+# Run: bash buildScript/ci/verify_temurin21_urls.sh
+
+TEMURIN21_TAG="jdk-21.0.11+10"
+TEMURIN21_TAG_PATH="jdk-21.0.11%2B10"
+TEMURIN21_WIN_X64_MSI="https://github.com/adoptium/temurin21-binaries/releases/download/${TEMURIN21_TAG_PATH}/OpenJDK21U-jdk_x64_windows_hotspot_21.0.11_10.msi"
+TEMURIN21_WIN_X64_ZIP="https://github.com/adoptium/temurin21-binaries/releases/download/${TEMURIN21_TAG_PATH}/OpenJDK21U-jdk_x64_windows_hotspot_21.0.11_10.zip"
+TEMURIN21_RELEASES_PAGE="https://github.com/adoptium/temurin21-binaries/releases"

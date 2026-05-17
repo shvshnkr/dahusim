@@ -83,7 +83,7 @@ pub fn interactiveJavaSetup(allocator: mem.Allocator, conf_path: []const u8) err
         \\
         \\If JAVA_HOME points to an older JDK, it is skipped and the launcher keeps searching.
         \\
-        \\YES = open Temurin 21 download page (browser)
+        \\YES = open Temurin 21 on GitHub Releases (browser)
         \\NO = pick java.exe / javaw.exe on disk
         \\CANCEL = exit
         \\
@@ -97,11 +97,12 @@ pub fn interactiveJavaSetup(allocator: mem.Allocator, conf_path: []const u8) err
     if (answer == IDCANCEL) return error.NeedJava21;
 
     if (answer == IDYES) {
-        const url = "https://adoptium.net/temurin/releases/?version=21";
+        // Keep in sync with buildScript/temurin21-pinned.urls (TEMURIN21_RELEASES_PAGE).
+        const url = "https://github.com/adoptium/temurin21-binaries/releases";
         _ = ShellExecuteA(null, "open", url, null, null, 1);
         _ = MessageBoxA(
             null,
-            "When the download finishes, install Temurin 21, then start this application again.",
+            "When the download finishes, install Temurin 21 (Windows x64 JDK MSI or ZIP), then start this application again.",
             caption,
             0,
         );

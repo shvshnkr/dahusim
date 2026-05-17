@@ -463,6 +463,8 @@ build_nsis() {
     local vi_version
     local url_scheme_registry
     local url_scheme_unregistry
+    # shellcheck source=../../buildScript/temurin21-pinned.urls
+    source "$ROOT_DIR/buildScript/temurin21-pinned.urls"
 
     vi_version="$(normalize_vi_version)" || {
         error "VERSION_NAME=$VERSION_NAME cannot be converted to a VIProductVersion."
@@ -491,7 +493,9 @@ build_nsis() {
         "__HUSI_JAVA_HOME_FILE__" "$ROOT_DIR/release/linux/desktop/desktop-java-home.conf.template" \
         "__HUSI_APP_ARGS_FILE__" "$ROOT_DIR/release/linux/desktop/desktop-app-args.conf" \
         "__HUSI_URL_SCHEME_REGISTRY__" "$url_scheme_registry" \
-        "__HUSI_URL_SCHEME_UNREGISTRY__" "$url_scheme_unregistry"
+        "__HUSI_URL_SCHEME_UNREGISTRY__" "$url_scheme_unregistry" \
+        "__HUSI_TEMURIN21_MSI_URL__" "$TEMURIN21_WIN_X64_MSI" \
+        "__HUSI_TEMURIN21_HELP_URL__" "$TEMURIN21_RELEASES_PAGE"
 
     rm -f "$output_path"
     "$NSIS_BIN" "$nsis_source"

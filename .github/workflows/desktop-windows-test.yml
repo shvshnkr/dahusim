@@ -53,6 +53,9 @@ jobs:
           java-version: "21"
           distribution: "temurin"
 
+      - name: Verify Temurin 21 GitHub download URLs
+        run: bash buildScript/ci/verify_temurin21_urls.sh
+
       - name: Windows JDK 21 (JNI headers for Linux→windows cross-compile)
         run: bash buildScript/ci/prepare_windows_jdk_jni_include.sh
 

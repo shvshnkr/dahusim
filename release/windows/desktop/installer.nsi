@@ -114,7 +114,7 @@ FunctionEnd
 Section "-TemurinJDK21"
     StrCmp $InstallTemurin21 ${BST_CHECKED} 0 temurin_done
     DetailPrint "Downloading Eclipse Temurin JDK 21 installer..."
-    NSISdl::download /TIMEOUT=300000 "https://api.adoptium.net/v3/installer/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk" "$TEMP\EclipseTemurinJDK21.msi"
+    NSISdl::download /TIMEOUT=300000 "__HUSI_TEMURIN21_MSI_URL__" "$TEMP\EclipseTemurinJDK21.msi"
     Pop $0
     StrCmp $0 success temurin_dl_ok temurin_dl_fail
 temurin_dl_ok:
@@ -123,7 +123,7 @@ temurin_dl_ok:
     Delete "$TEMP\EclipseTemurinJDK21.msi"
     Goto temurin_done
 temurin_dl_fail:
-    MessageBox MB_OK "Temurin JDK 21 download failed. Install Java 21 manually from https://adoptium.net/temurin/releases/?version=21"
+    MessageBox MB_OK "Temurin JDK 21 download failed. Install Java 21 manually from GitHub Releases: __HUSI_TEMURIN21_HELP_URL__"
 temurin_done:
 SectionEnd
 
