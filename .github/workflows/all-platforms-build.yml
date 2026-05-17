@@ -17,6 +17,10 @@ on:
       - "repositories.gradle.kts"
       - "buildScript/**"
       - "libcore/**"
+      - "launcher/**"
+      - "release/linux/**"
+      - "release/windows/**"
+      - "release/desktop/**"
       - "husi.properties"
       - "plugin/**"
       - "run"
@@ -34,17 +38,107 @@ permissions:
   contents: write
 
 jobs:
+  changes:
+    name: Detect changed platform scopes
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      android: ${{ steps.filter.outputs.android }}
+      desktop: ${{ steps.filter.outputs.desktop }}
+      linux: ${{ steps.filter.outputs.linux }}
+      windows: ${{ steps.filter.outputs.windows }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Path filters
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shared:
+              - "composeApp/src/commonMain/**"
+              - "library/**"
+              - "libcore/**"
+              - "buildSrc/**"
+              - "buildScript/lib/**"
+              - "buildScript/init/**"
+              - "gradle/**"
+              - "gradle.properties"
+              - "settings.gradle.kts"
+              - "build.gradle.kts"
+              - "repositories.gradle.kts"
+              - "composeApp/build.gradle.kts"
+              - "husi.properties"
+              - "plugin/**"
+              - "run"
+              - "Makefile"
+              - ".github/CRONET_GO_VERSION"
+            android:
+              - "androidApp/**"
+              - "composeApp/src/androidMain/**"
+            desktop:
+              - "composeApp/src/desktopMain/**"
+              - "launcher/**"
+              - "release/desktop/**"
+            linux:
+              - "release/linux/**"
+              - "buildScript/ci/smoke_linux_desktop_packages.sh"
+            windows:
+              - "release/windows/**"
+              - "buildScript/temurin21-pinned.urls"
+              - "buildScript/ci/prepare_windows_jdk_jni_include.sh"
+              - "buildScript/ci/verify_temurin21_urls.sh"
+
   android:
     name: Android APK
+    needs: changes
+    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.android == 'true' }}
     uses: ./.github/workflows/build.yml
     secrets: inherit
 
   linux-desktop:
     name: Linux desktop
+    needs: changes
+    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.desktop == 'true' || needs.changes.outputs.linux == 'true' }}
     uses: ./.github/workflows/desktop-linux-test.yml
     secrets: inherit
 
   windows-desktop:
     name: Windows desktop
+    needs: changes
+    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.desktop == 'true' || needs.changes.outputs.windows == 'true' }}
     uses: ./.github/workflows/desktop-windows-test.yml
     secrets: inherit
+
+  summary:
+    name: Build selection summary
+    runs-on: ubuntu-latest
+    needs: [changes, android, linux-desktop, windows-desktop]
+    if: ${{ always() }}
+    steps:
+      - name: Publish selection and release metadata
+        run: |
+          {
+            echo "## All-platforms selection"
+            echo
+            echo "- run_id: \`${{ github.run_id }}\`"
+            echo "- shared changes: \`${{ needs.changes.outputs.shared }}\`"
+            echo "- android changes: \`${{ needs.changes.outputs.android }}\`"
+            echo "- desktop changes: \`${{ needs.changes.outputs.desktop }}\`"
+            echo "- linux-only changes: \`${{ needs.changes.outputs.linux }}\`"
+            echo "- windows-only changes: \`${{ needs.changes.outputs.windows }}\`"
+            echo
+            echo "## Job results"
+            echo
+            echo "- android: \`${{ needs.android.result }}\`"
+            echo "- linux-desktop: \`${{ needs.linux-desktop.result }}\`"
+            echo "- windows-desktop: \`${{ needs.windows-desktop.result }}\`"
+            echo
+            echo "## Expected release tags for this run"
+            echo
+            echo "- android tag: \`rolling-${{ github.run_id }}\`"
+            echo "- linux tag: \`linux-desktop-linux-amd64-${{ github.run_id }}\`"
+            echo "- windows tag: \`windows-desktop-windows-amd64-${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

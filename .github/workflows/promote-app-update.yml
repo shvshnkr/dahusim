@@ -1,0 +1,417 @@
+name: Promote app update channel
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "CI run id from all-platforms-build (empty = latest successful)"
+        required: false
+        type: string
+      source_android_tag:
+        description: "Optional override, e.g. rolling-123456789"
+        required: false
+        type: string
+      source_linux_tag:
+        description: "Optional override, e.g. linux-desktop-linux-amd64-123456789"
+        required: false
+        type: string
+      source_windows_tag:
+        description: "Optional override, e.g. windows-desktop-windows-amd64-123456789"
+        required: false
+        type: string
+      offer_update:
+        description: "Expose update to clients"
+        required: true
+        default: true
+        type: boolean
+      mandatory:
+        description: "Force update in clients that support mandatory mode"
+        required: true
+        default: false
+        type: boolean
+      min_version_code:
+        description: "Optional floor for clients (empty = promoted VERSION_CODE)"
+        required: false
+        type: string
+      release_notes:
+        description: "Optional notes (empty = auto-generated)"
+        required: false
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: promote-app-update-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promote selected build into app-update-channel
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
+      INPUT_RUN_ID: ${{ inputs.run_id }}
+      INPUT_ANDROID_TAG: ${{ inputs.source_android_tag }}
+      INPUT_LINUX_TAG: ${{ inputs.source_linux_tag }}
+      INPUT_WINDOWS_TAG: ${{ inputs.source_windows_tag }}
+      INPUT_OFFER_UPDATE: ${{ inputs.offer_update }}
+      INPUT_MANDATORY: ${{ inputs.mandatory }}
+      INPUT_MIN_VERSION_CODE: ${{ inputs.min_version_code }}
+      INPUT_RELEASE_NOTES: ${{ inputs.release_notes }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve source run and tags (run_id-first)
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RUN_ID="${INPUT_RUN_ID:-}"
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID="$(gh run list --workflow "all-platforms-build.yml" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "Cannot resolve successful all-platforms-build run id"
+            exit 1
+          fi
+
+          HEAD_SHA="$(gh run view "$RUN_ID" --json headSha --jq '.headSha')"
+          if [ -z "$HEAD_SHA" ] || [ "$HEAD_SHA" = "null" ]; then
+            echo "Cannot resolve head SHA for run $RUN_ID"
+            exit 1
+          fi
+
+          ANDROID_TAG="${INPUT_ANDROID_TAG:-rolling-${RUN_ID}}"
+          LINUX_TAG="${INPUT_LINUX_TAG:-linux-desktop-linux-amd64-${RUN_ID}}"
+          WINDOWS_TAG="${INPUT_WINDOWS_TAG:-windows-desktop-windows-amd64-${RUN_ID}}"
+
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "android_tag=$ANDROID_TAG" >> "$GITHUB_OUTPUT"
+          echo "linux_tag=$LINUX_TAG" >> "$GITHUB_OUTPUT"
+          echo "windows_tag=$WINDOWS_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Read VERSION_NAME / VERSION_CODE from promoted commit
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh api "repos/${GITHUB_REPOSITORY}/contents/husi.properties?ref=${{ steps.resolve.outputs.head_sha }}" --jq '.content' \
+            | tr -d '\n' | base64 -d > promoted_husi.properties
+
+          VER_NAME="$(grep '^VERSION_NAME=' promoted_husi.properties | sed 's/^VERSION_NAME=//')"
+          VER_CODE="$(grep '^VERSION_CODE=' promoted_husi.properties | sed 's/^VERSION_CODE=//')"
+
+          if [ -z "$VER_NAME" ] || [ -z "$VER_CODE" ]; then
+            echo "Failed to parse VERSION_NAME / VERSION_CODE from promoted commit"
+            exit 1
+          fi
+
+          if [ -n "${INPUT_MIN_VERSION_CODE:-}" ]; then
+            MIN_CODE="${INPUT_MIN_VERSION_CODE}"
+          else
+            MIN_CODE="$VER_CODE"
+          fi
+
+          echo "version_name=$VER_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VER_CODE" >> "$GITHUB_OUTPUT"
+          echo "min_version_code=$MIN_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -n "${INPUT_RELEASE_NOTES:-}" ]; then
+            printf "%s\n" "${INPUT_RELEASE_NOTES}" > release_notes.md
+          else
+            {
+              echo "Promoted from all-platforms run \`${{ steps.resolve.outputs.run_id }}\`."
+              echo
+              echo "Source commit: \`${{ steps.resolve.outputs.head_sha }}\`"
+              echo
+              echo "Recent commits:"
+              echo
+              git log --oneline --no-merges -25 "${{ steps.resolve.outputs.head_sha }}"
+            } > release_notes.md
+          fi
+
+      - name: Fetch source release metadata (if present)
+        id: srcmeta
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source_releases
+
+          has_android=false
+          has_linux=false
+          has_windows=false
+
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${{ steps.resolve.outputs.android_tag }}" > source_releases/android.json 2>/dev/null; then
+            has_android=true
+          else
+            rm -f source_releases/android.json
+          fi
+
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${{ steps.resolve.outputs.linux_tag }}" > source_releases/linux.json 2>/dev/null; then
+            has_linux=true
+          else
+            rm -f source_releases/linux.json
+          fi
+
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${{ steps.resolve.outputs.windows_tag }}" > source_releases/windows.json 2>/dev/null; then
+            has_windows=true
+          else
+            rm -f source_releases/windows.json
+          fi
+
+          if [ "$has_android" = false ] && [ "$has_linux" = false ] && [ "$has_windows" = false ]; then
+            echo "None of source tags exists; nothing to promote"
+            exit 1
+          fi
+
+          echo "has_android=$has_android" >> "$GITHUB_OUTPUT"
+          echo "has_linux=$has_linux" >> "$GITHUB_OUTPUT"
+          echo "has_windows=$has_windows" >> "$GITHUB_OUTPUT"
+
+      - name: Build app-update.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p promoted_assets
+          export REPO="${GITHUB_REPOSITORY}"
+          export OFFER_UPDATE="${INPUT_OFFER_UPDATE}"
+          export MANDATORY="${INPUT_MANDATORY}"
+          export VERSION_NAME="${{ steps.version.outputs.version_name }}"
+          export VERSION_CODE="${{ steps.version.outputs.version_code }}"
+          export MIN_VERSION_CODE="${{ steps.version.outputs.min_version_code }}"
+          export HAS_ANDROID="${{ steps.srcmeta.outputs.has_android }}"
+          export HAS_LINUX="${{ steps.srcmeta.outputs.has_linux }}"
+          export HAS_WINDOWS="${{ steps.srcmeta.outputs.has_windows }}"
+          export NOTES_FILE="release_notes.md"
+          export GH_TOKEN
+
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          def b(v: str) -> bool:
+              return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+          def load_release(path: str):
+              p = Path(path)
+              if not p.exists():
+                  return None
+              return json.loads(p.read_text(encoding="utf-8"))
+
+          def normalize_abi(name: str) -> str:
+              lower = name.lower()
+              mapping = {
+                  "arm64_v8a": "arm64-v8a",
+                  "arm64-v8a": "arm64-v8a",
+                  "armeabi_v7a": "armeabi-v7a",
+                  "armeabi-v7a": "armeabi-v7a",
+                  "x86_64": "x86_64",
+                  "x86": "x86",
+              }
+              for token, abi in mapping.items():
+                  if token in lower:
+                      return abi
+              return "unknown"
+
+          def download_sha(url: str, dest: Path, token: str):
+              headers = {"User-Agent": "dahusim-promote-workflow"}
+              if token:
+                  headers["Authorization"] = f"Bearer {token}"
+              req = Request(url, headers=headers)
+              sha = hashlib.sha256()
+              total = 0
+              with urlopen(req) as resp, dest.open("wb") as f:
+                  while True:
+                      chunk = resp.read(1024 * 1024)
+                      if not chunk:
+                          break
+                      f.write(chunk)
+                      sha.update(chunk)
+                      total += len(chunk)
+              return sha.hexdigest(), total
+
+          def android_cert_sha256(apk_path: Path):
+              proc = subprocess.run(
+                  ["keytool", "-printcert", "-jarfile", str(apk_path)],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              out = proc.stdout
+              m = re.search(r"SHA256:\s*([0-9A-F:]+)", out)
+              if not m:
+                  raise RuntimeError("Cannot extract SHA256 cert fingerprint from APK")
+              return m.group(1).upper()
+
+          token = os.getenv("GH_TOKEN", "")
+          release_android = load_release("source_releases/android.json")
+          release_linux = load_release("source_releases/linux.json")
+          release_windows = load_release("source_releases/windows.json")
+
+          notes = Path(os.getenv("NOTES_FILE", "release_notes.md")).read_text(encoding="utf-8").strip()
+          manifest = {
+              "schema": 1,
+              "publishedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "offerUpdate": b(os.getenv("OFFER_UPDATE", "true")),
+              "mandatory": b(os.getenv("MANDATORY", "false")),
+              "minVersionCode": int(os.getenv("MIN_VERSION_CODE")),
+              "versionName": os.getenv("VERSION_NAME"),
+              "versionCode": int(os.getenv("VERSION_CODE")),
+              "notes": notes,
+          }
+
+          signing = {}
+
+          def assets_of(rel):
+              return [] if not rel else rel.get("assets", [])
+
+          # Android assets
+          if b(os.getenv("HAS_ANDROID", "false")) and release_android:
+              abis = {}
+              cert_fingerprint = None
+              build_type = "debug"
+              for a in assets_of(release_android):
+                  name = a.get("name", "")
+                  if not name.endswith(".apk"):
+                      continue
+                  url = a.get("browser_download_url")
+                  if not url:
+                      continue
+                  lname = name.lower()
+                  if "_play_release_" in lname:
+                      build_type = "release"
+                  abi = normalize_abi(name)
+                  local = Path("promoted_assets") / name
+                  sha256, size = download_sha(url, local, token)
+                  abis[abi] = {"url": url, "size": size, "sha256": sha256}
+                  if cert_fingerprint is None:
+                      cert_fingerprint = android_cert_sha256(local)
+              if abis:
+                  manifest["android"] = {
+                      "flavor": "play",
+                      "buildType": build_type,
+                      "abis": abis,
+                  }
+                  if cert_fingerprint:
+                      signing["androidCertSha256"] = [cert_fingerprint]
+
+          # Linux assets
+          if b(os.getenv("HAS_LINUX", "false")) and release_linux:
+              linux_assets = {}
+              for a in assets_of(release_linux):
+                  name = a.get("name", "")
+                  url = a.get("browser_download_url")
+                  if not url:
+                      continue
+                  key = None
+                  if name.endswith(".deb"):
+                      key = "deb"
+                  elif name.endswith(".rpm"):
+                      key = "rpm"
+                  elif name.endswith(".pkg.tar.zst"):
+                      key = "pkgTarZst"
+                  elif name.endswith(".jar"):
+                      key = "jar"
+                  if key is None:
+                      continue
+                  local = Path("promoted_assets") / name
+                  sha256, _ = download_sha(url, local, token)
+                  linux_assets[key] = {"url": url, "sha256": sha256}
+              if linux_assets:
+                  manifest["linux"] = {"arch": "amd64", "assets": linux_assets}
+
+          # Windows assets
+          if b(os.getenv("HAS_WINDOWS", "false")) and release_windows:
+              windows_assets = {}
+              for a in assets_of(release_windows):
+                  name = a.get("name", "")
+                  url = a.get("browser_download_url")
+                  if not url:
+                      continue
+                  key = None
+                  if name.endswith("_installer.exe"):
+                      key = "installer"
+                  elif name.endswith(".zip"):
+                      key = "zip"
+                  elif name.endswith(".jar"):
+                      key = "jar"
+                  if key is None:
+                      continue
+                  local = Path("promoted_assets") / name
+                  sha256, _ = download_sha(url, local, token)
+                  windows_assets[key] = {"url": url, "sha256": sha256}
+              if windows_assets:
+                  manifest["windows"] = {"arch": "amd64", **windows_assets}
+
+          if signing:
+              manifest["signing"] = signing
+
+          Path("app-update.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Publish app-update-channel release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHANNEL_TAG="app-update-channel"
+          CHANNEL_TITLE="App update channel"
+
+          if gh release view "$CHANNEL_TAG" >/dev/null 2>&1; then
+            echo "Channel release exists: $CHANNEL_TAG"
+          else
+            gh release create "$CHANNEL_TAG" \
+              --title "$CHANNEL_TITLE" \
+              --notes "Stable channel manifest for in-app update checks." \
+              --target "${{ steps.resolve.outputs.head_sha }}"
+          fi
+
+          gh release upload "$CHANNEL_TAG" app-update.json --clobber
+
+          {
+            echo "## app-update-channel promoted"
+            echo
+            echo "- run_id: \`${{ steps.resolve.outputs.run_id }}\`"
+            echo "- head_sha: \`${{ steps.resolve.outputs.head_sha }}\`"
+            echo "- offer_update: \`${{ inputs.offer_update }}\`"
+            echo "- mandatory: \`${{ inputs.mandatory }}\`"
+            echo "- version_name: \`${{ steps.version.outputs.version_name }}\`"
+            echo "- version_code: \`${{ steps.version.outputs.version_code }}\`"
+            echo "- min_version_code: \`${{ steps.version.outputs.min_version_code }}\`"
+            echo
+            echo "## Source tags"
+            echo
+            echo "- android: \`${{ steps.resolve.outputs.android_tag }}\`"
+            echo "- linux: \`${{ steps.resolve.outputs.linux_tag }}\`"
+            echo "- windows: \`${{ steps.resolve.outputs.windows_tag }}\`"
+            echo
+            echo "## Channel URL"
+            echo
+            echo "${{ github.server_url }}/${{ github.repository }}/releases/download/app-update-channel/app-update.json"
+          } >> "$GITHUB_STEP_SUMMARY"
