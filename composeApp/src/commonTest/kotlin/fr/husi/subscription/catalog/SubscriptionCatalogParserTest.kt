@@ -67,4 +67,83 @@ class SubscriptionCatalogParserTest {
             SubscriptionCatalogParser.parse(raw)
         }
     }
+
+    /** Mirrors docs/SUBSCRIPTION_SOURCES_LOCAL.md §4.1 starter catalog. */
+    @Test
+    fun `parse starter catalog from local handbook`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=1
+            allow_empty=false
+            # GitHub RAW
+            UPSERT|mifa-vless|Mifa VLESS|https://mifa.world/vless|RAW|default
+            UPSERT|mifa-hy|Mifa Hysteria|https://mifa.world/hysteria|RAW|default
+            UPSERT|paid-main|Paid subscription|https://sub.example-provider.net/api/sub|SIP008|happ
+        """.trimIndent()
+
+        val document = SubscriptionCatalogParser.parse(raw)
+        assertEquals(1L, document.generation)
+        assertEquals(3, document.entries.size)
+
+        val paid = document.entries[2] as SubscriptionCatalogEntry.Upsert
+        assertEquals("paid-main", paid.sourceId)
+        assertEquals(SubscriptionType.SIP008, paid.subscriptionType)
+        assertEquals(SubscriptionFetchProfile.HAPP, paid.fetchProfile)
+    }
+
+    /** Mirrors docs/SUBSCRIPTION_SOURCES_LOCAL.md §4.3 custom User-Agent. */
+    @Test
+    fun `parse custom fetch profile with user agent field`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=3
+            allow_empty=false
+            UPSERT|corp-panel|Corp panel|https://vpn.corp.example/sub|RAW|custom|MyCorpVPN/1.0
+        """.trimIndent()
+
+        val upsert = SubscriptionCatalogParser.parse(raw).entries.single() as SubscriptionCatalogEntry.Upsert
+        assertEquals(SubscriptionFetchProfile.CUSTOM, upsert.fetchProfile)
+        assertEquals("MyCorpVPN/1.0", upsert.customUserAgent)
+    }
+
+    /** Mirrors docs/SUBSCRIPTION_SOURCES_LOCAL.md §4.5 explicit REMOVE. */
+    @Test
+    fun `parse catalog with explicit remove`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=4
+            allow_empty=false
+            UPSERT|mifa-vless|Mifa VLESS|https://mifa.world/vless|RAW|default
+            REMOVE|paid-main
+        """.trimIndent()
+
+        val document = SubscriptionCatalogParser.parse(raw)
+        assertEquals(2, document.entries.size)
+        assertEquals("paid-main", (document.entries[1] as SubscriptionCatalogEntry.Remove).sourceId)
+    }
+
+    @Test
+    fun `reject duplicate link with different host casing`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=1
+            UPSERT|a-id|A|https://Example.com/sub|RAW|default
+            UPSERT|b-id|B|https://example.com/sub|RAW|default
+        """.trimIndent()
+        assertFailsWith<IllegalArgumentException> {
+            SubscriptionCatalogParser.parse(raw)
+        }
+    }
+
+    @Test
+    fun `parse allow_empty true header`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=100
+            allow_empty=true
+        """.trimIndent()
+        val document = SubscriptionCatalogParser.parse(raw)
+        assertEquals(true, document.allowEmpty)
+        assertEquals(0, document.entries.size)
+    }
 }

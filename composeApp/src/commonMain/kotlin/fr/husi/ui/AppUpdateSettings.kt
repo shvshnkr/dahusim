@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.husi.Key
 import fr.husi.database.DataStore
+import fr.husi.platform.PlatformInfo
 import fr.husi.compose.PreferenceCategory
 import fr.husi.compose.PreferenceType
 import fr.husi.ktx.onDefaultDispatcher
@@ -31,7 +32,6 @@ import fr.husi.resources.update
 import fr.husi.update.AppUpdateCheckResult
 import fr.husi.update.AppUpdateCoordinator
 import fr.husi.update.AppUpdateInstallResult
-import fr.husi.platform.PlatformInfo
 import kotlinx.coroutines.launch
 import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.SwitchPreference
@@ -105,7 +105,7 @@ internal fun LazyListScope.appUpdateSettings(
             },
         )
     }
-    if (PlatformInfo.isDesktop) {
+    if (!PlatformInfo.isAndroid) {
         item(Key.APP_UPDATE_REOPEN_DOWNLOADED, PreferenceType.TEXT_FIELD) {
             val scope = rememberCoroutineScope()
             val repository = remember { resolveRepository() }

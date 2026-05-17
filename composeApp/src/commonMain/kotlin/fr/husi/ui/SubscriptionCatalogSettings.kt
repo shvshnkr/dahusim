@@ -25,6 +25,7 @@ import fr.husi.resources.subscription_catalog_summary
 import fr.husi.resources.subscription_catalog_sync_blocked
 import fr.husi.resources.subscription_catalog_sync_skipped
 import fr.husi.resources.subscription_catalog_sync_success
+import fr.husi.resources.security
 import fr.husi.resources.subscription_catalog_url
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import fr.husi.subscription.catalog.SubscriptionCatalogSyncResult
