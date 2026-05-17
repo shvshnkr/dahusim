@@ -188,12 +188,15 @@ fun Project.setupAppCommon() {
 }
 
 fun Project.setupApp() {
-    val pkgName = requireMetadata().getProperty("PACKAGE_NAME")
-    val verName = requireMetadata().getProperty("VERSION_NAME")
-    val verCode = requireMetadata().getProperty("VERSION_CODE").toInt()
+    val metadata = requireMetadata()
+    val pkgName = metadata.getProperty("PACKAGE_NAME")
+    val applicationId =
+        metadata.getProperty("ANDROID_APPLICATION_ID")?.trim().orEmpty().ifBlank { pkgName }
+    val verName = metadata.getProperty("VERSION_NAME")
+    val verCode = metadata.getProperty("VERSION_CODE").toInt()
     androidApp.apply {
         defaultConfig {
-            applicationId = pkgName
+            this.applicationId = applicationId
             versionCode = verCode
             versionName = verName
         }
