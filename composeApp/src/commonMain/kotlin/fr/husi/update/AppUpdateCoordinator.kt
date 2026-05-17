@@ -1,0 +1,84 @@
+package fr.husi.update
+
+import fr.husi.bg.currentEpochSeconds
+import fr.husi.database.DataStore
+import fr.husi.ktx.onDefaultDispatcher
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+object AppUpdateCoordinator {
+
+    private val repository = AppUpdateRepository()
+    private val _pendingOffer = MutableStateFlow<AppUpdateOffer?>(null)
+    val pendingOffer: StateFlow<AppUpdateOffer?> = _pendingOffer.asStateFlow()
+
+    suspend fun checkForUpdate(manual: Boolean = false): AppUpdateCheckResult = onDefaultDispatcher {
+        if (!DataStore.appUpdateCheckEnabled && !manual) {
+            return@onDefaultDispatcher AppUpdateCheckResult.Disabled
+        }
+
+        val now = currentEpochSeconds()
+        if (!manual && !isCheckDue(now)) {
+            return@onDefaultDispatcher AppUpdateCheckResult.UpToDate
+        }
+
+        DataStore.appUpdateLastCheckAt = now
+
+        val result = runCatching {
+            val manifest = repository.fetchManifest()
+            AppUpdateEvaluator.evaluate(manifest)
+        }.getOrElse { error ->
+            AppUpdateCheckResult.Error(error.message ?: error.toString())
+        }
+
+        when (result) {
+            is AppUpdateCheckResult.Available -> {
+                if (!manual && isDismissed(result.offer)) {
+                    AppUpdateCheckResult.UpToDate
+                } else {
+                    _pendingOffer.value = result.offer
+                    result
+                }
+            }
+            else -> result
+        }
+    }
+
+    fun dismissOffer(offer: AppUpdateOffer) {
+        if (!offer.mandatory) {
+            DataStore.appUpdateDismissedVersionCode = offer.versionCode
+        }
+        _pendingOffer.value = null
+    }
+
+    fun clearPendingOffer() {
+        _pendingOffer.value = null
+    }
+
+    fun disableChecks() {
+        DataStore.appUpdateCheckEnabled = false
+        _pendingOffer.value = null
+    }
+
+    suspend fun installPendingOffer(): AppUpdateInstallResult {
+        val offer = _pendingOffer.value ?: return AppUpdateInstallResult.Cancelled
+        val result = AppUpdatePlatform.installOffer(offer)
+        if (result is AppUpdateInstallResult.Success || result is AppUpdateInstallResult.PendingUserAction) {
+            _pendingOffer.value = null
+        }
+        return result
+    }
+
+    private fun isCheckDue(now: Long): Boolean {
+        val last = DataStore.appUpdateLastCheckAt
+        if (last <= 0L) return true
+        val intervalSeconds = DataStore.appUpdateCheckIntervalHours.coerceAtLeast(1) * 3600L
+        return now - last >= intervalSeconds
+    }
+
+    private fun isDismissed(offer: AppUpdateOffer): Boolean {
+        if (offer.mandatory) return false
+        return DataStore.appUpdateDismissedVersionCode == offer.versionCode
+    }
+}

@@ -45,6 +45,7 @@ import fr.husi.libcore.loadCA
 import fr.husi.platform.Platform
 import fr.husi.platform.PlatformInfo
 import fr.husi.repository.DesktopRepository
+import fr.husi.update.AppUpdateCoordinator
 import fr.husi.repository.resolveDesktopRepository
 import fr.husi.resources.Res
 import fr.husi.resources.app_name
@@ -140,6 +141,7 @@ private class DesktopMain : CliktCommand(APP_NAME) {
             runBlocking {
                 SubscriptionUpdater.reconfigureUpdater()
                 RouteAssetUpdater.reconfigureUpdater()
+                AppUpdateCoordinator.checkForUpdate(manual = false)
             }
         }.onFailure {
             Logs.e("reconfigure desktop tasks on startup", it)

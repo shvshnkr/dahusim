@@ -37,6 +37,11 @@ on:
         description: "Optional notes (empty = auto-generated)"
         required: false
         type: string
+      publish:
+        description: "Upload app-update.json to app-update-channel (false = dry-run summary only)"
+        required: true
+        default: true
+        type: boolean
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -63,10 +68,16 @@ jobs:
       INPUT_MANDATORY: ${{ inputs.mandatory }}
       INPUT_MIN_VERSION_CODE: ${{ inputs.min_version_code }}
       INPUT_RELEASE_NOTES: ${{ inputs.release_notes }}
+      INPUT_PUBLISH: ${{ inputs.publish }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
 
       - name: Resolve source run and tags (run_id-first)
         id: resolve
@@ -120,7 +131,7 @@ jobs:
           if [ -n "${INPUT_MIN_VERSION_CODE:-}" ]; then
             MIN_CODE="${INPUT_MIN_VERSION_CODE}"
           else
-            MIN_CODE="$VER_CODE"
+            MIN_CODE="0"
           fi
 
           echo "version_name=$VER_NAME" >> "$GITHUB_OUTPUT"
@@ -375,7 +386,24 @@ jobs:
           )
           PY
 
+      - name: Manifest preview (summary)
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## app-update.json preview"
+            echo
+            echo '```json'
+            cat app-update.json
+            echo '```'
+            echo
+            echo "- android block: $(jq -r 'if .android then "yes" else "no" end' app-update.json)"
+            echo "- linux block: $(jq -r 'if .linux then "yes" else "no" end' app-update.json)"
+            echo "- windows block: $(jq -r 'if .windows then "yes" else "no" end' app-update.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish app-update-channel release asset
+        if: ${{ inputs.publish }}
         shell: bash
         run: |
           set -euo pipefail

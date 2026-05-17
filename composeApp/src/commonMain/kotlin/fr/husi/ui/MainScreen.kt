@@ -65,6 +65,7 @@ import fr.husi.fmt.PluginEntry
 import fr.husi.ktx.exitApplication
 import fr.husi.ktx.restartApplication
 import fr.husi.ktx.runOnDefaultDispatcher
+import fr.husi.ktx.showToast
 import fr.husi.permission.AppPermission
 import fr.husi.permission.LocalPermissionPlatform
 import fr.husi.platform.PlatformInfo
@@ -624,6 +625,9 @@ private fun MainScreenContent(
         else -> Unit
     }
 
+    AppUpdatePromptHost { message ->
+        showToast(message)
+    }
 }
 
 @Immutable

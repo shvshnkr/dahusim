@@ -13,6 +13,21 @@
     <string name="menu_configuration">Configuration</string>
     <string name="menu_group">Group</string>
     <string name="menu_about">About</string>
+    <string name="app_update_settings">App updates</string>
+    <string name="app_update_check_enabled">Check for app updates</string>
+    <string name="app_update_check_enabled_sum">Uses GitHub app-update-channel manifest</string>
+    <string name="app_update_check_interval_hours">Update check interval (hours)</string>
+    <string name="app_update_check_now">Check for updates now</string>
+    <string name="app_update_checking">Checking for updates…</string>
+    <string name="app_update_up_to_date">App is up to date</string>
+    <string name="app_update_error">Update check failed: %1$s</string>
+    <string name="app_update_available_title">Update available</string>
+    <string name="app_update_available_message">%1$s (%2$d) is available. Install now?</string>
+    <string name="app_update_install">Install</string>
+    <string name="app_update_install_pending">Confirm installation in system package installer</string>
+    <string name="app_update_later">Later</string>
+    <string name="app_update_install_failed">Update install failed: %1$s</string>
+    <string name="app_update_disable_checks">Disable update checks</string>
     <!-- themes -->
     <string name="theme">Theme</string>
     <string name="themes_amber">Pine Tears</string>

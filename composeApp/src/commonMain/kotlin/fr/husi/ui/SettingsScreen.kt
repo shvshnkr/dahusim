@@ -1465,6 +1465,17 @@ fun SettingsScreen(
                         )
                     }
 
+                    if (isExpertState) {
+                        appUpdateSettings { message ->
+                            scope.launch {
+                                snackbarState.showSnackbar(
+                                    message = message,
+                                    actionLabel = resolveRepository().getString(Res.string.ok),
+                                    duration = SnackbarDuration.Short,
+                                )
+                            }
+                        }
+                    }
                     item(Key.MISC_SETTINGS, PreferenceType.CATEGORY) {
                         PreferenceCategory(text = { Text(stringResource(Res.string.cag_misc)) })
                     }

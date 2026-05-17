@@ -15,6 +15,7 @@ object Key {
     const val DNS_SETTINGS = "dnsSettings"
     const val INBOUND_SETTINGS = "inboundSettings"
     const val MISC_SETTINGS = "miscSettings"
+    const val APP_UPDATE_SETTINGS = "appUpdateSettings"
     const val NTP_SETTINGS = "ntpSettings"
 
     const val PERSIST_ACROSS_REBOOT = "isAutoConnect"
@@ -144,6 +145,12 @@ object Key {
     const val SUBSCRIPTION_UPDATE_PARALLELISM_BACKGROUND = "subscriptionUpdateParallelismBackground"
     const val SUBSCRIPTION_CONNECT_REFRESH_BUDGET_MS = "subscriptionConnectRefreshBudgetMs"
     const val SUBSCRIPTION_FALLBACK_REFRESH_BUDGET_MS = "subscriptionFallbackRefreshBudgetMs"
+
+    const val APP_UPDATE_CHECK_ENABLED = "appUpdateCheckEnabled"
+    const val APP_UPDATE_CHECK_INTERVAL_HOURS = "appUpdateCheckIntervalHours"
+    const val APP_UPDATE_CHECK_NOW = "appUpdateCheckNow"
+    const val APP_UPDATE_LAST_CHECK_AT = "appUpdateLastCheckAt"
+    const val APP_UPDATE_DISMISSED_VERSION_CODE = "appUpdateDismissedVersionCode"
 
 }
 

@@ -114,14 +114,34 @@ jobs:
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
           echo "sdk.dir=${SDK}" > local.properties
 
-      - name: Assemble Play debug (arm64-v8a, armeabi-v7a, x86_64, x86)
+      - name: Restore release keystore (optional)
+        env:
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "${KEYSTORE_PASS:-}" ] && [ -n "${KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > release.keystore
+            test -s release.keystore
+          fi
+
+      - name: Assemble Play APK (release if keystore, else debug)
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
           GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          ALIAS_NAME: ${{ secrets.ALIAS_NAME }}
+          ALIAS_PASS: ${{ secrets.ALIAS_PASS }}
         run: |
-          # Две задачи в одном вызове → requireTargetAbi() не режет ABI (см. buildSrc).
-          ./gradlew :composeApp:exportLibraryDefinitions assemblePlayDebugAllAbi --no-daemon
+          set -euo pipefail
+          if [ -n "${KEYSTORE_PASS:-}" ] && [ -f release.keystore ]; then
+            echo "build_type=release" >> "$GITHUB_ENV"
+            ./gradlew :composeApp:exportLibraryDefinitions assemblePlayReleaseAllAbi --no-daemon
+          else
+            echo "build_type=debug" >> "$GITHUB_ENV"
+            ./gradlew :composeApp:exportLibraryDefinitions assemblePlayDebugAllAbi --no-daemon
+          fi
 
       - name: Collect APK
         run: |
@@ -156,6 +176,8 @@ jobs:
 
       - name: Version, rename APK by ABI, release notes
         id: rel
+        env:
+          BUILD_TYPE: ${{ env.build_type }}
         run: |
           set -e
           VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
@@ -172,7 +194,8 @@ jobs:
               abi="unknown"
             fi
             abi_safe=$(echo "$abi" | tr '-' '_')
-            dest="release_assets/dahusim_${SAFE_VER}_play_debug_${abi_safe}.apk"
+            build_type="${BUILD_TYPE:-debug}"
+            dest="release_assets/dahusim_${SAFE_VER}_play_${build_type}_${abi_safe}.apk"
             cp -v "$apk" "$dest"
             count=$((count + 1))
           done

@@ -58,8 +58,17 @@ import fr.husi.compose.rememberScrollHideState
 import fr.husi.compose.theme.AppTheme
 import fr.husi.compose.withNavigation
 import fr.husi.database.DataStore
+import fr.husi.ktx.onDefaultDispatcher
+import fr.husi.ktx.showToast
 import fr.husi.libcore.Libcore
 import fr.husi.repository.resolveRepository
+import fr.husi.resources.app_update_check_now
+import fr.husi.resources.app_update_error
+import fr.husi.resources.update
+import fr.husi.resources.app_update_up_to_date
+import fr.husi.resources.app_update_available_title
+import fr.husi.update.AppUpdateCheckResult
+import fr.husi.update.AppUpdateCoordinator
 import fr.husi.resources.*
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -84,15 +93,27 @@ fun AboutScreen(
     var showAlertDialog by remember { mutableStateOf<MainViewModelUiEvent.AlertDialog?>(null) }
 
     val displayVersion = remember { "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})" }
-    val releaseLink = remember {
-        val isPreVersion = Libcore.isPreRelease(BuildConfig.VERSION_NAME)
-        if (isPreVersion) {
-            "https://codeberg.org/xchacha20-poly1305/husi/releases"
-        } else {
-            "https://codeberg.org/xchacha20-poly1305/husi/releases/latest"
+    val coreVersion = remember { Libcore.version() }
+
+    fun checkForUpdates() {
+        scope.launch {
+            val result = onDefaultDispatcher { AppUpdateCoordinator.checkForUpdate(manual = true) }
+            val message = when (result) {
+                AppUpdateCheckResult.Disabled,
+                AppUpdateCheckResult.UpToDate,
+                AppUpdateCheckResult.NoPlatformArtifact,
+                -> resolveRepository().getString(Res.string.app_update_up_to_date)
+                is AppUpdateCheckResult.Error -> resolveRepository().getString(
+                    Res.string.app_update_error,
+                    result.message,
+                )
+                is AppUpdateCheckResult.Available -> resolveRepository().getString(
+                    Res.string.app_update_available_title,
+                )
+            }
+            showToast(message)
         }
     }
-    val coreVersion = remember { Libcore.version() }
 
     val shouldRequestBattery = rememberShouldRequestBatteryOptimizations()
     val requestIgnoreBatteryOptimizations = rememberRequestIgnoreBatteryOptimizations()
@@ -170,9 +191,12 @@ fun AboutScreen(
                             title = stringResource(Res.string.about_display_name),
                             titleTextStyle = null,
                             description = displayVersion,
-                            onCLick = {
-                                uriHandler.openUri(releaseLink)
-                            },
+                            onCLick = { checkForUpdates() },
+                        )
+                        CardItem(
+                            icon = { Icon(vectorResource(Res.drawable.update), null) },
+                            title = stringResource(Res.string.app_update_check_now),
+                            onCLick = { checkForUpdates() },
                         )
                         CardItem(
                             icon = {
@@ -249,7 +273,7 @@ fun AboutScreen(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             icon = { Icon(vectorResource(Res.drawable.code), null) },
                             title = stringResource(Res.string.github),
-                            onCLick = { uriHandler.openUri("https://codeberg.org/xchacha20-poly1305/husi") },
+                            onCLick = { uriHandler.openUri("https://github.com/shvshnkr/dahusim") },
                         )
                         CardItem(
                             modifier = Modifier.padding(horizontal = 16.dp),

@@ -289,4 +289,9 @@ object DataStore {
         1200L
     }
 
+    var appUpdateCheckEnabled by configurationStore.boolean(Key.APP_UPDATE_CHECK_ENABLED) { true }
+    var appUpdateCheckIntervalHours by configurationStore.int(Key.APP_UPDATE_CHECK_INTERVAL_HOURS) { 24 }
+    var appUpdateLastCheckAt by configurationStore.long(Key.APP_UPDATE_LAST_CHECK_AT) { 0L }
+    var appUpdateDismissedVersionCode by configurationStore.int(Key.APP_UPDATE_DISMISSED_VERSION_CODE) { 0 }
+
 }
