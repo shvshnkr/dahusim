@@ -73,6 +73,8 @@ import fr.husi.compose.setPlainText
 import fr.husi.compose.withNavigation
 import fr.husi.database.SagerDatabase
 import fr.husi.fmt.toUniversalLink
+import fr.husi.group.SubscriptionFetchProfile
+import fr.husi.group.SubscriptionSourceKind
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.formatTime
 import fr.husi.ktx.onIoDispatcher
@@ -112,8 +114,13 @@ import fr.husi.resources.share
 import fr.husi.resources.share_qr_nfc
 import fr.husi.resources.share_subscription
 import fr.husi.resources.subscription_expire
+import fr.husi.resources.subscription_fetch_profile_custom
+import fr.husi.resources.subscription_fetch_profile_default
+import fr.husi.resources.subscription_fetch_profile_happ
 import fr.husi.resources.subscription_traffic
 import fr.husi.resources.subscription_last_updated
+import fr.husi.resources.subscription_source_kind_github
+import fr.husi.resources.subscription_source_kind_web
 import fr.husi.resources.subscription_used
 import fr.husi.resources.undo
 import fr.husi.resources.update
@@ -536,6 +543,30 @@ private fun DraggableSwipeableItemScope<GroupItemUiState>.GroupCard(
                                 subscription?.username.blankAsNull()?.let { username ->
                                     Text(
                                         text = username,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                subscription?.let { sub ->
+                                    val sourceText = if (
+                                        SubscriptionSourceKind.inferFromLink(sub.link) ==
+                                        SubscriptionSourceKind.GITHUB
+                                    ) {
+                                        stringResource(Res.string.subscription_source_kind_github)
+                                    } else {
+                                        stringResource(Res.string.subscription_source_kind_web)
+                                    }
+                                    val profileText = when (sub.fetchProfile) {
+                                        SubscriptionFetchProfile.HAPP -> stringResource(
+                                            Res.string.subscription_fetch_profile_happ,
+                                        )
+                                        SubscriptionFetchProfile.CUSTOM -> stringResource(
+                                            Res.string.subscription_fetch_profile_custom,
+                                        )
+                                        else -> stringResource(Res.string.subscription_fetch_profile_default)
+                                    }
+                                    Text(
+                                        text = "$sourceText · $profileText",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

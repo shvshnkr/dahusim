@@ -25,6 +25,11 @@ class SubscriptionBean : Serializable() {
     var forceResolve: Boolean = false
     var deduplication: Boolean = false
     var filterNotRegex: String = ""
+    var sourceId: String = ""
+    var managedByRemote: Boolean = false
+    var pendingRemoveAt: Long = 0L
+    var remoteGenerationSeen: Long = 0L
+    var fetchProfile: Int = 0
     var updateWhenConnectedOnly: Boolean = false
     var customUserAgent: String = ""
     var autoUpdate: Boolean = false
@@ -40,7 +45,7 @@ class SubscriptionBean : Serializable() {
     var expiryDate: Long = 0L
 
     override fun serializeToBuffer(output: ByteBufferOutput) {
-        output.writeInt(4)
+        output.writeInt(5)
 
         output.writeInt(type)
         output.writeString(link)
@@ -57,6 +62,11 @@ class SubscriptionBean : Serializable() {
         output.writeLong(bytesRemaining)
         output.writeString(token)
         output.writeString(filterNotRegex)
+        output.writeString(sourceId)
+        output.writeBoolean(managedByRemote)
+        output.writeLong(pendingRemoveAt)
+        output.writeLong(remoteGenerationSeen)
+        output.writeInt(fetchProfile)
     }
 
     fun serializeForShare(output: ByteBufferOutput) {
@@ -97,6 +107,13 @@ class SubscriptionBean : Serializable() {
 
         if (version >= 4) {
             filterNotRegex = input.readString()
+        }
+        if (version >= 5) {
+            sourceId = input.readString()
+            managedByRemote = input.readBoolean()
+            pendingRemoveAt = input.readLong()
+            remoteGenerationSeen = input.readLong()
+            fetchProfile = input.readInt()
         }
     }
 

@@ -47,6 +47,7 @@ import fr.husi.platform.PlatformInfo
 import fr.husi.repository.DesktopRepository
 import fr.husi.update.AppUpdateCoordinator
 import fr.husi.repository.resolveDesktopRepository
+import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import fr.husi.resources.Res
 import fr.husi.resources.app_name
 import fr.husi.resources.close
@@ -141,6 +142,7 @@ private class DesktopMain : CliktCommand(APP_NAME) {
             runBlocking {
                 SubscriptionUpdater.reconfigureUpdater()
                 RouteAssetUpdater.reconfigureUpdater()
+                SubscriptionCatalogCoordinator.syncIfDue(manual = false)
                 AppUpdateCoordinator.checkForUpdate(manual = false)
             }
         }.onFailure {

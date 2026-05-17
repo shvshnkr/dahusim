@@ -17,11 +17,13 @@ import fr.husi.resources.app_update_available_title
 import fr.husi.resources.app_update_install
 import fr.husi.resources.app_update_install_failed
 import fr.husi.resources.app_update_install_pending
+import fr.husi.resources.app_update_install_pending_desktop
 import fr.husi.resources.app_update_later
 import fr.husi.resources.app_update_disable_checks
 import fr.husi.repository.resolveRepository
 import fr.husi.update.AppUpdateCoordinator
 import fr.husi.update.AppUpdateInstallResult
+import fr.husi.platform.PlatformInfo
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
@@ -64,7 +66,13 @@ fun AppUpdatePromptHost(
                                 AppUpdateInstallResult.Cancelled,
                                 -> Unit
                                 AppUpdateInstallResult.PendingUserAction -> showMessage(
-                                    repository.getString(Res.string.app_update_install_pending),
+                                    repository.getString(
+                                        if (PlatformInfo.isAndroid) {
+                                            Res.string.app_update_install_pending
+                                        } else {
+                                            Res.string.app_update_install_pending_desktop
+                                        },
+                                    ),
                                 )
                                 is AppUpdateInstallResult.Failed -> showMessage(
                                     repository.getString(

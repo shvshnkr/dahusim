@@ -11,6 +11,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 
 /**
  * Periodic subscription and route-asset updates while the desktop JVM is alive.
@@ -56,6 +57,7 @@ internal object DesktopBackgroundCoordinator {
             delay(plan.initialDelaySeconds * 1000L)
             if (!currentCoroutineContext().isActive) return
             runCatching {
+                SubscriptionCatalogCoordinator.syncIfDue(manual = false)
                 SubscriptionAutoUpdateRunner.run(mode = SubscriptionUpdateMode.BackgroundEco)
             }.onFailure {
                 if (it.isCoroutineCancellation()) return@onFailure

@@ -62,6 +62,10 @@ actual object AppUpdatePlatform {
         )
     }
 
+    actual suspend fun reopenDownloadedArtifact(): AppUpdateInstallResult {
+        return AppUpdateInstallResult.Failed("Not supported on Android")
+    }
+
     private fun canRequestPackageInstalls(): Boolean {
         return appContext.packageManager.canRequestPackageInstalls()
     }

@@ -16,6 +16,20 @@ The app checks this manifest when **Settings → App updates → Check for app u
    - `publish` — `false` prints manifest preview only (dry-run).
 4. Users on builds with matching Android signing cert receive the in-app prompt.
 
+## Desktop (Linux/Windows) behavior
+
+- Desktop update installs are **manual by design**:
+  - the app downloads the selected artifact, verifies SHA-256 (and size when present), then opens it.
+  - result is treated as pending user action (not immediate success).
+- In Settings, desktop users can use **Open downloaded installer again** to reopen the last downloaded
+  file/folder if the prompt was closed.
+- Windows:
+  - `installer` artifacts are opened directly.
+  - `zip` / `jar` open the download folder so users can extract/run manually.
+- Linux:
+  - preferred order is `deb` -> `rpm` -> `pkgTarZst` -> `zip` -> `jar`.
+  - desktop integration opens artifact (or folder fallback), final install is user-driven.
+
 ## Android signing
 
 OTA install requires the **same signing key** as the installed APK.

@@ -18,6 +18,7 @@
     <string name="app_update_check_enabled_sum">Uses GitHub app-update-channel manifest</string>
     <string name="app_update_check_interval_hours">Update check interval (hours)</string>
     <string name="app_update_check_now">Check for updates now</string>
+    <string name="app_update_open_downloaded">Open downloaded installer again</string>
     <string name="app_update_checking">Checking for updates…</string>
     <string name="app_update_up_to_date">App is up to date</string>
     <string name="app_update_error">Update check failed: %1$s</string>
@@ -25,9 +26,20 @@
     <string name="app_update_available_message">%1$s (%2$d) is available. Install now?</string>
     <string name="app_update_install">Install</string>
     <string name="app_update_install_pending">Confirm installation in system package installer</string>
+    <string name="app_update_install_pending_desktop">Installer/download opened. Complete installation manually, then restart daHusiM.</string>
     <string name="app_update_later">Later</string>
     <string name="app_update_install_failed">Update install failed: %1$s</string>
     <string name="app_update_disable_checks">Disable update checks</string>
+    <string name="subscription_catalog_settings">Subscription catalog</string>
+    <string name="subscription_catalog_check_enabled">Sync subscriptions from catalog</string>
+    <string name="subscription_catalog_summary">Fetches a managed subscription list from a GitHub text file</string>
+    <string name="subscription_catalog_url">Catalog URL</string>
+    <string name="subscription_catalog_check_interval_hours">Catalog sync interval (hours)</string>
+    <string name="subscription_catalog_check_now">Sync catalog now</string>
+    <string name="subscription_catalog_sync_success">Catalog synced: +%1$d, ~%2$d, -%3$d, pending remove %4$d</string>
+    <string name="subscription_catalog_sync_skipped">Catalog is already up to date</string>
+    <string name="subscription_catalog_sync_blocked">Catalog blocked by safety checks: %1$s</string>
+    <string name="subscription_catalog_error">Catalog sync failed: %1$s</string>
     <!-- themes -->
     <string name="theme">Theme</string>
     <string name="themes_amber">Pine Tears</string>
@@ -388,6 +400,15 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="subscription_settings">Subscription Settings</string>
     <string name="group_type">Group Type</string>
     <string name="subscription_type">Subscription Type</string>
+    <string name="subscription_source_kind">Source kind</string>
+    <string name="subscription_source_kind_github">GitHub</string>
+    <string name="subscription_source_kind_web">Web</string>
+    <string name="subscription_source_id">Source ID</string>
+    <string name="subscription_managed_by_remote">Managed by remote catalog</string>
+    <string name="subscription_fetch_profile">Fetch profile</string>
+    <string name="subscription_fetch_profile_default">Default</string>
+    <string name="subscription_fetch_profile_happ">Happ</string>
+    <string name="subscription_fetch_profile_custom">Custom</string>
     <string name="delete_group_prompt">Are you sure you want to remove this group?</string>
     <string name="force_resolve">Force Resolve</string>
     <string name="force_resolve_sum">Resolve all domain names to IP addresses when updating. Host and SNI will be automatically appended if possible</string>

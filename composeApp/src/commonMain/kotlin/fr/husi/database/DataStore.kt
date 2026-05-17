@@ -293,5 +293,19 @@ object DataStore {
     var appUpdateCheckIntervalHours by configurationStore.int(Key.APP_UPDATE_CHECK_INTERVAL_HOURS) { 24 }
     var appUpdateLastCheckAt by configurationStore.long(Key.APP_UPDATE_LAST_CHECK_AT) { 0L }
     var appUpdateDismissedVersionCode by configurationStore.int(Key.APP_UPDATE_DISMISSED_VERSION_CODE) { 0 }
+    var appUpdateLastDownloadedPath by configurationStore.string(Key.APP_UPDATE_LAST_DOWNLOADED_PATH) { "" }
+
+    var subscriptionCatalogEnabled by configurationStore.boolean(Key.SUBSCRIPTION_CATALOG_ENABLED) { true }
+    var subscriptionCatalogUrl by configurationStore.string(Key.SUBSCRIPTION_CATALOG_URL) {
+        "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
+    }
+    var subscriptionCatalogCheckIntervalHours by configurationStore.int(
+        Key.SUBSCRIPTION_CATALOG_CHECK_INTERVAL_HOURS,
+    ) { 12 }
+    var subscriptionCatalogLastCheckAt by configurationStore.long(Key.SUBSCRIPTION_CATALOG_LAST_CHECK_AT) { 0L }
+    var subscriptionCatalogLastAppliedGeneration by configurationStore.long(
+        Key.SUBSCRIPTION_CATALOG_LAST_APPLIED_GENERATION,
+    ) { 0L }
+    var subscriptionCatalogLastAppliedHash by configurationStore.string(Key.SUBSCRIPTION_CATALOG_LAST_APPLIED_HASH) { "" }
 
 }

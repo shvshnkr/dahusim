@@ -14,9 +14,11 @@ import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.ktx.parseProxies
+import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import kotlinx.coroutines.flow.first
 
 object DefaultUserBootstrap {
+    private const val BUILTIN_SOURCE_PREFIX = "builtin."
     private const val AUTO_UPDATE_MINUTES = 60
     private const val STANDALONE_SE_GROUP = "Quick standalone SE"
     private const val STANDALONE_SE_PROFILE = "SE relay builtin"
@@ -42,6 +44,11 @@ object DefaultUserBootstrap {
 
     suspend fun bootstrapAll() {
         bootstrapDefaultSubscriptions()
+        runCatching {
+            SubscriptionCatalogCoordinator.syncIfDue(manual = false)
+        }.onFailure {
+            Logs.w("DefaultUserBootstrap: subscription catalog sync", it)
+        }
         ensureStandaloneSeVlessProfile()
         bootstrapPerAppDefaults()
         ProfileManager.ensureBootstrapRoutingDefaults()
@@ -51,6 +58,7 @@ object DefaultUserBootstrap {
     private suspend fun bootstrapDefaultSubscriptions() {
         val subscriptions = SagerDatabase.groupDao.subscriptions()
         migrateBrokenSwordwareSubscription(subscriptions)
+        ensureBuiltinManagedMarkers(subscriptions)
         val existingLinks = SagerDatabase.groupDao.subscriptions()
             .mapNotNull { it.subscription?.link }
             .toSet()
@@ -70,6 +78,8 @@ object DefaultUserBootstrap {
                         autoUpdateDelay = AUTO_UPDATE_MINUTES
                         deduplication = true
                         updateWhenConnectedOnly = false
+                        managedByRemote = true
+                        sourceId = builtinSourceId(index)
                     }
                 },
                 notifySubscriptionScheduler = false,
@@ -93,6 +103,18 @@ object DefaultUserBootstrap {
         Logs.d(
             "Default subscriptions bootstrap completed, createdAny=$createdAny, removedLegacy=${obsoleteIds.size}",
         )
+    }
+
+    private suspend fun ensureBuiltinManagedMarkers(subscriptions: List<ProxyGroup>) {
+        val byLink = subscriptions.associateBy { it.subscription?.link.orEmpty() }
+        defaultSubscriptionLinks.forEachIndexed { index, link ->
+            val group = byLink[link] ?: return@forEachIndexed
+            val sub = group.subscription ?: return@forEachIndexed
+            if (sub.sourceId.startsWith(BUILTIN_SOURCE_PREFIX) && sub.managedByRemote) return@forEachIndexed
+            sub.managedByRemote = true
+            sub.sourceId = builtinSourceId(index)
+            GroupManager.updateGroup(group)
+        }
     }
 
     private suspend fun ensureStandaloneSeVlessProfile() {
@@ -132,6 +154,8 @@ object DefaultUserBootstrap {
             Logs.d("DefaultUserBootstrap: migrated group id=${group.id} from broken Swordware.txt to vless reserve")
         }
     }
+
+    private fun builtinSourceId(index: Int): String = "$BUILTIN_SOURCE_PREFIX${index + 1}"
 }
 
 internal expect suspend fun bootstrapPerAppDefaults()

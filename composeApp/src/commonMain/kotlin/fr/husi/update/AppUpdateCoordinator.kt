@@ -70,6 +70,10 @@ object AppUpdateCoordinator {
         return result
     }
 
+    suspend fun reopenDownloadedArtifact(): AppUpdateInstallResult {
+        return AppUpdatePlatform.reopenDownloadedArtifact()
+    }
+
     private fun isCheckDue(now: Long): Boolean {
         val last = DataStore.appUpdateLastCheckAt
         if (last <= 0L) return true

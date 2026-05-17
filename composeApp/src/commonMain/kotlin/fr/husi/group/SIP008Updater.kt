@@ -27,7 +27,6 @@ import fr.husi.fmt.shadowsocks.ShadowsocksBean
 import fr.husi.fmt.shadowsocks.pluginToLocal
 import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
-import fr.husi.ktx.generateUserAgent
 import fr.husi.ktx.kxs
 import fr.husi.libcore.Libcore
 import fr.husi.repository.resolveRepository
@@ -103,7 +102,7 @@ object SIP008Updater : GroupUpdater() {
                 restrictedTLS()
             }.newRequest().apply {
                 setURL(subscription.link)
-                setUserAgent(generateUserAgent(subscription.customUserAgent))
+                setUserAgent(SubscriptionFetchProfile.resolveUserAgent(subscription))
             }.execute()
 
             sip008Response = kxs.decodeFromString(response.contentString)

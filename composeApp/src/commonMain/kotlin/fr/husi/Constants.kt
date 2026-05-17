@@ -16,6 +16,7 @@ object Key {
     const val INBOUND_SETTINGS = "inboundSettings"
     const val MISC_SETTINGS = "miscSettings"
     const val APP_UPDATE_SETTINGS = "appUpdateSettings"
+    const val SUBSCRIPTION_CATALOG_SETTINGS = "subscriptionCatalogSettings"
     const val NTP_SETTINGS = "ntpSettings"
 
     const val PERSIST_ACROSS_REBOOT = "isAutoConnect"
@@ -151,6 +152,16 @@ object Key {
     const val APP_UPDATE_CHECK_NOW = "appUpdateCheckNow"
     const val APP_UPDATE_LAST_CHECK_AT = "appUpdateLastCheckAt"
     const val APP_UPDATE_DISMISSED_VERSION_CODE = "appUpdateDismissedVersionCode"
+    const val APP_UPDATE_REOPEN_DOWNLOADED = "appUpdateReopenDownloaded"
+    const val APP_UPDATE_LAST_DOWNLOADED_PATH = "appUpdateLastDownloadedPath"
+
+    const val SUBSCRIPTION_CATALOG_ENABLED = "subscriptionCatalogEnabled"
+    const val SUBSCRIPTION_CATALOG_URL = "subscriptionCatalogUrl"
+    const val SUBSCRIPTION_CATALOG_CHECK_INTERVAL_HOURS = "subscriptionCatalogCheckIntervalHours"
+    const val SUBSCRIPTION_CATALOG_LAST_CHECK_AT = "subscriptionCatalogLastCheckAt"
+    const val SUBSCRIPTION_CATALOG_LAST_APPLIED_GENERATION = "subscriptionCatalogLastAppliedGeneration"
+    const val SUBSCRIPTION_CATALOG_LAST_APPLIED_HASH = "subscriptionCatalogLastAppliedHash"
+    const val SUBSCRIPTION_CATALOG_CHECK_NOW = "subscriptionCatalogCheckNow"
 
 }
 

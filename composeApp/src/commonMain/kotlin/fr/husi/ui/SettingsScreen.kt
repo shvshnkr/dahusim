@@ -1466,6 +1466,15 @@ fun SettingsScreen(
                     }
 
                     if (isExpertState) {
+                        subscriptionCatalogSettings { message ->
+                            scope.launch {
+                                snackbarState.showSnackbar(
+                                    message = message,
+                                    actionLabel = resolveRepository().getString(Res.string.ok),
+                                    duration = SnackbarDuration.Short,
+                                )
+                            }
+                        }
                         appUpdateSettings { message ->
                             scope.launch {
                                 snackbarState.showSnackbar(

@@ -18,6 +18,7 @@ import fr.husi.lib.R
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
+import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.runBlocking
@@ -86,6 +87,7 @@ actual object SubscriptionUpdater {
                     return Result.success()
                 }
             }
+            SubscriptionCatalogCoordinator.syncIfDue(manual = false)
 
             val outcome = SubscriptionAutoUpdateRunner.runWithResult(
                 mode = SubscriptionUpdateMode.BackgroundEco,

@@ -28,7 +28,6 @@ import fr.husi.fmt.shadowsocks.pluginToLocal
 import fr.husi.ktx.Logs
 import fr.husi.ktx.addPathSegments
 import fr.husi.ktx.applyDefaultValues
-import fr.husi.ktx.generateUserAgent
 import fr.husi.ktx.kxs
 import fr.husi.libcore.Libcore
 import fr.husi.libcore.URL
@@ -126,7 +125,7 @@ object OpenOnlineConfigUpdater : GroupUpdater() {
             if (certSha256 != null) pinnedSHA256(certSha256)
         }.newRequest().apply {
             setURL(baseLink.string)
-            setUserAgent(generateUserAgent(subscription.customUserAgent))
+            setUserAgent(SubscriptionFetchProfile.resolveUserAgent(subscription))
         }.execute()
 
         val oocResponse: OOCResponse = try {

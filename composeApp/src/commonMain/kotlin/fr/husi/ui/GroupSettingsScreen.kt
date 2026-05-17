@@ -45,6 +45,8 @@ import fr.husi.compose.TextButton
 import fr.husi.compose.UIntegerTextField
 import fr.husi.compose.withNavigation
 import fr.husi.database.SagerDatabase
+import fr.husi.group.SubscriptionFetchProfile
+import fr.husi.group.SubscriptionSourceKind
 import fr.husi.ktx.USER_AGENT
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.contentOrUnset
@@ -99,6 +101,15 @@ import fr.husi.resources.security
 import fr.husi.resources.sip008
 import fr.husi.resources.ssh_auth_type_none
 import fr.husi.resources.subscription
+import fr.husi.resources.subscription_fetch_profile
+import fr.husi.resources.subscription_fetch_profile_custom
+import fr.husi.resources.subscription_fetch_profile_default
+import fr.husi.resources.subscription_fetch_profile_happ
+import fr.husi.resources.subscription_managed_by_remote
+import fr.husi.resources.subscription_source_id
+import fr.husi.resources.subscription_source_kind
+import fr.husi.resources.subscription_source_kind_github
+import fr.husi.resources.subscription_source_kind_web
 import fr.husi.resources.subscription_settings
 import fr.husi.resources.subscription_type
 import fr.husi.resources.subscription_user_agent
@@ -112,6 +123,7 @@ import io.github.oikvpqya.compose.fastscroller.rememberScrollbarAdapter
 import kotlinx.coroutines.runBlocking
 import me.zhanghai.compose.preference.ListPreference
 import me.zhanghai.compose.preference.ListPreferenceType
+import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import me.zhanghai.compose.preference.SwitchPreference
 import me.zhanghai.compose.preference.TextFieldPreference
@@ -425,6 +437,64 @@ private fun LazyListScope.groupSettings(
                 },
             )
         }
+        fun sourceKind(kind: Int) = when (kind) {
+            SubscriptionSourceKind.GITHUB -> Res.string.subscription_source_kind_github
+            else -> Res.string.subscription_source_kind_web
+        }
+        item("subscription_source_kind", PreferenceType.TEXT_FIELD) {
+            Preference(
+                title = { Text(stringResource(Res.string.subscription_source_kind)) },
+                icon = { Icon(vectorResource(Res.drawable.public_icon), null) },
+                summary = { Text(stringResource(sourceKind(uiState.subscriptionSourceKind))) },
+            )
+        }
+        item("subscription_source_id", PreferenceType.TEXT_FIELD) {
+            Preference(
+                title = { Text(stringResource(Res.string.subscription_source_id)) },
+                icon = { Icon(vectorResource(Res.drawable.link), null) },
+                summary = {
+                    val text = uiState.subscriptionSourceId.blankAsNull()
+                        ?: stringResource(Res.string.not_set)
+                    Text(text)
+                },
+            )
+        }
+        item("subscription_managed_by_remote", PreferenceType.TEXT_FIELD) {
+            Preference(
+                title = { Text(stringResource(Res.string.subscription_managed_by_remote)) },
+                icon = { Icon(vectorResource(Res.drawable.security), null) },
+                summary = {
+                    Text(
+                        if (uiState.subscriptionManagedByRemote) {
+                            stringResource(Res.string.ok)
+                        } else {
+                            stringResource(Res.string.no)
+                        },
+                    )
+                },
+            )
+        }
+        fun fetchProfile(profile: Int) = when (profile) {
+            SubscriptionFetchProfile.HAPP -> Res.string.subscription_fetch_profile_happ
+            SubscriptionFetchProfile.CUSTOM -> Res.string.subscription_fetch_profile_custom
+            else -> Res.string.subscription_fetch_profile_default
+        }
+        item("subscription_fetch_profile", PreferenceType.LIST) {
+            ListPreference(
+                value = uiState.subscriptionFetchProfile,
+                onValueChange = { viewModel.setSubscriptionFetchProfile(it) },
+                values = listOf(
+                    SubscriptionFetchProfile.DEFAULT,
+                    SubscriptionFetchProfile.HAPP,
+                    SubscriptionFetchProfile.CUSTOM,
+                ),
+                title = { Text(stringResource(Res.string.subscription_fetch_profile)) },
+                icon = { Icon(vectorResource(Res.drawable.grid_3x3), null) },
+                summary = { Text(stringResource(fetchProfile(uiState.subscriptionFetchProfile))) },
+                type = ListPreferenceType.DROPDOWN_MENU,
+                valueToText = { AnnotatedString(stringResource(fetchProfile(it))) },
+            )
+        }
         val isOOCv1 = uiState.subscriptionType == SubscriptionType.OOCv1
         if (isOOCv1) {
             item("subscription_token", PreferenceType.TEXT_FIELD) {
@@ -488,9 +558,16 @@ private fun LazyListScope.groupSettings(
                 onValueChange = { viewModel.setSubscriptionUserAgent(it) },
                 title = { Text(stringResource(Res.string.subscription_user_agent)) },
                 textToValue = { it },
+                enabled = uiState.subscriptionFetchProfile == SubscriptionFetchProfile.CUSTOM,
                 icon = { Icon(vectorResource(Res.drawable.grid_3x3), null) },
                 summary = {
-                    val text = uiState.subscriptionUserAgent.blankAsNull() ?: USER_AGENT
+                    val text = when (uiState.subscriptionFetchProfile) {
+                        SubscriptionFetchProfile.HAPP -> "happ/2.9.0"
+                        SubscriptionFetchProfile.CUSTOM -> {
+                            uiState.subscriptionUserAgent.blankAsNull() ?: USER_AGENT
+                        }
+                        else -> USER_AGENT
+                    }
                     Text(text)
                 },
                 valueToText = { it },

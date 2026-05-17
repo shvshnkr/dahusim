@@ -11,6 +11,8 @@ import fr.husi.database.GroupManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
+import fr.husi.group.SubscriptionFetchProfile
+import fr.husi.group.SubscriptionSourceKind
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.runOnIoDispatcher
@@ -35,6 +37,10 @@ internal data class GroupSettingsUiState(
     val subscriptionType: Int = SubscriptionType.RAW,
     val subscriptionToken: String = "",
     val subscriptionLink: String = "",
+    val subscriptionSourceKind: Int = SubscriptionSourceKind.WEB,
+    val subscriptionSourceId: String = "",
+    val subscriptionManagedByRemote: Boolean = false,
+    val subscriptionFetchProfile: Int = SubscriptionFetchProfile.DEFAULT,
     val subscriptionForceResolve: Boolean = false,
     val subscriptionDeduplication: Boolean = false,
     val subscriptionFilterNotRegex: String = "",
@@ -90,6 +96,10 @@ internal class GroupSettingsViewModel(
                 subscriptionType = subscription.type,
                 subscriptionToken = subscription.token,
                 subscriptionLink = subscription.link,
+                subscriptionSourceKind = SubscriptionSourceKind.inferFromLink(subscription.link),
+                subscriptionSourceId = subscription.sourceId,
+                subscriptionManagedByRemote = subscription.managedByRemote,
+                subscriptionFetchProfile = subscription.fetchProfile,
                 subscriptionForceResolve = subscription.forceResolve,
                 subscriptionDeduplication = subscription.deduplication,
                 subscriptionFilterNotRegex = subscription.filterNotRegex,
@@ -140,6 +150,7 @@ internal class GroupSettingsViewModel(
                 type = state.subscriptionType
                 token = state.subscriptionToken
                 link = state.subscriptionLink
+                fetchProfile = state.subscriptionFetchProfile
                 forceResolve = state.subscriptionForceResolve
                 deduplication = state.subscriptionDeduplication
                 filterNotRegex = state.subscriptionFilterNotRegex
@@ -195,7 +206,16 @@ internal class GroupSettingsViewModel(
 
     fun setSubscriptionLink(subscriptionLink: String) = viewModelScope.launch {
         _uiState.update {
-            it.copy(subscriptionLink = subscriptionLink)
+            it.copy(
+                subscriptionLink = subscriptionLink,
+                subscriptionSourceKind = SubscriptionSourceKind.inferFromLink(subscriptionLink),
+            )
+        }
+    }
+
+    fun setSubscriptionFetchProfile(subscriptionFetchProfile: Int) = viewModelScope.launch {
+        _uiState.update {
+            it.copy(subscriptionFetchProfile = subscriptionFetchProfile)
         }
     }
 
