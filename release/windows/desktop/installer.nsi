@@ -41,6 +41,7 @@ Var CheckboxDesktopShortcut
 Var CheckboxStartMenuShortcut
 Var InstallTemurin21
 Var CheckboxInstallJava
+Var HasInstalledJava
 
 ; --- Pages ---
 !insertmacro MUI_PAGE_LICENSE "__HUSI_LICENSE_FILE__"
@@ -74,22 +75,30 @@ LangString UninstallSectionName ${LANG_ENGLISH} "Uninstall"
 LangString UninstallSectionName ${LANG_SIMPCHINESE} "卸载"
 LangString UninstallShortcutName ${LANG_ENGLISH} "Uninstall"
 LangString UninstallShortcutName ${LANG_SIMPCHINESE} "卸载"
-LangString JavaRuntimePageTitle ${LANG_ENGLISH} "Java 21 runtime"
-LangString JavaRuntimePageTitle ${LANG_SIMPCHINESE} "Java 21 运行环境"
-LangString JavaRuntimePageSubtitle ${LANG_ENGLISH} "Optional: install Eclipse Temurin JDK 21 if you do not have Java 21 yet."
-LangString JavaRuntimePageSubtitle ${LANG_SIMPCHINESE} "可选：若尚未安装 Java 21，可安装 Eclipse Temurin JDK 21。"
-LangString JavaRuntimePageDescription ${LANG_ENGLISH} "The application needs Java 21 or newer. Temurin is installed only if you tick the box below (silent MSI, /qn); it does not replace or override your existing JAVA_HOME unless you choose this option."
-LangString JavaRuntimePageDescription ${LANG_SIMPCHINESE} "本应用需要 Java 21 或更高版本。仅当您勾选下方选项时才安装 Temurin（静默 MSI /qn）；不会替换您现有的 JAVA_HOME，除非您主动选择。"
-LangString InstallTemurin21Label ${LANG_ENGLISH} "Download and install Eclipse Temurin JDK 21 (optional, explicit opt-in; silent MSI /qn; network + UAC may apply)"
-LangString InstallTemurin21Label ${LANG_SIMPCHINESE} "下载并安装 Eclipse Temurin JDK 21（可选，需手动勾选；静默 MSI /qn；联网且可能 UAC）"
+LangString JavaRuntimePageTitle ${LANG_ENGLISH} "Java runtime"
+LangString JavaRuntimePageTitle ${LANG_SIMPCHINESE} "Java 运行环境"
+LangString JavaRuntimePageSubtitle ${LANG_ENGLISH} "Optional: install a Java runtime if it is not installed yet."
+LangString JavaRuntimePageSubtitle ${LANG_SIMPCHINESE} "可选：若尚未安装 Java 运行环境，可在此安装。"
+LangString JavaRuntimePageDescription ${LANG_ENGLISH} "If Java is already installed, you can keep using it. If not, you may tick the box below to install a recommended Java 21 runtime (silent MSI, /qn). This does not override your existing JAVA_HOME unless you explicitly choose this option."
+LangString JavaRuntimePageDescription ${LANG_SIMPCHINESE} "若系统已安装 Java，可继续直接使用。若未安装，可勾选下方选项安装推荐的 Java 21 运行环境（静默 MSI /qn）。除非您主动选择，此操作不会覆盖现有 JAVA_HOME。"
+LangString InstallTemurin21Label ${LANG_ENGLISH} "Download and install a recommended Java 21 runtime (optional, explicit opt-in; silent MSI /qn; network + UAC may apply)"
+LangString InstallTemurin21Label ${LANG_SIMPCHINESE} "下载并安装推荐的 Java 21 运行环境（可选，需手动勾选；静默 MSI /qn；联网且可能 UAC）"
 
 Function .onInit
     StrCpy $CreateDesktopShortcut ${BST_CHECKED}
     StrCpy $CreateStartMenuShortcut ${BST_CHECKED}
     StrCpy $InstallTemurin21 ${BST_UNCHECKED}
+    StrCpy $HasInstalledJava 0
+    Call detectInstalledJava
+    IfSilent init_done
+    StrCmp $HasInstalledJava 1 init_done
+    StrCpy $InstallTemurin21 ${BST_CHECKED}
+init_done:
 FunctionEnd
 
 Function javaRuntimePageCreate
+    StrCmp $HasInstalledJava 1 0 +2
+    Abort
     !insertmacro MUI_HEADER_TEXT "$(JavaRuntimePageTitle)" "$(JavaRuntimePageSubtitle)"
 
     nsDialogs::Create 1018
@@ -109,6 +118,17 @@ FunctionEnd
 
 Function javaRuntimePageLeave
     ${NSD_GetState} $CheckboxInstallJava $InstallTemurin21
+FunctionEnd
+
+Function detectInstalledJava
+    ; Detect any installed Java runtime from PATH or standard JavaSoft registry roots.
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference=''SilentlyContinue''; $ok=$false; if(Get-Command java -ErrorAction SilentlyContinue){ $ok=$true }; if(-not $ok){ $roots=@(''HKLM:\SOFTWARE\JavaSoft\JDK'',''HKLM:\SOFTWARE\WOW6432Node\JavaSoft\JDK'',''HKCU:\SOFTWARE\JavaSoft\JDK'',''HKCU:\SOFTWARE\WOW6432Node\JavaSoft\JDK'',''HKLM:\SOFTWARE\JavaSoft\JRE'',''HKLM:\SOFTWARE\WOW6432Node\JavaSoft\JRE'',''HKCU:\SOFTWARE\JavaSoft\JRE'',''HKCU:\SOFTWARE\WOW6432Node\JavaSoft\JRE''); foreach($r in $roots){ $cv=(Get-ItemProperty -Path $r -Name CurrentVersion -ErrorAction SilentlyContinue).CurrentVersion; if($cv){ $ok=$true; break } } }; if($ok){ exit 0 } else { exit 1 }"'
+    Pop $0
+    StrCmp $0 0 0 detect_no
+    StrCpy $HasInstalledJava 1
+    Return
+detect_no:
+    StrCpy $HasInstalledJava 0
 FunctionEnd
 
 Section "-TemurinJDK21"
