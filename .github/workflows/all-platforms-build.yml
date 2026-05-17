@@ -1,7 +1,7 @@
 name: All platforms (auto pre-release)
 
 # After pushes that touch app/runtime code: Android APK + Linux + Windows desktop pre-releases.
-# Skips docs-only, workflow-only, and other non-app commits (positive path list).
+# Skips docs-only and workflow-only commits (positive path list). Manual: workflow_dispatch.
 on:
   push:
     branches: [main]
@@ -26,6 +26,20 @@ on:
       - "run"
       - "Makefile"
       - ".github/CRONET_GO_VERSION"
+  workflow_dispatch:
+    inputs:
+      android:
+        description: Build Android pre-release
+        type: boolean
+        default: true
+      linux_desktop:
+        description: Build Linux desktop pre-release
+        type: boolean
+        default: true
+      windows_desktop:
+        description: Build Windows desktop pre-release
+        type: boolean
+        default: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -42,17 +56,17 @@ jobs:
     name: Detect changed platform scopes
     runs-on: ubuntu-latest
     outputs:
-      shared: ${{ steps.filter.outputs.shared }}
-      android: ${{ steps.filter.outputs.android }}
-      desktop: ${{ steps.filter.outputs.desktop }}
-      linux: ${{ steps.filter.outputs.linux }}
-      windows: ${{ steps.filter.outputs.windows }}
+      run_android: ${{ steps.resolve.outputs.run_android }}
+      run_linux: ${{ steps.resolve.outputs.run_linux }}
+      run_windows: ${{ steps.resolve.outputs.run_windows }}
+      trigger: ${{ steps.resolve.outputs.trigger }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
 
       - name: Path filters
+        if: github.event_name == 'push'
         id: filter
         uses: dorny/paths-filter@v3
         with:
@@ -91,24 +105,64 @@ jobs:
               - "buildScript/ci/prepare_windows_jdk_jni_include.sh"
               - "buildScript/ci/verify_temurin21_urls.sh"
 
+      - name: Resolve platform selection
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "trigger=manual" >> "$GITHUB_OUTPUT"
+            echo "run_android=${{ inputs.android }}" >> "$GITHUB_OUTPUT"
+            echo "run_linux=${{ inputs.linux_desktop }}" >> "$GITHUB_OUTPUT"
+            echo "run_windows=${{ inputs.windows_desktop }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "trigger=push" >> "$GITHUB_OUTPUT"
+
+          shared="${{ steps.filter.outputs.shared }}"
+          android="${{ steps.filter.outputs.android }}"
+          desktop="${{ steps.filter.outputs.desktop }}"
+          linux="${{ steps.filter.outputs.linux }}"
+          windows="${{ steps.filter.outputs.windows }}"
+
+          run_android=false
+          run_linux=false
+          run_windows=false
+
+          if [ "$shared" = "true" ] || [ "$android" = "true" ]; then
+            run_android=true
+          fi
+          if [ "$shared" = "true" ] || [ "$desktop" = "true" ] || [ "$linux" = "true" ]; then
+            run_linux=true
+          fi
+          if [ "$shared" = "true" ] || [ "$desktop" = "true" ] || [ "$windows" = "true" ]; then
+            run_windows=true
+          fi
+
+          echo "run_android=$run_android" >> "$GITHUB_OUTPUT"
+          echo "run_linux=$run_linux" >> "$GITHUB_OUTPUT"
+          echo "run_windows=$run_windows" >> "$GITHUB_OUTPUT"
+
   android:
     name: Android APK
     needs: changes
-    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.android == 'true' }}
+    if: ${{ needs.changes.outputs.run_android == 'true' }}
     uses: ./.github/workflows/build.yml
     secrets: inherit
 
   linux-desktop:
     name: Linux desktop
     needs: changes
-    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.desktop == 'true' || needs.changes.outputs.linux == 'true' }}
+    if: ${{ needs.changes.outputs.run_linux == 'true' }}
     uses: ./.github/workflows/desktop-linux-test.yml
     secrets: inherit
 
   windows-desktop:
     name: Windows desktop
     needs: changes
-    if: ${{ needs.changes.outputs.shared == 'true' || needs.changes.outputs.desktop == 'true' || needs.changes.outputs.windows == 'true' }}
+    if: ${{ needs.changes.outputs.run_windows == 'true' }}
     uses: ./.github/workflows/desktop-windows-test.yml
     secrets: inherit
 
@@ -119,16 +173,16 @@ jobs:
     if: ${{ always() }}
     steps:
       - name: Publish selection and release metadata
+        shell: bash
         run: |
           {
             echo "## All-platforms selection"
             echo
+            echo "- trigger: \`${{ needs.changes.outputs.trigger }}\`"
             echo "- run_id: \`${{ github.run_id }}\`"
-            echo "- shared changes: \`${{ needs.changes.outputs.shared }}\`"
-            echo "- android changes: \`${{ needs.changes.outputs.android }}\`"
-            echo "- desktop changes: \`${{ needs.changes.outputs.desktop }}\`"
-            echo "- linux-only changes: \`${{ needs.changes.outputs.linux }}\`"
-            echo "- windows-only changes: \`${{ needs.changes.outputs.windows }}\`"
+            echo "- run_android: \`${{ needs.changes.outputs.run_android }}\`"
+            echo "- run_linux: \`${{ needs.changes.outputs.run_linux }}\`"
+            echo "- run_windows: \`${{ needs.changes.outputs.run_windows }}\`"
             echo
             echo "## Job results"
             echo
@@ -141,4 +195,8 @@ jobs:
             echo "- android tag: \`rolling-${{ github.run_id }}\`"
             echo "- linux tag: \`linux-desktop-linux-amd64-${{ github.run_id }}\`"
             echo "- windows tag: \`windows-desktop-windows-amd64-${{ github.run_id }}\`"
+            echo
+            if [ "${{ needs.changes.outputs.trigger }}" = "manual" ]; then
+              echo "Manual run: Actions → **Run workflow** on this file."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
