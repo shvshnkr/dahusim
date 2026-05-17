@@ -16,6 +16,16 @@ open class ComposeActivity : PrivacyModeActivity() {
         UiActivityTracker.attach(this)
     }
 
+    override fun onResume() {
+        super.onResume()
+        UiActivityTracker.onResume(this)
+    }
+
+    override fun onPause() {
+        UiActivityTracker.onPause(this)
+        super.onPause()
+    }
+
     override fun onStop() {
         UiActivityTracker.detach(this)
         super.onStop()

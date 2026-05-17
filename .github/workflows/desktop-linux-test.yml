@@ -5,9 +5,10 @@ name: Linux desktop (linux/amd64, test channel)
 permissions:
   contents: write
 
-# Temporarily manual-only: run from Actions tab when you want Linux packages pre-release.
+# Manual: Actions tab. Auto: all-platforms-build.yml on push (app paths only).
 on:
   workflow_dispatch:
+  workflow_call:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

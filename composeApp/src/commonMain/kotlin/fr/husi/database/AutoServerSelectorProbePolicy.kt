@@ -7,6 +7,21 @@ internal object AutoServerSelectorProbePolicy {
 
     private const val FULL_PROBE_INTERVAL_MS = 18L * 60 * 60 * 1000
     private const val LAST_KNOWN_GOOD_URL_STALE_MS = 48L * 60 * 60 * 1000
+    private const val PROXY_SET_CHANGE_GRACE_MS = 3L * 60 * 1000
+
+    fun useCompactReprobeForProxySetChange(
+        proxies: List<ProxyEntity>,
+        whitelistBuiltinOnly: Boolean,
+        networkHandoff: Boolean,
+    ): Boolean {
+        if (networkHandoff) return false
+        if (DataStore.autoSelectLastProbeWhitelistOnly != whitelistBuiltinOnly) return false
+        val hash = computeProxyIdSetHash(proxies)
+        val storedHash = DataStore.autoSelectProxyIdSetHash
+        if (storedHash == 0L || hash == storedHash) return false
+        val lastProbeAt = DataStore.autoSelectLastFullProbeAt
+        return lastProbeAt > 0L && System.currentTimeMillis() - lastProbeAt < PROXY_SET_CHANGE_GRACE_MS
+    }
 
     fun computeProxyIdSetHash(proxies: Collection<ProxyEntity>): Long {
         var hash = 1L
@@ -46,7 +61,11 @@ internal object AutoServerSelectorProbePolicy {
         }
         if (!networkHandoff) {
             if (storedHash != 0L && hash != storedHash) {
-                reasons += "proxy_set_changed"
+                val recentProbe = lastProbeAt > 0L && now - lastProbeAt < PROXY_SET_CHANGE_GRACE_MS
+                val wlModeUnchanged = DataStore.autoSelectLastProbeWhitelistOnly == whitelistBuiltinOnly
+                if (!(recentProbe && wlModeUnchanged)) {
+                    reasons += "proxy_set_changed"
+                }
             }
             if (DataStore.autoSelectLastProbeWhitelistOnly && !whitelistBuiltinOnly) {
                 reasons += "wl_to_open"

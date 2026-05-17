@@ -1,23 +1,8 @@
 name: JDK matrix (composeApp desktop tests)
 
-# Manual run always. Push to main: only paths that affect composeApp desktop / libcore / Gradle.
+# Manual only (JDK 21–26 matrix). App pre-releases: workflow all-platforms-build.yml on push.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/jdk-matrix-test.yml"
-      - "composeApp/**"
-      - "library/**"
-      - "buildSrc/**"
-      - "gradle/**"
-      - "gradle.properties"
-      - "settings.gradle.kts"
-      - "build.gradle.kts"
-      - "repositories.gradle.kts"
-      - "buildScript/**"
-      - "libcore/**"
-      - "husi.properties"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

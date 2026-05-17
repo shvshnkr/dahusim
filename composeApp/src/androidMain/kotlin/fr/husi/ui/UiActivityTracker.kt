@@ -15,6 +15,9 @@ object UiActivityTracker {
     @Volatile
     private var activityRef: WeakReference<Activity>? = null
 
+    @Volatile
+    private var resumed = false
+
     fun attach(activity: Activity) {
         activityRef = WeakReference(activity)
         simpleModeLog("SimpleMode", "H23 ui_activity_attach name=${activity.javaClass.simpleName}")
@@ -24,7 +27,24 @@ object UiActivityTracker {
         simpleModeLog("SimpleMode", "H23 ui_activity_detach name=${activity.javaClass.simpleName}")
         if (activityRef?.get() === activity) {
             activityRef = null
+            resumed = false
         }
+    }
+
+    fun onResume(activity: Activity) {
+        activityRef = WeakReference(activity)
+        resumed = true
+    }
+
+    fun onPause(activity: Activity) {
+        if (activityRef?.get() === activity) {
+            resumed = false
+        }
+    }
+
+    fun isResumedForVpnPermission(): Boolean {
+        val activity = activityRef?.get() ?: return false
+        return resumed && !activity.isFinishing
     }
 
     /**

@@ -1,0 +1,50 @@
+name: All platforms (auto pre-release)
+
+# After pushes that touch app/runtime code: Android APK + Linux + Windows desktop pre-releases.
+# Skips docs-only, workflow-only, and other non-app commits (positive path list).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "androidApp/**"
+      - "composeApp/**"
+      - "library/**"
+      - "buildSrc/**"
+      - "gradle/**"
+      - "gradle.properties"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "repositories.gradle.kts"
+      - "buildScript/**"
+      - "libcore/**"
+      - "husi.properties"
+      - "plugin/**"
+      - "run"
+      - "Makefile"
+      - ".github/CRONET_GO_VERSION"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: all-platforms-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android APK
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  linux-desktop:
+    name: Linux desktop
+    uses: ./.github/workflows/desktop-linux-test.yml
+    secrets: inherit
+
+  windows-desktop:
+    name: Windows desktop
+    uses: ./.github/workflows/desktop-windows-test.yml
+    secrets: inherit

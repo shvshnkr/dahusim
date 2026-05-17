@@ -40,7 +40,7 @@ internal object SimpleModeVpnCoordinator {
 
     fun cancelAdaptation() {
         adaptGeneration.incrementAndGet()
-        AutoServerSelector.cancelInFlightPrepare()
+        AutoServerSelector.cancelAdaptPrepare("adapt")
         adaptJob?.cancel()
         adaptJob = null
     }
@@ -49,7 +49,7 @@ internal object SimpleModeVpnCoordinator {
         if (!DataStore.simpleMode) return
         if (adaptJob?.isActive == true) {
             adaptGeneration.incrementAndGet()
-            AutoServerSelector.cancelInFlightPrepare()
+            AutoServerSelector.cancelAdaptPrepare("adapt_supersede")
         }
         adaptJob?.cancel()
         adaptJob = adaptScope.launch {
@@ -91,7 +91,7 @@ internal object SimpleModeVpnCoordinator {
             "H30 wl_post_connect_recover start failedProfileId=$failedProfileId",
         )
         val recoverGen = adaptGeneration.incrementAndGet()
-        AutoServerSelector.cancelInFlightPrepare()
+        AutoServerSelector.cancelAdaptPrepare("post_connect_recover")
         if (applyReselectAndRestart("post_connect_unhealthy", whitelistOnly, failedProfileId, recoverGen)) {
             return true
         }
@@ -101,6 +101,10 @@ internal object SimpleModeVpnCoordinator {
                 "SimpleMode",
                 "H30 wl_post_connect_fallback failedProfileId=$failedProfileId nextId=$fallback",
             )
+            if (!DataStore.simpleMode) {
+                simpleModeLog("SimpleMode", "H30 wl_adapt_reload_skipped reason=simple_mode_off")
+                return true
+            }
             ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()
             return true
         }
@@ -131,7 +135,7 @@ internal object SimpleModeVpnCoordinator {
             requestReloadOnChange = false,
         )
         if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) return
-        AutoServerSelector.cancelInFlightPrepare()
+        AutoServerSelector.cancelAdaptPrepare("adapt_locked")
         val previousId = DataStore.selectedProxy
         applyReselectAndRestart(reason, reachability.whitelistOnly, previousId, adaptGen)
     }
@@ -203,6 +207,11 @@ internal object SimpleModeVpnCoordinator {
                     "SimpleMode",
                     "H30 wl_adapt_restart reason=$reason wl=$whitelistOnly prev=$previousProfileId new=$newId gen=$adaptGen",
                 )
+                if (!DataStore.simpleMode) {
+                    simpleModeLog("SimpleMode", "H30 wl_adapt_reload_skipped reason=simple_mode_off")
+                    DataStore.simpleModeActivity = ""
+                    return true
+                }
                 if (!DataStore.serviceState.connected) {
                     return true
                 }

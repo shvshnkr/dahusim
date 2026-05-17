@@ -31,6 +31,13 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
+enum class PrepareOwner {
+    CONNECT,
+    ADAPT,
+}
+
+private data class PrepareSession(val owner: PrepareOwner, val id: Int)
+
 sealed class PrepareForConnectResult {
     data class Success(val profileId: Long) : PrepareForConnectResult()
     data object NoProfiles : PrepareForConnectResult()
@@ -50,19 +57,50 @@ object AutoServerSelector {
     private var probeUiActive = false
 
     private val prepareMutex = Mutex()
-    private val prepareGeneration = AtomicInteger(0)
+    private val connectPrepareGeneration = AtomicInteger(0)
+    private val adaptPrepareGeneration = AtomicInteger(0)
     private val recentProbeFailures = ConcurrentHashMap<Long, Long>()
 
-    /** Abort an in-flight [prepareForConnect] (e.g. superseded by user connect or handoff). */
-    fun cancelInFlightPrepare() {
-        prepareGeneration.incrementAndGet()
-        simpleModeLog("SimpleMode", "H31 prepare_cancel_requested")
+    fun cancelConnectPrepare(reason: String = "connect") {
+        connectPrepareGeneration.incrementAndGet()
+        simpleModeLog("SimpleMode", "H31 prepare_cancel_requested reason=$reason owner=connect")
     }
 
-    private fun ensurePrepareCurrent(generation: Int) {
-        if (generation != prepareGeneration.get()) {
+    fun cancelAdaptPrepare(reason: String = "adapt") {
+        adaptPrepareGeneration.incrementAndGet()
+        simpleModeLog("SimpleMode", "H31 prepare_cancel_requested reason=$reason owner=adapt")
+    }
+
+    /** Cancels both connect and adaptation prepares (legacy callers). */
+    fun cancelInFlightPrepare(reason: String = "legacy") {
+        cancelAdaptPrepare(reason)
+        cancelConnectPrepare(reason)
+    }
+
+    private fun newPrepareSession(owner: PrepareOwner): PrepareSession {
+        val id = when (owner) {
+            PrepareOwner.CONNECT -> connectPrepareGeneration.incrementAndGet()
+            PrepareOwner.ADAPT -> adaptPrepareGeneration.incrementAndGet()
+        }
+        return PrepareSession(owner, id)
+    }
+
+    private fun ensurePrepareCurrent(session: PrepareSession) {
+        val current = when (session.owner) {
+            PrepareOwner.CONNECT -> connectPrepareGeneration.get()
+            PrepareOwner.ADAPT -> adaptPrepareGeneration.get()
+        }
+        if (session.id != current) {
             throw CancellationException("prepareForConnect superseded")
         }
+    }
+
+    private fun isPrepareCurrent(session: PrepareSession): Boolean {
+        val current = when (session.owner) {
+            PrepareOwner.CONNECT -> connectPrepareGeneration.get()
+            PrepareOwner.ADAPT -> adaptPrepareGeneration.get()
+        }
+        return session.id == current
     }
 
     /** Stale [prepareForConnect] runs must not overwrite UI after tunnel is up, except live probe progress. */
@@ -103,17 +141,23 @@ object AutoServerSelector {
         return (priority + rest).distinctBy { it.id }
     }
 
-    suspend fun prepareForConnect(networkHandoff: Boolean = false): PrepareForConnectResult {
-        val generation = prepareGeneration.incrementAndGet()
+    suspend fun prepareForConnect(
+        networkHandoff: Boolean = false,
+        owner: PrepareOwner = PrepareOwner.CONNECT,
+    ): PrepareForConnectResult {
+        val session = newPrepareSession(owner)
         return prepareMutex.withLock {
             probeUiActive = true
             try {
-                ensurePrepareCurrent(generation)
-                val result = prepareForConnectLocked(generation, networkHandoff)
-                ensurePrepareCurrent(generation)
+                ensurePrepareCurrent(session)
+                val result = prepareForConnectLocked(session, networkHandoff)
+                ensurePrepareCurrent(session)
                 result
             } catch (e: CancellationException) {
-                simpleModeLog("SimpleMode", "H31 prepare_aborted gen=$generation")
+                simpleModeLog(
+                    "SimpleMode",
+                    "H31 prepare_aborted gen=${session.id} owner=${session.owner.name.lowercase()}",
+                )
                 throw e
             } finally {
                 probeUiActive = false
@@ -122,7 +166,7 @@ object AutoServerSelector {
     }
 
     private suspend fun prepareForConnectLocked(
-        generation: Int,
+        session: PrepareSession,
         networkHandoff: Boolean,
     ): PrepareForConnectResult {
         val selectedBefore = DataStore.selectedProxy
@@ -162,18 +206,30 @@ object AutoServerSelector {
                 "subsWlMarked=${subscriptionWhitelistMarked.size} pool=${proxies.size} " +
                 "priorityFirst=${priorityFirstIds.size}",
         )
+        val subscriptionCompactReprobe = AutoServerSelectorProbePolicy.useCompactReprobeForProxySetChange(
+            proxies = proxies,
+            whitelistBuiltinOnly = whitelistBuiltinOnly,
+            networkHandoff = networkHandoff,
+        )
+        val effectiveHandoff = networkHandoff || subscriptionCompactReprobe
         val forceFullProbeReason = AutoServerSelectorProbePolicy.forceFullProbeReason(
             proxies = proxies,
             whitelistBuiltinOnly = whitelistBuiltinOnly,
             networkHandoff = networkHandoff,
         )
-        if (!networkHandoff && forceFullProbeReason?.contains("proxy_set_changed") != true &&
+        if (subscriptionCompactReprobe) {
+            simpleModeLog(
+                "SimpleMode",
+                "H25 compact_reprobe_proxy_set_changed pool=${proxies.size} graceMs=180000",
+            )
+        }
+        if (!effectiveHandoff && forceFullProbeReason?.contains("proxy_set_changed") != true &&
             forceFullProbeReason?.contains("wl_to_open") != true
         ) {
             tryLastKnownGoodFastPath(
                 proxies = proxies,
                 priorityFirstIds = priorityFirstIds,
-                generation = generation,
+                session = session,
                 selectedBefore = selectedBefore,
             )?.let { best ->
                 simpleModeLog("SimpleMode", "H26 lkg_fast_path best=$best reason=url_verified")
@@ -212,38 +268,38 @@ object AutoServerSelector {
                 it.status == ProxyEntity.STATUS_UNAVAILABLE ||
                 it.status == ProxyEntity.STATUS_INVALID
         }
-        val shouldQuickProbe = networkHandoff ||
+        val shouldQuickProbe = effectiveHandoff ||
             initialCount == proxies.size ||
             availableCount == 0 ||
             forceFullProbeReason != null
         if (forceFullProbeReason != null) {
             simpleModeLog(
                 "SimpleMode",
-                "H25 full_probe_forced reason=$forceFullProbeReason handoff=$networkHandoff " +
+                "H25 full_probe_forced reason=$forceFullProbeReason handoff=$effectiveHandoff " +
                     "initial=$initialCount avail=$availableCount",
             )
-        } else if (networkHandoff) {
+        } else if (effectiveHandoff) {
             simpleModeLog(
                 "SimpleMode",
                 "H33 handoff_probe_compact initial=$initialCount avail=$availableCount",
             )
         }
-        val urlTestCap = if (networkHandoff) {
+        val urlTestCap = if (effectiveHandoff) {
             12
         } else {
             (probeConcurrency(whitelistBuiltinOnly) * 2).coerceIn(12, 32)
         }
-        val extraUrlTestByTcp = if (networkHandoff) 4 else 8
+        val extraUrlTestByTcp = if (effectiveHandoff) 4 else 8
         val parallelUrlPoolSize = (urlTestCap + extraUrlTestByTcp).coerceAtMost(proxies.size)
-        val urlSupplementCap = if (networkHandoff) 6 else 10
-        val compactTcpProbe = whitelistBuiltinOnly || networkHandoff || proxies.size > OPEN_NET_TCP_PROBE_CAP
+        val urlSupplementCap = if (effectiveHandoff) 6 else 10
+        val compactTcpProbe = whitelistBuiltinOnly || effectiveHandoff || proxies.size > OPEN_NET_TCP_PROBE_CAP
         val tcpCap = if (whitelistBuiltinOnly) 128 else OPEN_NET_TCP_PROBE_CAP
         val tcpProbeTargets = if (compactTcpProbe) {
             buildCompactTcpProbePool(proxies, priorityFirstIds, maxTotal = tcpCap)
         } else {
             proxies
         }
-        ensurePrepareCurrent(generation)
+        ensurePrepareCurrent(session)
         val urlConcurrency = probeConcurrency(whitelistBuiltinOnly)
         val tcpConcurrency = tcpProbeConcurrency(whitelistBuiltinOnly)
 
@@ -262,11 +318,11 @@ object AutoServerSelector {
                 "SimpleMode",
                 "H14 quick_probe_started tcp=${tcpProbeTargets.size} pool=${proxies.size} " +
                     "parallel_url_pool=${parallelUrlPool.size} compactTcp=$compactTcpProbe " +
-                    "handoff=$networkHandoff tcpConc=$tcpConcurrency urlConc=$urlConcurrency",
+                    "handoff=$effectiveHandoff tcpConc=$tcpConcurrency urlConc=$urlConcurrency",
             )
             coroutineScope {
                 val tcpJob = async(Dispatchers.IO) {
-                    quickTcpProbe(tcpProbeTargets, tcpConcurrency, generation) { done, total ->
+                    quickTcpProbe(tcpProbeTargets, tcpConcurrency, session) { done, total ->
                         setSimpleModeActivity("Testing TCP $done/$total")
                     }
                 }
@@ -279,12 +335,12 @@ object AutoServerSelector {
                             "SimpleMode",
                             "H17 urltest_started candidates=${parallelUrlPool.size} baseCap=$urlTestCap extraTcp=$extraUrlTestByTcp mode=parallel_stratified",
                         )
-                        urlTestTopCandidates(parallelUrlPool, urlConcurrency, generation) { done, total ->
+                        urlTestTopCandidates(parallelUrlPool, urlConcurrency, session) { done, total ->
                             setSimpleModeActivity("Testing URL $done/$total")
                         }
                     }
                 }
-                ensurePrepareCurrent(generation)
+                ensurePrepareCurrent(session)
                 quickProbePings = tcpJob.await()
                 val quickProbeAlive = quickProbePings.size
                 val quickProbeHead = quickProbePings.entries
@@ -295,7 +351,7 @@ object AutoServerSelector {
                     "SimpleMode",
                     "H14 quick_probe_done alive=$quickProbeAlive tested=${tcpProbeTargets.size} best=$quickProbeHead",
                 )
-                ensurePrepareCurrent(generation)
+                ensurePrepareCurrent(session)
                 var merged = urlJob.await().toMutableMap()
                 val preUrlSorted = proxies.sortedWith(
                     compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
@@ -332,7 +388,7 @@ object AutoServerSelector {
                         "H17 urltest_supplement candidates=${missing.size} cap=$urlSupplementCap",
                     )
                     merged.putAll(
-                        urlTestTopCandidates(missing, urlConcurrency, generation) { done, total ->
+                        urlTestTopCandidates(missing, urlConcurrency, session) { done, total ->
                             setSimpleModeActivity("Testing URL $done/$total")
                         },
                     )
@@ -361,7 +417,7 @@ object AutoServerSelector {
                     "SimpleMode",
                     "H17 urltest_started candidates=${urlTestCandidates.size} baseCap=$urlTestCap extraTcp=$extraUrlTestByTcp mode=sequential",
                 )
-                urlTestTopCandidates(urlTestCandidates, urlConcurrency, generation) { done, total ->
+                urlTestTopCandidates(urlTestCandidates, urlConcurrency, session) { done, total ->
                     setSimpleModeActivity("Testing URL $done/$total")
                 }
             } else {
@@ -503,7 +559,7 @@ object AutoServerSelector {
             "SimpleMode",
             "H4 queue_prepared before=$selectedBefore best=$best size=${ranked.size} avail=$availableCount initial=$initialCount bad=$badCount probeAlive=$quickProbeAlive urlOk=${urlTestDelays.size} head=$rankedHead",
         )
-        if (shouldQuickProbe && !networkHandoff) {
+        if (shouldQuickProbe && !effectiveHandoff) {
             AutoServerSelectorProbePolicy.recordFullProbe(proxies, whitelistBuiltinOnly)
         }
         return PrepareForConnectResult.Success(best)
@@ -615,7 +671,7 @@ object AutoServerSelector {
     private suspend fun tryLastKnownGoodFastPath(
         proxies: List<ProxyEntity>,
         priorityFirstIds: Set<Long>,
-        generation: Int,
+        session: PrepareSession,
         selectedBefore: Long,
     ): Long? {
         val goodId = DataStore.autoSelectLastKnownGood
@@ -624,11 +680,11 @@ object AutoServerSelector {
         }
         val good = proxies.find { it.id == goodId } ?: return null
         if (isInFailureCooldown(goodId)) return null
-        ensurePrepareCurrent(generation)
+        ensurePrepareCurrent(session)
         setSimpleModeActivity("Verifying last server…")
         val lkgDelay = profileUrlTestDelay(good) ?: return null
         if (lkgDelay <= 0) return null
-        ensurePrepareCurrent(generation)
+        ensurePrepareCurrent(session)
         val urlPool = buildStratifiedUrlPool(
             proxies = listOf(good) + proxies.filter { it.id != goodId },
             cap = 12,
@@ -637,7 +693,7 @@ object AutoServerSelector {
         val urlDelays = if (urlPool.size <= 1) {
             mapOf(goodId to lkgDelay)
         } else {
-            urlTestTopCandidates(urlPool, probeConcurrency(false), generation)
+            urlTestTopCandidates(urlPool, probeConcurrency(false), session)
         }
         if (urlDelays[goodId] == null && urlDelays.isNotEmpty()) {
             val alt = urlDelays.minBy { it.value }.key
@@ -786,7 +842,7 @@ object AutoServerSelector {
     private suspend fun urlTestTopCandidates(
         candidates: List<ProxyEntity>,
         concurrency: Int,
-        generation: Int,
+        session: PrepareSession,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Map<Long, Int> = coroutineScope {
         val total = candidates.size
@@ -806,7 +862,7 @@ object AutoServerSelector {
         candidates.map { proxy ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
-                    if (generation != prepareGeneration.get() || !currentCoroutineContext().isActive) {
+                    if (!isPrepareCurrent(session) || !currentCoroutineContext().isActive) {
                         return@withPermit
                     }
                     try {
@@ -863,7 +919,7 @@ object AutoServerSelector {
     private suspend fun quickTcpProbe(
         proxies: List<ProxyEntity>,
         concurrency: Int,
-        generation: Int,
+        session: PrepareSession,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Map<Long, Int> = coroutineScope {
         val total = proxies.size
@@ -883,7 +939,7 @@ object AutoServerSelector {
         proxies.map { proxy ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
-                    if (generation != prepareGeneration.get() || !currentCoroutineContext().isActive) {
+                    if (!isPrepareCurrent(session) || !currentCoroutineContext().isActive) {
                         return@withPermit
                     }
                     try {
