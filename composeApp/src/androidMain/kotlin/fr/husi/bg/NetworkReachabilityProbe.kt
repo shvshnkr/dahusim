@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -37,6 +38,8 @@ internal object NetworkReachabilityProbe {
     )
     private const val TIMEOUT_MS = 1800
     private const val FAST_TIMEOUT_MS = 1200
+    private const val PROBE_TOTAL_TIMEOUT_MS = 6000L
+    private const val FAST_PROBE_TOTAL_TIMEOUT_MS = 4000L
 
     suspend fun probe(fast: Boolean = false): NetworkReachability = coroutineScope {
         val probeNetwork = resolveProbeNetwork()
@@ -49,35 +52,65 @@ internal object NetworkReachabilityProbe {
             )
         }
         val timeoutMs = if (fast) FAST_TIMEOUT_MS else TIMEOUT_MS
-        val google = async(Dispatchers.IO) { probeUrl(GOOGLE_PROBE_URL, timeoutMs, probeNetwork) }
-        val dzen = async(Dispatchers.IO) { probeUrl(DZEN_PROBE_URL, timeoutMs, probeNetwork) }
-        val ya = async(Dispatchers.IO) { probeUrl(YA_PROBE_URL, timeoutMs, probeNetwork) }
-        val whitelist = async(Dispatchers.IO) {
-            anyWhitelistSourceReachable(timeoutMs, fast, probeNetwork)
+        val totalTimeoutMs = if (fast) FAST_PROBE_TOTAL_TIMEOUT_MS else PROBE_TOTAL_TIMEOUT_MS
+
+        var googleOk = false
+        var dzenOk = false
+        var yaOk = false
+        var whitelistOk = false
+
+        val google = async(Dispatchers.IO) {
+            probeUrl(GOOGLE_PROBE_URL, timeoutMs, probeNetwork).also { googleOk = it }
         }
-        if (google.await()) {
-            return@coroutineScope NetworkReachability(
-                googleReachable = true,
-                dzenReachable = false,
-                yaReachable = false,
-                whitelistSourceReachable = false,
+        val dzen = async(Dispatchers.IO) {
+            probeUrl(DZEN_PROBE_URL, timeoutMs, probeNetwork).also { dzenOk = it }
+        }
+        val ya = async(Dispatchers.IO) {
+            probeUrl(YA_PROBE_URL, timeoutMs, probeNetwork).also { yaOk = it }
+        }
+        val whitelist = async(Dispatchers.IO) {
+            anyWhitelistSourceReachable(timeoutMs, fast, probeNetwork).also { whitelistOk = it }
+        }
+
+        val completed = withTimeoutOrNull(totalTimeoutMs) {
+            if (google.await()) {
+                return@withTimeoutOrNull NetworkReachability(
+                    googleReachable = true,
+                    dzenReachable = false,
+                    yaReachable = false,
+                    whitelistSourceReachable = false,
+                )
+            }
+            dzen.await()
+            ya.await()
+            whitelist.await()
+            NetworkReachability(
+                googleReachable = googleOk,
+                dzenReachable = dzenOk,
+                yaReachable = yaOk,
+                whitelistSourceReachable = whitelistOk,
             )
         }
-        val dzenOk = dzen.await()
-        val yaOk = ya.await()
-        val whitelistSourceReachable = whitelist.await()
+
+        if (completed != null) {
+            return@coroutineScope completed
+        }
+
+        google.cancel()
+        dzen.cancel()
+        ya.cancel()
+        whitelist.cancel()
         NetworkReachability(
-            googleReachable = false,
+            googleReachable = googleOk,
             dzenReachable = dzenOk,
             yaReachable = yaOk,
-            whitelistSourceReachable = whitelistSourceReachable,
+            whitelistSourceReachable = whitelistOk,
         )
     }
 
     private suspend fun resolveProbeNetwork(): Network? {
         DefaultNetworkMonitor.defaultNetwork?.let { return it }
-        return runCatching { DefaultNetworkMonitor.require() }.getOrNull()
-            ?: resolveAndroidRepository().connectivity.activeNetwork
+        return resolveAndroidRepository().connectivity.activeNetwork
     }
 
     private suspend fun anyWhitelistSourceReachable(
