@@ -133,17 +133,20 @@ FunctionEnd
 
 Section "-TemurinJDK21"
     StrCmp $InstallTemurin21 ${BST_CHECKED} 0 temurin_done
-    DetailPrint "Downloading Eclipse Temurin JDK 21 installer..."
-    NSISdl::download /TIMEOUT=300000 "__HUSI_TEMURIN21_MSI_URL__" "$TEMP\EclipseTemurinJDK21.msi"
+    DetailPrint "Downloading recommended Java 21 runtime..."
+    Delete "$TEMP\EclipseTemurinJDK21.msi"
+    ; NSISdl is HTTP-only and cannot fetch GitHub HTTPS assets — use PowerShell instead.
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference=''SilentlyContinue''; $dest=''$env:TEMP\EclipseTemurinJDK21.msi''; try { Invoke-WebRequest -Uri ''__HUSI_TEMURIN21_MSI_URL__'' -OutFile $dest -UseBasicParsing; if(-not (Test-Path -LiteralPath $dest)){ exit 1 }; if((Get-Item -LiteralPath $dest).Length -lt 1000000){ exit 2 }; exit 0 } catch { exit 1 }"'
     Pop $0
-    StrCmp $0 success temurin_dl_ok temurin_dl_fail
+    Pop $1
+    StrCmp $0 0 temurin_dl_ok temurin_dl_fail
 temurin_dl_ok:
-    DetailPrint "Installing Temurin JDK 21 (silent /qn; UAC may still apply)..."
+    DetailPrint "Installing Java 21 runtime (silent /qn; UAC may still apply)..."
     ExecWait 'msiexec /i "$TEMP\EclipseTemurinJDK21.msi" INSTALLLEVEL=1 /qn /norestart'
     Delete "$TEMP\EclipseTemurinJDK21.msi"
     Goto temurin_done
 temurin_dl_fail:
-    MessageBox MB_OK "Temurin JDK 21 download failed. Install Java 21 manually from GitHub Releases: __HUSI_TEMURIN21_HELP_URL__"
+    MessageBox MB_OK "Java 21 runtime download failed.$\r$\n$\r$\nInstall Java manually from:$\r$\n__HUSI_TEMURIN21_HELP_URL__"
 temurin_done:
 SectionEnd
 
