@@ -135,8 +135,18 @@ Section "-TemurinJDK21"
     StrCmp $InstallTemurin21 ${BST_CHECKED} 0 temurin_done
     DetailPrint "Downloading recommended Java 21 runtime..."
     Delete "$TEMP\EclipseTemurinJDK21.msi"
+    ; Pick x64 vs ARM64 MSI (Temurin has no Windows x86 build; app installer is 64-bit only).
+    ReadEnvStr $R0 PROCESSOR_ARCHITECTURE
+    StrCmp $R0 "ARM64" temurin_dl_arm64 temurin_dl_x64
+temurin_dl_arm64:
+    DetailPrint "Target CPU: ARM64 (Temurin aarch64 MSI)"
     ; NSISdl is HTTP-only and cannot fetch GitHub HTTPS assets — use PowerShell instead.
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference=''SilentlyContinue''; $dest=''$env:TEMP\EclipseTemurinJDK21.msi''; try { Invoke-WebRequest -Uri ''__HUSI_TEMURIN21_MSI_URL__'' -OutFile $dest -UseBasicParsing; if(-not (Test-Path -LiteralPath $dest)){ exit 1 }; if((Get-Item -LiteralPath $dest).Length -lt 1000000){ exit 2 }; exit 0 } catch { exit 1 }"'
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference=''SilentlyContinue''; $dest=''$env:TEMP\EclipseTemurinJDK21.msi''; try { Invoke-WebRequest -Uri ''__HUSI_TEMURIN21_MSI_URL_ARM64__'' -OutFile $dest -UseBasicParsing; if(-not (Test-Path -LiteralPath $dest)){ exit 1 }; if((Get-Item -LiteralPath $dest).Length -lt 1000000){ exit 2 }; exit 0 } catch { exit 1 }"'
+    Goto temurin_dl_run
+temurin_dl_x64:
+    DetailPrint "Target CPU: x64 (Temurin x64 MSI)"
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference=''SilentlyContinue''; $dest=''$env:TEMP\EclipseTemurinJDK21.msi''; try { Invoke-WebRequest -Uri ''__HUSI_TEMURIN21_MSI_URL_X64__'' -OutFile $dest -UseBasicParsing; if(-not (Test-Path -LiteralPath $dest)){ exit 1 }; if((Get-Item -LiteralPath $dest).Length -lt 1000000){ exit 2 }; exit 0 } catch { exit 1 }"'
+temurin_dl_run:
     Pop $0
     Pop $1
     StrCmp $0 0 temurin_dl_ok temurin_dl_fail

@@ -494,7 +494,8 @@ build_nsis() {
         "__HUSI_APP_ARGS_FILE__" "$ROOT_DIR/release/linux/desktop/desktop-app-args.conf" \
         "__HUSI_URL_SCHEME_REGISTRY__" "$url_scheme_registry" \
         "__HUSI_URL_SCHEME_UNREGISTRY__" "$url_scheme_unregistry" \
-        "__HUSI_TEMURIN21_MSI_URL__" "$TEMURIN21_WIN_X64_MSI" \
+        "__HUSI_TEMURIN21_MSI_URL_X64__" "$TEMURIN21_WIN_X64_MSI" \
+        "__HUSI_TEMURIN21_MSI_URL_ARM64__" "$TEMURIN21_WIN_ARM64_MSI" \
         "__HUSI_TEMURIN21_HELP_URL__" "$TEMURIN21_RELEASES_PAGE"
 
     rm -f "$output_path"
