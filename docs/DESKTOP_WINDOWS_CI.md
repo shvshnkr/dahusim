@@ -2,6 +2,12 @@
 
 Windows desktop test channel реализован в [`.github/workflows/desktop-windows-test.yml`](../.github/workflows/desktop-windows-test.yml).
 
+## Платформа
+
+- Релизы и CI собирают только **`windows/amd64`** (64-битная Windows, x64).
+- **32-битная Windows** не поддерживается.
+- **`windows/arm64`** в релизах пока нет; установщик NSIS предупреждает, что нужна 64-битная Windows (x64), и при опциональной установке Java качает только Temurin **x64** MSI.
+
 ## Что делает workflow
 
 - Триггер: только ручной `workflow_dispatch`.

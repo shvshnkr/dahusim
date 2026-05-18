@@ -18,7 +18,6 @@ check_url() {
 }
 
 check_url "msi_x64" "$TEMURIN21_WIN_X64_MSI"
-check_url "msi_arm64" "$TEMURIN21_WIN_ARM64_MSI"
 check_url "zip" "$TEMURIN21_WIN_X64_ZIP"
 check_url "releases_page" "$TEMURIN21_RELEASES_PAGE"
 echo "verify_temurin21_urls: all OK ($TEMURIN21_TAG)"

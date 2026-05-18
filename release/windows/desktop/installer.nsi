@@ -45,6 +45,7 @@ Var HasInstalledJava
 
 ; --- Pages ---
 !insertmacro MUI_PAGE_LICENSE "__HUSI_LICENSE_FILE__"
+Page custom win64ReqPageCreate win64ReqPageLeave
 Page custom javaRuntimePageCreate javaRuntimePageLeave
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -83,6 +84,10 @@ LangString JavaRuntimePageDescription ${LANG_ENGLISH} "If Java is already instal
 LangString JavaRuntimePageDescription ${LANG_SIMPCHINESE} "若系统已安装 Java，可继续直接使用。若未安装，可勾选下方选项安装推荐的 Java 21 运行环境（静默 MSI /qn）。除非您主动选择，此操作不会覆盖现有 JAVA_HOME。"
 LangString InstallTemurin21Label ${LANG_ENGLISH} "Download and install a recommended Java 21 runtime (optional, explicit opt-in; silent MSI /qn; network + UAC may apply)"
 LangString InstallTemurin21Label ${LANG_SIMPCHINESE} "下载并安装推荐的 Java 21 运行环境（可选，需手动勾选；静默 MSI /qn；联网且可能 UAC）"
+LangString Win64ReqTitle ${LANG_ENGLISH} "System requirements"
+LangString Win64ReqTitle ${LANG_SIMPCHINESE} "系统要求"
+LangString Win64ReqText ${LANG_ENGLISH} "${APP_NAME} requires 64-bit Windows (x64).$\r$\n32-bit Windows is not supported.$\r$\n$\r$\nARM64 Windows builds are not offered in releases yet — use the x64 installer on Intel/AMD PCs."
+LangString Win64ReqText ${LANG_SIMPCHINESE} "${APP_NAME} 需要 64 位 Windows (x64)。$\r$\n不支持 32 位 Windows。$\r$\n$\r$\n暂未提供 ARM64 Windows 安装包 — 请在 Intel/AMD 电脑上使用 x64 安装程序。"
 
 Function .onInit
     StrCpy $CreateDesktopShortcut ${BST_CHECKED}
@@ -94,6 +99,20 @@ Function .onInit
     StrCmp $HasInstalledJava 1 init_done
     StrCpy $InstallTemurin21 ${BST_CHECKED}
 init_done:
+FunctionEnd
+
+Function win64ReqPageCreate
+    !insertmacro MUI_HEADER_TEXT "$(Win64ReqTitle)" "$(Win64ReqTitle)"
+    nsDialogs::Create 1018
+    Pop $0
+    StrCmp $0 error 0 +2
+    Abort
+    ${NSD_CreateLabel} 0 0 100% 72u "$(Win64ReqText)"
+    Pop $0
+    nsDialogs::Show
+FunctionEnd
+
+Function win64ReqPageLeave
 FunctionEnd
 
 Function javaRuntimePageCreate
@@ -133,20 +152,10 @@ FunctionEnd
 
 Section "-TemurinJDK21"
     StrCmp $InstallTemurin21 ${BST_CHECKED} 0 temurin_done
-    DetailPrint "Downloading recommended Java 21 runtime..."
+    DetailPrint "Downloading recommended Java 21 runtime (x64)..."
     Delete "$TEMP\EclipseTemurinJDK21.msi"
-    ; Pick x64 vs ARM64 MSI (Temurin has no Windows x86 build; app installer is 64-bit only).
-    ReadEnvStr $R0 PROCESSOR_ARCHITECTURE
-    StrCmp $R0 "ARM64" temurin_dl_arm64 temurin_dl_x64
-temurin_dl_arm64:
-    DetailPrint "Target CPU: ARM64 (Temurin aarch64 MSI)"
     ; NSISdl is HTTP-only and cannot fetch GitHub HTTPS assets — use PowerShell instead.
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference=''SilentlyContinue''; $dest=''$env:TEMP\EclipseTemurinJDK21.msi''; try { Invoke-WebRequest -Uri ''__HUSI_TEMURIN21_MSI_URL_ARM64__'' -OutFile $dest -UseBasicParsing; if(-not (Test-Path -LiteralPath $dest)){ exit 1 }; if((Get-Item -LiteralPath $dest).Length -lt 1000000){ exit 2 }; exit 0 } catch { exit 1 }"'
-    Goto temurin_dl_run
-temurin_dl_x64:
-    DetailPrint "Target CPU: x64 (Temurin x64 MSI)"
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference=''SilentlyContinue''; $dest=''$env:TEMP\EclipseTemurinJDK21.msi''; try { Invoke-WebRequest -Uri ''__HUSI_TEMURIN21_MSI_URL_X64__'' -OutFile $dest -UseBasicParsing; if(-not (Test-Path -LiteralPath $dest)){ exit 1 }; if((Get-Item -LiteralPath $dest).Length -lt 1000000){ exit 2 }; exit 0 } catch { exit 1 }"'
-temurin_dl_run:
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference=''SilentlyContinue''; $dest=''$env:TEMP\EclipseTemurinJDK21.msi''; try { Invoke-WebRequest -Uri ''__HUSI_TEMURIN21_MSI_URL__'' -OutFile $dest -UseBasicParsing; if(-not (Test-Path -LiteralPath $dest)){ exit 1 }; if((Get-Item -LiteralPath $dest).Length -lt 1000000){ exit 2 }; exit 0 } catch { exit 1 }"'
     Pop $0
     Pop $1
     StrCmp $0 0 temurin_dl_ok temurin_dl_fail
