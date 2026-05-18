@@ -37,6 +37,7 @@ import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.simplemode.SimpleModeSessionHealth
+import fr.husi.simplemode.SimpleModeTunnelRestart
 import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.resources.*
 import fr.husi.utils.simpleModeDebugEvent
@@ -478,10 +479,8 @@ class BaseService {
             }
             data.connectingJob = runOnDefaultDispatcher {
                 try {
-                    val reachability = NetworkReachabilityProbe.probe()
-                    if (DataStore.simpleMode) {
-                        DataStore.simpleModeActivity = "Preparing network checks…"
-                    }
+                    preInit()
+                    val reachability = resolveConnectReachability()
                     simpleModeLog(
                         "SimpleMode",
                         "H7 reachability google=${reachability.googleReachable} dzen=${reachability.dzenReachable} ya=${reachability.yaReachable} whitelistSource=${reachability.whitelistSourceReachable} paused=${DataStore.autoConnectPausedUntilGoogle}",
@@ -559,7 +558,6 @@ class BaseService {
                         fr.husi.routing.VpnExitProbe.clearCache()
                     }
                     Executable.killAll()    // clean up old processes
-                    preInit()
                     data.backend.init(profile)
                     DataStore.currentProfile = profile.id
 
@@ -678,6 +676,9 @@ class BaseService {
                                 ),
                             )
                             // #endregion
+                            if (DataStore.simpleMode) {
+                                SimpleModeTunnelRestart.markReconnect(reachability)
+                            }
                             stopRunner(restart = true)
                         } else {
                             if (!wlOnly) {
@@ -762,6 +763,9 @@ class BaseService {
                     }
                     val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
                     if (fallback != null) {
+                        if (DataStore.simpleMode) {
+                            SimpleModeTunnelRestart.markModeReconnect(DataStore.activeWhitelistRestrictedNetwork)
+                        }
                         stopRunner(restart = true)
                     } else {
                         setPausedUntilGoogle(
@@ -821,6 +825,9 @@ class BaseService {
                     }
                     val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
                     if (fallback != null) {
+                        if (DataStore.simpleMode) {
+                            SimpleModeTunnelRestart.markModeReconnect(DataStore.activeWhitelistRestrictedNetwork)
+                        }
                         stopRunner(restart = true)
                     } else {
                         setPausedUntilGoogle(
@@ -850,4 +857,26 @@ class BaseService {
         }
     }
 
+}
+
+private suspend fun resolveConnectReachability(): NetworkReachability {
+    val startedAt = System.currentTimeMillis()
+    SimpleModeTunnelRestart.takeCachedReachability()?.let { cached ->
+        simpleModeLog(
+            "SimpleMode",
+            "H7 reachability_reused_tunnel_restart google=${cached.googleReachable} " +
+                "whitelistOnly=${cached.whitelistOnly}",
+        )
+        simpleModeLog(
+            "SimpleMode",
+            "H7 reachability_probe source=cache elapsedMs=${System.currentTimeMillis() - startedAt}",
+        )
+        return cached
+    }
+    val result = NetworkReachabilityProbe.probe(fast = DataStore.simpleMode)
+    simpleModeLog(
+        "SimpleMode",
+        "H7 reachability_probe source=network elapsedMs=${System.currentTimeMillis() - startedAt} fast=${DataStore.simpleMode}",
+    )
+    return result
 }

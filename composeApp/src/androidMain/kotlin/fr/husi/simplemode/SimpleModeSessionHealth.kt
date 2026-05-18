@@ -105,6 +105,7 @@ internal object SimpleModeSessionHealth {
                 "SimpleMode",
                 "H34 session_health_switch profileId=$profileId nextId=$next",
             )
+            SimpleModeTunnelRestart.markModeReconnect(wlOnly)
             ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()
         } else {
             simpleModeLog("SimpleMode", "H34 session_health_exhausted profileId=$profileId")

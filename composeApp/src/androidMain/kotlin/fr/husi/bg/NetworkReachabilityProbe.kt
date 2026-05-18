@@ -1,5 +1,7 @@
 package fr.husi.bg
 
+import android.net.Network
+import android.os.Build
 import fr.husi.repository.resolveAndroidRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -37,7 +39,8 @@ internal object NetworkReachabilityProbe {
     private const val FAST_TIMEOUT_MS = 1200
 
     suspend fun probe(fast: Boolean = false): NetworkReachability = coroutineScope {
-        if (resolveAndroidRepository().connectivity.activeNetwork == null) {
+        val probeNetwork = resolveProbeNetwork()
+        if (probeNetwork == null && resolveAndroidRepository().connectivity.activeNetwork == null) {
             return@coroutineScope NetworkReachability(
                 googleReachable = false,
                 dzenReachable = false,
@@ -46,11 +49,11 @@ internal object NetworkReachabilityProbe {
             )
         }
         val timeoutMs = if (fast) FAST_TIMEOUT_MS else TIMEOUT_MS
-        val google = async(Dispatchers.IO) { probeUrl(GOOGLE_PROBE_URL, timeoutMs) }
-        val dzen = async(Dispatchers.IO) { probeUrl(DZEN_PROBE_URL, timeoutMs) }
-        val ya = async(Dispatchers.IO) { probeUrl(YA_PROBE_URL, timeoutMs) }
+        val google = async(Dispatchers.IO) { probeUrl(GOOGLE_PROBE_URL, timeoutMs, probeNetwork) }
+        val dzen = async(Dispatchers.IO) { probeUrl(DZEN_PROBE_URL, timeoutMs, probeNetwork) }
+        val ya = async(Dispatchers.IO) { probeUrl(YA_PROBE_URL, timeoutMs, probeNetwork) }
         val whitelist = async(Dispatchers.IO) {
-            anyWhitelistSourceReachable(timeoutMs, fast)
+            anyWhitelistSourceReachable(timeoutMs, fast, probeNetwork)
         }
         if (google.await()) {
             return@coroutineScope NetworkReachability(
@@ -71,9 +74,16 @@ internal object NetworkReachabilityProbe {
         )
     }
 
+    private suspend fun resolveProbeNetwork(): Network? {
+        DefaultNetworkMonitor.defaultNetwork?.let { return it }
+        return runCatching { DefaultNetworkMonitor.require() }.getOrNull()
+            ?: resolveAndroidRepository().connectivity.activeNetwork
+    }
+
     private suspend fun anyWhitelistSourceReachable(
         timeoutMs: Int,
         fast: Boolean,
+        network: Network?,
     ): Boolean = coroutineScope {
         val urls = if (fast) {
             WHITELIST_PROBE_URLS.take(2)
@@ -81,13 +91,17 @@ internal object NetworkReachabilityProbe {
             WHITELIST_PROBE_URLS
         }
         urls
-            .map { url -> async(Dispatchers.IO) { probeUrl(url, timeoutMs) } }
+            .map { url -> async(Dispatchers.IO) { probeUrl(url, timeoutMs, network) } }
             .awaitAll()
             .any { it }
     }
 
-    private suspend fun probeUrl(url: String, timeoutMs: Int): Boolean = withContext(Dispatchers.IO) {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+    private suspend fun probeUrl(
+        url: String,
+        timeoutMs: Int,
+        network: Network? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val connection = openHttpConnection(url, network).apply {
             requestMethod = "GET"
             connectTimeout = timeoutMs
             readTimeout = timeoutMs
@@ -101,6 +115,15 @@ internal object NetworkReachabilityProbe {
             false
         }.also {
             connection.disconnect()
+        }
+    }
+
+    private fun openHttpConnection(url: String, network: Network?): HttpURLConnection {
+        val target = URL(url)
+        return if (network != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            network.openConnection(target) as HttpURLConnection
+        } else {
+            target.openConnection() as HttpURLConnection
         }
     }
 }

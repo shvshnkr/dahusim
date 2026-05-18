@@ -105,6 +105,7 @@ internal object SimpleModeVpnCoordinator {
                 simpleModeLog("SimpleMode", "H30 wl_adapt_reload_skipped reason=simple_mode_off")
                 return true
             }
+            SimpleModeTunnelRestart.markModeReconnect(whitelistOnly)
             ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()
             return true
         }
@@ -215,6 +216,7 @@ internal object SimpleModeVpnCoordinator {
                 if (!DataStore.serviceState.connected) {
                     return true
                 }
+                SimpleModeTunnelRestart.markModeReconnect(whitelistOnly)
                 ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()
                 return true
             }
