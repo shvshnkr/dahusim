@@ -474,6 +474,13 @@ build_nsis() {
     url_scheme_registry="$(nsis_url_scheme_install_entries)"
     url_scheme_unregistry="$(nsis_url_scheme_uninstall_entries)"
 
+    local icon_file="$ROOT_DIR/launcher/icon.ico"
+    if [[ ! -f "$icon_file" ]]; then
+        error "Missing launcher icon: $icon_file (run: python release/desktop/sync_icons.py)"
+        exit 1
+    fi
+    cp "$icon_file" "$work_dir/installer.ico"
+
     render_template \
         "$NSIS_TEMPLATE_FILE" \
         "$nsis_source" \
@@ -495,7 +502,8 @@ build_nsis() {
         "__HUSI_URL_SCHEME_REGISTRY__" "$url_scheme_registry" \
         "__HUSI_URL_SCHEME_UNREGISTRY__" "$url_scheme_unregistry" \
         "__HUSI_TEMURIN21_MSI_URL__" "$TEMURIN21_WIN_X64_MSI" \
-        "__HUSI_TEMURIN21_HELP_URL__" "$TEMURIN21_RELEASES_PAGE"
+        "__HUSI_TEMURIN21_HELP_URL__" "$TEMURIN21_RELEASES_PAGE" \
+        "__HUSI_ICON_FILE__" "installer.ico"
 
     rm -f "$output_path"
     "$NSIS_BIN" "$nsis_source"

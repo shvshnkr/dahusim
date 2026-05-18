@@ -33,6 +33,8 @@ VIAddVersionKey "FileDescription" "${APP_DESCRIPTION}"
 VIAddVersionKey "LegalCopyright" "${MAINTAINER}"
 
 ; --- MUI settings ---
+!define MUI_ICON "__HUSI_ICON_FILE__"
+!define MUI_UNICON "__HUSI_ICON_FILE__"
 !define MUI_ABORTWARNING
 
 Var CreateDesktopShortcut

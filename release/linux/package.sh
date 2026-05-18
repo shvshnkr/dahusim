@@ -407,7 +407,10 @@ prepare_rootfs() {
         "$URL_SCHEME_MIME_TYPES_PLACEHOLDER" "$URL_SCHEME_MIME_TYPES" \
         "$STARTUP_WM_CLASS_PLACEHOLDER" "$startup_wm_class"
 
-    local icon_source="$ROOT_DIR/fastlane/metadata/android/en-US/images/icon.png"
+    local icon_source="$ROOT_DIR/release/desktop/icon.png"
+    if [[ ! -f "$icon_source" ]]; then
+        icon_source="$ROOT_DIR/fastlane/metadata/android/en-US/images/icon.png"
+    fi
     if [[ -f "$icon_source" ]]; then
         cp "$icon_source" "$rootfs/usr/share/pixmaps/$PACKAGE_NAME.png"
     fi
