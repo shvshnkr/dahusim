@@ -32,6 +32,12 @@ actual object AppUpdatePlatform {
         return readInstalledCertSha256(appContext.packageManager)
     }
 
+    actual fun canInstallPackages(): Boolean = canRequestPackageInstalls()
+
+    actual fun requestInstallPackagePermission() {
+        openInstallPermissionSettings()
+    }
+
     actual suspend fun installOffer(offer: AppUpdateOffer): AppUpdateInstallResult = onDefaultDispatcher {
         val apkInfo = offer.androidApk
             ?: return@onDefaultDispatcher AppUpdateInstallResult.Failed("No Android APK in update manifest")

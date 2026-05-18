@@ -13,6 +13,7 @@
     <string name="menu_configuration">Configuration</string>
     <string name="menu_group">Group</string>
     <string name="menu_about">About</string>
+    <string name="menu_app_update">Updates</string>
     <string name="app_update_settings">App updates</string>
     <string name="app_update_check_enabled">Check for app updates</string>
     <string name="app_update_check_enabled_sum">Uses GitHub app-update-channel manifest</string>
@@ -30,6 +31,16 @@
     <string name="app_update_later">Later</string>
     <string name="app_update_install_failed">Update install failed: %1$s</string>
     <string name="app_update_disable_checks">Disable update checks</string>
+    <string name="app_update_screen_title">App updates</string>
+    <string name="app_update_channel_sum">Checks GitHub app-update-channel for new builds</string>
+    <string name="app_update_installed_version">Installed: %1$s (%2$d)</string>
+    <string name="app_update_last_check_never">Last check: never</string>
+    <string name="app_update_last_check_at">Last check: %1$s</string>
+    <string name="app_update_pending_offer">%1$s (%2$d) is ready to install</string>
+    <string name="app_update_install_permission">Allow installing updates</string>
+    <string name="app_update_install_permission_sum">Opens Android settings for unknown app installs (required for in-app APK updates)</string>
+    <string name="app_update_install_permission_granted">Installation from this app is allowed</string>
+    <string name="app_update_install_permission_denied">Installation not allowed — open settings to enable</string>
     <string name="subscription_catalog_settings">Subscription catalog</string>
     <string name="subscription_catalog_check_enabled">Sync subscriptions from catalog</string>
     <string name="subscription_catalog_summary">Fetches a managed subscription list from a GitHub text file</string>

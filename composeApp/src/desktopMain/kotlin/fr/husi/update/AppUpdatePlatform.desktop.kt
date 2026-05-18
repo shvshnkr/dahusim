@@ -10,6 +10,10 @@ actual object AppUpdatePlatform {
     actual fun preferredAndroidAbi(): String? = null
     actual fun installedAndroidCertSha256(): String? = null
 
+    actual fun canInstallPackages(): Boolean = true
+
+    actual fun requestInstallPackagePermission() = Unit
+
     actual suspend fun installOffer(offer: AppUpdateOffer): AppUpdateInstallResult = onDefaultDispatcher {
         val desktopAsset = when {
             PlatformInfo.isLinux -> offer.linuxAsset?.let {

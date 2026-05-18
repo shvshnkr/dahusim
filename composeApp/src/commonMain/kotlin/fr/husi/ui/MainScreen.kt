@@ -88,6 +88,7 @@ import fr.husi.resources.info
 import fr.husi.resources.location_permission_description
 import fr.husi.resources.location_permission_title
 import fr.husi.resources.menu_about
+import fr.husi.resources.menu_app_update
 import fr.husi.resources.menu_configuration
 import fr.husi.resources.menu_dashboard
 import fr.husi.resources.menu_group
@@ -376,6 +377,13 @@ private fun MainScreenContent(
                 icon = {
                     Icon(vectorResource(Res.drawable.data_usage), null)
                 },
+            )
+            BuildDrawerItem(
+                DrawerItemInfo(
+                    Res.string.menu_app_update,
+                    Res.drawable.update,
+                    NavRoutes.AppUpdate,
+                ),
             )
             BuildDrawerItem(
                 DrawerItemInfo(

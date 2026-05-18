@@ -58,17 +58,11 @@ import fr.husi.compose.rememberScrollHideState
 import fr.husi.compose.theme.AppTheme
 import fr.husi.compose.withNavigation
 import fr.husi.database.DataStore
-import fr.husi.ktx.onDefaultDispatcher
-import fr.husi.ktx.showToast
 import fr.husi.libcore.Libcore
 import fr.husi.repository.resolveRepository
-import fr.husi.resources.app_update_check_now
-import fr.husi.resources.app_update_error
+import fr.husi.resources.app_update_channel_sum
+import fr.husi.resources.menu_app_update
 import fr.husi.resources.update
-import fr.husi.resources.app_update_up_to_date
-import fr.husi.resources.app_update_available_title
-import fr.husi.update.AppUpdateCheckResult
-import fr.husi.update.AppUpdateCoordinator
 import fr.husi.resources.*
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -83,6 +77,7 @@ fun AboutScreen(
     mainViewModel: MainViewModel,
     onDrawerClick: () -> Unit,
     onNavigateToLibraries: () -> Unit,
+    onNavigateToAppUpdate: () -> Unit,
 ) {
     val windowInsets = WindowInsets.safeDrawing
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -94,26 +89,6 @@ fun AboutScreen(
 
     val displayVersion = remember { "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})" }
     val coreVersion = remember { Libcore.version() }
-
-    fun checkForUpdates() {
-        scope.launch {
-            val result = onDefaultDispatcher { AppUpdateCoordinator.checkForUpdate(manual = true) }
-            val message = when (result) {
-                AppUpdateCheckResult.Disabled,
-                AppUpdateCheckResult.UpToDate,
-                AppUpdateCheckResult.NoPlatformArtifact,
-                -> resolveRepository().getString(Res.string.app_update_up_to_date)
-                is AppUpdateCheckResult.Error -> resolveRepository().getString(
-                    Res.string.app_update_error,
-                    result.message,
-                )
-                is AppUpdateCheckResult.Available -> resolveRepository().getString(
-                    Res.string.app_update_available_title,
-                )
-            }
-            showToast(message)
-        }
-    }
 
     val shouldRequestBattery = rememberShouldRequestBatteryOptimizations()
     val requestIgnoreBatteryOptimizations = rememberRequestIgnoreBatteryOptimizations()
@@ -191,12 +166,12 @@ fun AboutScreen(
                             title = stringResource(Res.string.about_display_name),
                             titleTextStyle = null,
                             description = displayVersion,
-                            onCLick = { checkForUpdates() },
                         )
                         CardItem(
                             icon = { Icon(vectorResource(Res.drawable.update), null) },
-                            title = stringResource(Res.string.app_update_check_now),
-                            onCLick = { checkForUpdates() },
+                            title = stringResource(Res.string.menu_app_update),
+                            description = stringResource(Res.string.app_update_channel_sum),
+                            onCLick = onNavigateToAppUpdate,
                         )
                         CardItem(
                             icon = {
@@ -410,6 +385,7 @@ private fun PreviewAboutScreen() {
             mainViewModel = mainViewModel,
             onDrawerClick = {},
             onNavigateToLibraries = {},
+            onNavigateToAppUpdate = {},
         )
     }
 }

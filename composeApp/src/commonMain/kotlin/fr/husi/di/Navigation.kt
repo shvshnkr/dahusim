@@ -5,6 +5,7 @@ package fr.husi.di
 import androidx.navigation3.runtime.NavKey
 import fr.husi.results.LocalResultEventBus
 import fr.husi.ui.AboutScreen
+import fr.husi.ui.AppUpdateScreen
 import fr.husi.ui.AssetEditScreen
 import fr.husi.ui.AssetsScreen
 import fr.husi.ui.GroupScreen
@@ -276,6 +277,13 @@ internal val commonNavigationModule = module {
             )
         }
 
+        navigation<NavRoutes.AppUpdate> { _ ->
+            val drawerController = get<DrawerController>()
+            AppUpdateScreen(
+                onDrawerClick = drawerController::toggle,
+            )
+        }
+
         navigation<NavRoutes.About> { _ ->
             val drawerController = get<DrawerController>()
             val viewModel = koinViewModel<MainViewModel>()
@@ -285,6 +293,9 @@ internal val commonNavigationModule = module {
                 onDrawerClick = drawerController::toggle,
                 onNavigateToLibraries = {
                     navigator.navigateTo(NavRoutes.Libraries)
+                },
+                onNavigateToAppUpdate = {
+                    navigator.navigateTo(NavRoutes.AppUpdate)
                 },
             )
         }

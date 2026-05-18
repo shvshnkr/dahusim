@@ -25,6 +25,7 @@ class Navigator(
             NavRoutes.Dashboard,
             NavRoutes.Tools,
             NavRoutes.About,
+            NavRoutes.AppUpdate,
                 -> true
 
             else -> false

@@ -29,6 +29,7 @@ sealed class NavRoutes : NavKey {
                         subclass(ToolsPage.SpeedTest::class, ToolsPage.SpeedTest.serializer())
                         subclass(ToolsPage.RuleSetMatch::class, ToolsPage.RuleSetMatch.serializer())
                         subclass(About::class, About.serializer())
+                        subclass(AppUpdate::class, AppUpdate.serializer())
                         subclass(Libraries::class, Libraries.serializer())
                         subclass(ProfileEditor::class, ProfileEditor.serializer())
                         subclass(ConnectionsDetail::class, ConnectionsDetail.serializer())
@@ -92,6 +93,9 @@ sealed class NavRoutes : NavKey {
 
     @Serializable
     data object About : NavRoutes()
+
+    @Serializable
+    data object AppUpdate : NavRoutes()
 
     @Serializable
     data object Libraries : NavRoutes()
