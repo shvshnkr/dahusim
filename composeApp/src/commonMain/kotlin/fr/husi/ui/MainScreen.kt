@@ -111,6 +111,7 @@ import fr.husi.resources.simple_mode_all_servers_dead_title
 import fr.husi.resources.simple_mode_exit_app_action
 import fr.husi.resources.simple_mode_wait_for_google_action
 import fr.husi.resources.transform
+import fr.husi.resources.update
 import fr.husi.resources.view_list
 import fr.husi.resources.warning_amber
 import fr.husi.results.LocalResultEventBus
