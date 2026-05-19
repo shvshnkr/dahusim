@@ -427,6 +427,13 @@ Options:
   -l, --log-level=<int>  Log level override (0-6)
   -m, --many             Ignore exist instance
   -b, --background       Start without opening the main window
+  --daemon               Run headless daemon (no Compose window/tray)
+  --proxy-port=<int>     Daemon mixed proxy listen port
+  --proxy-auth=<string>  Daemon auth user:password; use 'none' to disable
+  --ctl=<command>        Control daemon: start|stop|reload|status|ping|export-log|update-check|update-install
+  --systemd=<command>    Linux systemd: install|uninstall|enable|disable|start|stop|restart|status
+  --systemd-scope=<text> systemd scope: user|system (default: user)
+  --pseudo-gui           Interactive terminal pseudo-GUI for daemon control
   -h, --help             Show this message and exit
 
 Arguments:
@@ -436,6 +443,65 @@ Arguments:
 #### Arguments
 
 URLs to import.
+
+#### Linux headless control
+
+```shell
+# Run daemon in foreground without GUI/tray.
+fr.husi --daemon
+
+# Override daemon proxy endpoint/auth from CLI.
+fr.husi --daemon --proxy-port 2080 --proxy-auth none
+fr.husi --daemon --proxy-port 2080 --proxy-auth user:secret
+
+# Control the running daemon from another shell.
+fr.husi --ctl status
+fr.husi --ctl ping
+fr.husi --ctl start
+fr.husi --ctl stop
+fr.husi --ctl reload
+fr.husi --ctl export-log
+fr.husi --ctl update-check
+fr.husi --ctl update-install
+
+# Interactive terminal pseudo-GUI.
+fr.husi --pseudo-gui
+```
+
+Daemon proxy config precedence: CLI option > environment > config file > existing settings.
+
+Environment variables:
+
+```shell
+export HUSI_PROXY_PORT=2080
+export HUSI_PROXY_AUTH=none
+```
+
+Optional config file: `~/.config/dahusim/daemon-proxy.conf`
+
+```ini
+proxy_port=2080
+proxy_auth=none
+allow_access=true
+```
+
+Desktop GUI (expert mode): in `Inbound settings`, disable `Auto-generate inbound credentials`
+to keep proxy-mode inbound username/password empty (or set custom credentials manually).
+
+Systemd daemon management (Linux):
+
+```shell
+# user scope (default)
+fr.husi --systemd install
+fr.husi --systemd enable
+fr.husi --systemd start
+fr.husi --systemd status
+
+# system scope
+sudo fr.husi --systemd install --systemd-scope system
+sudo fr.husi --systemd enable --systemd-scope system
+sudo fr.husi --systemd start --systemd-scope system
+```
 
 ## ☠️ End users
 

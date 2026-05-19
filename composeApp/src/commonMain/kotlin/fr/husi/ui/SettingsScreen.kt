@@ -1398,6 +1398,40 @@ fun SettingsScreen(
                             summary = { Text(stringResource(Res.string.allow_access_sum)) },
                         )
                     }
+                    if (isExpertState && !PlatformInfo.isAndroid) item(
+                        Key.INBOUND_AUTO_CREDENTIALS,
+                        PreferenceType.SWITCH,
+                    ) {
+                        val value by DataStore.configurationStore
+                            .booleanFlow(Key.INBOUND_AUTO_CREDENTIALS, true)
+                            .collectAsStateWithLifecycle(true)
+                        SwitchPreference(
+                            value = value,
+                            onValueChange = {
+                                DataStore.inboundAutoCredentials = it
+                                if (it) {
+                                    DataStore.ensureInboundCredentials()
+                                }
+                                needReload()
+                            },
+                            title = { Text("Auto-generate inbound credentials") },
+                            icon = {
+                                Icon(
+                                    vectorResource(Res.drawable.lock),
+                                    null,
+                                )
+                            },
+                            summary = {
+                                Text(
+                                    if (value) {
+                                        "Enabled: auto-create mixed inbound username/password when empty."
+                                    } else {
+                                        "Disabled: in proxy mode you may keep inbound username/password empty."
+                                    },
+                                )
+                            },
+                        )
+                    }
                     item(Key.INBOUND_USERNAME, PreferenceType.TEXT_FIELD) {
                         val value by DataStore.configurationStore
                             .stringFlow(Key.INBOUND_USERNAME, "")

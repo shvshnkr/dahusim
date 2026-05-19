@@ -19,6 +19,7 @@ import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
 import com.github.ajalt.clikt.parameters.types.int
@@ -29,6 +30,10 @@ import fr.husi.bg.DeepLinkDispatcher
 import fr.husi.bg.DesktopBackgroundCoordinator
 import fr.husi.bg.DesktopLegacySchedulerCleanup
 import fr.husi.bg.DesktopTaskRegistry
+import fr.husi.bg.DESKTOP_CONTROL_EXPORT_FILE
+import fr.husi.bg.DESKTOP_CONTROL_PING_FILE
+import fr.husi.bg.DESKTOP_CONTROL_STATUS_FILE
+import fr.husi.bg.DESKTOP_CONTROL_UPDATE_FILE
 import fr.husi.bg.RouteAssetUpdater
 import fr.husi.bg.ServiceState
 import fr.husi.bg.SubscriptionUpdater
@@ -68,6 +73,9 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import java.awt.Desktop
 import java.io.File
+import java.io.InputStreamReader
+import java.io.BufferedReader
+import java.util.concurrent.CountDownLatch
 import javax.swing.JOptionPane
 import kotlin.system.exitProcess
 
@@ -80,6 +88,10 @@ private class DesktopMain : CliktCommand(APP_NAME) {
     companion object {
         private const val MIN_LOG_LEVEL = 0
         private const val MAX_LOG_LEVEL = 6
+        private const val MIN_PORT = 1
+        private const val MAX_PORT = 65535
+        private const val DAEMON_PROXY_ENV_PORT = "HUSI_PROXY_PORT"
+        private const val DAEMON_PROXY_ENV_AUTH = "HUSI_PROXY_AUTH"
 
         private const val PREFERENCE_NODE_PROPERTY_NAME = "me.zhanghai.compose.preference.node"
         private const val PREFERENCE_NODE_NAME = "/fr/husi/preference"
@@ -120,6 +132,41 @@ private class DesktopMain : CliktCommand(APP_NAME) {
         help = "Start without opening the main window",
     ).flag()
 
+    val daemon: Boolean by option(
+        "--daemon",
+        help = "Run headless daemon (no Compose window/tray)",
+    ).flag()
+
+    val daemonProxyPort: Int? by option(
+        "--proxy-port",
+        help = "Daemon mixed proxy listen port",
+    ).int().restrictTo(MIN_PORT..MAX_PORT)
+
+    val daemonProxyAuth: String? by option(
+        "--proxy-auth",
+        help = "Daemon proxy auth in user:password format; use 'none' to disable auth",
+    )
+
+    val control: String? by option(
+        "--ctl",
+        help = "Control a running daemon: start|stop|reload|status|ping|export-log|update-check|update-install",
+    )
+
+    val systemd: String? by option(
+        "--systemd",
+        help = "Manage Linux systemd unit: install|uninstall|enable|disable|start|stop|restart|status",
+    )
+
+    val systemdScope: String by option(
+        "--systemd-scope",
+        help = "systemd scope: user|system",
+    ).default("user")
+
+    val pseudoGui: Boolean by option(
+        "--pseudo-gui",
+        help = "Open interactive terminal pseudo-GUI for daemon control",
+    ).flag()
+
     val taskId: String? by option(
         "--task",
         hidden = true,
@@ -133,7 +180,27 @@ private class DesktopMain : CliktCommand(APP_NAME) {
 
     override fun run() {
         taskId?.let {
-            exitProcess(runTaskMode(it))
+            exitProcess(runTaskMode(it, requireExistingInstance = false))
+        }
+        control?.let {
+            exitProcess(runControlMode(it))
+        }
+        systemd?.let {
+            val launcher = buildLauncherCommand()
+            exitProcess(
+                DesktopSystemd.run(
+                    command = it,
+                    scope = systemdScope,
+                    launcherCommand = launcher,
+                ),
+            )
+        }
+        if (pseudoGui) {
+            exitProcess(runPseudoGui())
+        }
+        if (daemon) {
+            runDaemonMode()
+            return
         }
 
         registerMacOSOpenUriHandler()
@@ -326,12 +393,21 @@ private class DesktopMain : CliktCommand(APP_NAME) {
      * @return Exit code
      */
     private fun runTaskMode(taskId: String): Int {
+        return runTaskMode(taskId, requireExistingInstance = false)
+    }
+
+    private fun runTaskMode(taskId: String, requireExistingInstance: Boolean): Int {
         DesktopTaskRegistry.require(taskId)
         val repository = createDesktopRepository()
         val filesDir = repository.filesDir.invariantDirectoryPathString()
 
         when (checkExistingTaskInstance(filesDir, taskId)) {
-            ExistingTaskDispatchResult.NotFound -> Unit
+            ExistingTaskDispatchResult.NotFound -> {
+                if (requireExistingInstance) {
+                    System.err.println("No running daemon instance found")
+                    return 2
+                }
+            }
             ExistingTaskDispatchResult.Forwarded -> return 0
             ExistingTaskDispatchResult.ForwardFailed -> return 1
         }
@@ -346,6 +422,121 @@ private class DesktopMain : CliktCommand(APP_NAME) {
             Logs.e("run desktop task $taskId", e)
             1
         }
+    }
+
+    private fun runControlMode(command: String): Int {
+        val normalized = command.trim().lowercase()
+        val taskId = when (normalized) {
+            "start" -> "service-start"
+            "stop" -> "service-stop"
+            "reload" -> "service-reload"
+            "status" -> "service-status-snapshot"
+            "ping" -> "service-ping"
+            "export-log" -> "simple-log-export"
+            "update-check" -> "app-update-check"
+            "update-install" -> "app-update-install"
+            else -> {
+                System.err.println("Unknown --ctl command: $command")
+                return 2
+            }
+        }
+        val repository = createDesktopRepository()
+        val expectedFile = when (normalized) {
+            "status" -> repository.cacheDir.resolve(DESKTOP_CONTROL_STATUS_FILE)
+            "ping" -> repository.cacheDir.resolve(DESKTOP_CONTROL_PING_FILE)
+            "export-log" -> repository.cacheDir.resolve(DESKTOP_CONTROL_EXPORT_FILE)
+            "update-check", "update-install" -> repository.cacheDir.resolve(DESKTOP_CONTROL_UPDATE_FILE)
+            else -> null
+        }
+        val previousModified = expectedFile?.takeIf { it.exists() }?.lastModified() ?: -1L
+        val code = runTaskMode(taskId, requireExistingInstance = true)
+        if (code != 0) return code
+        if (expectedFile != null) {
+            val content = waitControlFileContent(expectedFile, previousModified)
+            if (content.isNotBlank()) {
+                println(content)
+            }
+        }
+        return 0
+    }
+
+    private fun runPseudoGui(): Int {
+        val reader = BufferedReader(InputStreamReader(System.`in`))
+        println("daHusiM pseudo-GUI (daemon control)")
+        println("Daemon keeps running after you exit this menu.")
+        while (true) {
+            println()
+            println("[1] Status")
+            println("[2] Ping")
+            println("[3] Start service")
+            println("[4] Stop service")
+            println("[5] Reload service")
+            println("[6] Export simple log")
+            println("[7] Check update")
+            println("[8] Install update")
+            println("[q] Quit")
+            print("Select action: ")
+            val command = when (reader.readLine()?.trim()?.lowercase()) {
+                "1" -> "status"
+                "2" -> "ping"
+                "3" -> "start"
+                "4" -> "stop"
+                "5" -> "reload"
+                "6" -> "export-log"
+                "7" -> "update-check"
+                "8" -> "update-install"
+                "q", "quit", "exit" -> return 0
+                else -> {
+                    println("Unknown command")
+                    continue
+                }
+            }
+            val result = runControlMode(command)
+            if (result != 0) {
+                println("Command failed with code=$result")
+            }
+        }
+    }
+
+    private fun runDaemonMode() {
+        registerMacOSOpenUriHandler()
+        val repository = createDesktopRepository()
+        applyDaemonProxyDefaults(repository)
+        initDesktopRuntime()
+        val runtimeRepository = resolveDesktopRepository()
+        runCatching {
+            runBlocking {
+                SubscriptionUpdater.reconfigureUpdater()
+                RouteAssetUpdater.reconfigureUpdater()
+                SubscriptionCatalogCoordinator.syncIfDue(manual = false)
+                AppUpdateCoordinator.checkForUpdate(manual = false)
+            }
+        }.onFailure {
+            Logs.e("reconfigure desktop tasks on daemon startup", it)
+        }
+        if (shouldAutoConnectOnLaunch()) {
+            runtimeRepository.startService()
+        }
+        Runtime.getRuntime().addShutdownHook(
+            Thread {
+                DesktopBackgroundCoordinator.stop()
+                runCatching {
+                    runBlocking {
+                        runtimeRepository.stopService()
+                    }
+                }
+            },
+        )
+        val authMode = if (DataStore.inboundUsername.isBlank() && DataStore.inboundPassword.isBlank()) {
+            "none"
+        } else {
+            "userpass"
+        }
+        println(
+            "Daemon started in proxy mode: listen=0.0.0.0:${DataStore.mixedPort} auth=$authMode " +
+                "(ctl: start|stop|reload|status|ping|export-log|update-check|update-install)",
+        )
+        CountDownLatch(1).await()
     }
 
     private fun fixComposePreferenceNode() {
@@ -397,6 +588,93 @@ private class DesktopMain : CliktCommand(APP_NAME) {
             DesktopBackgroundCoordinator.start()
         }
     }
+
+    private fun waitControlFileContent(file: File, previousModified: Long): String {
+        repeat(40) {
+            if (file.exists() && file.lastModified() > previousModified) {
+                return runCatching { file.readText(Charsets.UTF_8).trim() }.getOrDefault("")
+            }
+            Thread.sleep(50)
+        }
+        return if (file.exists()) {
+            runCatching { file.readText(Charsets.UTF_8).trim() }.getOrDefault("")
+        } else {
+            ""
+        }
+    }
+
+    private fun applyDaemonProxyDefaults(repository: DesktopRepository) {
+        DataStore.daemonAllowOpenProxyInbound = true
+        DataStore.serviceMode = Key.MODE_PROXY
+
+        val configFileValues = readDaemonProxyConfig(repository.dataDir.resolve("daemon-proxy.conf"))
+        val resolvedPort = daemonProxyPort
+            ?: System.getenv(DAEMON_PROXY_ENV_PORT)?.trim()?.toIntOrNull()
+            ?: configFileValues.port
+        if (resolvedPort != null && resolvedPort in MIN_PORT..MAX_PORT) {
+            DataStore.mixedPort = resolvedPort
+        }
+
+        // Daemon/headless default is network proxy for external clients.
+        DataStore.allowAccess = configFileValues.allowAccess ?: true
+
+        val resolvedAuth = daemonProxyAuth
+            ?: System.getenv(DAEMON_PROXY_ENV_AUTH)?.trim()
+            ?: configFileValues.auth
+        applyDaemonProxyAuth(resolvedAuth)
+    }
+
+    private fun applyDaemonProxyAuth(rawAuth: String?) {
+        val normalized = rawAuth?.trim().orEmpty()
+        if (
+            normalized.isEmpty() ||
+            normalized.equals("none", ignoreCase = true) ||
+            normalized.equals("off", ignoreCase = true) ||
+            normalized.equals("disabled", ignoreCase = true)
+        ) {
+            DataStore.inboundUsername = ""
+            DataStore.inboundPassword = ""
+            return
+        }
+        val separator = normalized.indexOf(':')
+        require(separator > 0 && separator < normalized.lastIndex) {
+            "Invalid --proxy-auth format. Expected user:password or 'none'."
+        }
+        DataStore.inboundUsername = normalized.substring(0, separator)
+        DataStore.inboundPassword = normalized.substring(separator + 1)
+    }
+
+    private fun readDaemonProxyConfig(file: File): DaemonProxyConfig {
+        if (!file.isFile) return DaemonProxyConfig()
+        val values = linkedMapOf<String, String>()
+        file.readLines(Charsets.UTF_8).forEach { line ->
+            val trimmed = line.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) return@forEach
+            val idx = trimmed.indexOf('=')
+            if (idx <= 0) return@forEach
+            val key = trimmed.substring(0, idx).trim().lowercase()
+            val value = trimmed.substring(idx + 1).trim()
+            values[key] = value
+        }
+        val allowAccess = values["allow_access"]?.let {
+            when (it.lowercase()) {
+                "1", "true", "yes", "on" -> true
+                "0", "false", "no", "off" -> false
+                else -> null
+            }
+        }
+        return DaemonProxyConfig(
+            port = values["proxy_port"]?.toIntOrNull(),
+            auth = values["proxy_auth"],
+            allowAccess = allowAccess,
+        )
+    }
+
+    private data class DaemonProxyConfig(
+        val port: Int? = null,
+        val auth: String? = null,
+        val allowAccess: Boolean? = null,
+    )
 }
 
 private fun registerMacOSOpenUriHandler() {

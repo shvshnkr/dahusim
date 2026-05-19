@@ -64,6 +64,7 @@ object Key {
     const val HTTP_PROXY_BYPASS = "httpProxyBypass"
     const val INBOUND_USERNAME = "inboundUsername"
     const val INBOUND_PASSWORD = "inboundPassword"
+    const val INBOUND_AUTO_CREDENTIALS = "inboundAutoCredentials"
     const val ANCHOR_SSID = "anchorSSID"
 
     const val MIXED_PORT = "mixedPort"

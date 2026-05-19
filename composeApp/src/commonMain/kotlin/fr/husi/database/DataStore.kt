@@ -21,6 +21,7 @@ import fr.husi.ktx.long
 import fr.husi.ktx.parsePort
 import fr.husi.ktx.string
 import fr.husi.ktx.stringSet
+import fr.husi.platform.PlatformInfo
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
@@ -53,6 +54,15 @@ object DataStore {
     /** Profile id for which [vpnExitIsRussia] was measured; 0 = none. */
     @Volatile
     var vpnExitProbeProfileId: Long = 0L
+
+    /**
+     * Desktop headless/daemon override: allow open mixed inbound in proxy mode.
+     *
+     * When enabled, [ensureInboundCredentials] does not auto-generate credentials for
+     * desktop proxy mode, so operators can intentionally run an unauthenticated network proxy.
+     */
+    @Volatile
+    var daemonAllowOpenProxyInbound: Boolean = false
 
     val configurationStore = DataStorePreferenceDataStore.create(createConfigurationDataStore())
 
@@ -133,6 +143,7 @@ object DataStore {
     var bypassLan by configurationStore.boolean(Key.BYPASS_LAN) { true }
     var inboundUsername by configurationStore.string(Key.INBOUND_USERNAME) { "" }
     var inboundPassword by configurationStore.string(Key.INBOUND_PASSWORD) { "" }
+    var inboundAutoCredentials by configurationStore.boolean(Key.INBOUND_AUTO_CREDENTIALS) { true }
 
     /**
      * Ensure the local SOCKS5/HTTP mixed inbound has authentication before exposing it.
@@ -145,6 +156,13 @@ object DataStore {
      * Returns true if new credentials were generated and persisted.
      */
     fun ensureInboundCredentials(): Boolean {
+        if (
+            (daemonAllowOpenProxyInbound || !inboundAutoCredentials) &&
+            !PlatformInfo.isAndroid &&
+            serviceMode == Key.MODE_PROXY
+        ) {
+            return false
+        }
         if (inboundUsername.isNotBlank() && inboundPassword.isNotBlank()) return false
         if (inboundUsername.isBlank()) inboundUsername = InboundCredentialRandom.username()
         if (inboundPassword.isBlank()) inboundPassword = InboundCredentialRandom.password()
