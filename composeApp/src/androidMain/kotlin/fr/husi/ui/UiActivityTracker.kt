@@ -3,6 +3,7 @@ package fr.husi.ui
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
+import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import java.lang.ref.WeakReference
 
@@ -34,11 +35,29 @@ object UiActivityTracker {
     fun onResume(activity: Activity) {
         activityRef = WeakReference(activity)
         resumed = true
+        // #region agent log
+        simpleModeDebugEvent(
+            runId = "handoff-reconnect",
+            hypothesisId = "H4_UI_FOREGROUND_GATE",
+            location = "UiActivityTracker.onResume",
+            message = "UI resumed",
+            data = mapOf("activity" to activity.javaClass.simpleName),
+        )
+        // #endregion
     }
 
     fun onPause(activity: Activity) {
         if (activityRef?.get() === activity) {
             resumed = false
+            // #region agent log
+            simpleModeDebugEvent(
+                runId = "handoff-reconnect",
+                hypothesisId = "H4_UI_FOREGROUND_GATE",
+                location = "UiActivityTracker.onPause",
+                message = "UI paused",
+                data = mapOf("activity" to activity.javaClass.simpleName),
+            )
+            // #endregion
         }
     }
 

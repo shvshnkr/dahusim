@@ -10,6 +10,7 @@ import kotlinx.coroutines.CancellationException
 import fr.husi.database.DataStore
 import fr.husi.database.PrepareForConnectResult
 import fr.husi.repository.resolveRepository
+import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +48,20 @@ internal object SimpleModeVpnCoordinator {
 
     fun scheduleAdaptation(reason: String) {
         if (!DataStore.simpleMode) return
+        // #region agent log
+        simpleModeDebugEvent(
+            runId = "handoff-reconnect",
+            hypothesisId = "H2_ADAPT_TRIGGER",
+            location = "SimpleModeVpnCoordinator.scheduleAdaptation",
+            message = "Adaptation scheduled",
+            data = mapOf(
+                "reason" to reason,
+                "connected" to DataStore.serviceState.connected.toString(),
+                "simpleMode" to DataStore.simpleMode.toString(),
+                "jobActive" to (adaptJob?.isActive == true).toString(),
+            ),
+        )
+        // #endregion
         if (adaptJob?.isActive == true) {
             adaptGeneration.incrementAndGet()
             AutoServerSelector.cancelAdaptPrepare("adapt_supersede")
@@ -113,6 +128,20 @@ internal object SimpleModeVpnCoordinator {
     }
 
     private suspend fun adaptLocked(reason: String, adaptGen: Int) {
+        // #region agent log
+        simpleModeDebugEvent(
+            runId = "handoff-reconnect",
+            hypothesisId = "H2_ADAPT_TRIGGER",
+            location = "SimpleModeVpnCoordinator.adaptLocked:entry",
+            message = "Adaptation started",
+            data = mapOf(
+                "reason" to reason,
+                "gen" to adaptGen.toString(),
+                "connected" to DataStore.serviceState.connected.toString(),
+                "selectedProxy" to DataStore.selectedProxy.toString(),
+            ),
+        )
+        // #endregion
         if (!DataStore.simpleMode) return
         if (!DataStore.serviceState.connected) {
             simpleModeLog("SimpleMode", "H30 wl_adapt_skipped reason=not_connected trigger=$reason")
@@ -208,6 +237,21 @@ internal object SimpleModeVpnCoordinator {
                     "SimpleMode",
                     "H30 wl_adapt_restart reason=$reason wl=$whitelistOnly prev=$previousProfileId new=$newId gen=$adaptGen",
                 )
+                // #region agent log
+                simpleModeDebugEvent(
+                    runId = "handoff-reconnect",
+                    hypothesisId = "H3_RELOAD_EXEC",
+                    location = "SimpleModeVpnCoordinator.applyReselectAndRestart:reload",
+                    message = "Adaptation requests service reload",
+                    data = mapOf(
+                        "reason" to reason,
+                        "whitelistOnly" to whitelistOnly.toString(),
+                        "prevProfileId" to previousProfileId.toString(),
+                        "newProfileId" to newId.toString(),
+                        "gen" to adaptGen.toString(),
+                    ),
+                )
+                // #endregion
                 if (!DataStore.simpleMode) {
                     simpleModeLog("SimpleMode", "H30 wl_adapt_reload_skipped reason=simple_mode_off")
                     DataStore.simpleModeActivity = ""

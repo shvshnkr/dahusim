@@ -9,7 +9,7 @@ import java.net.URL
 import org.json.JSONObject
 
 private const val DEBUG_ENDPOINT = "http://127.0.0.1:7587/ingest/83220b13-894a-4e68-8cf1-6a9d6c84cae7"
-private const val DEBUG_SESSION_ID = "c39a52"
+private const val DEBUG_SESSION_ID = "1677a3"
 
 internal actual fun simpleModeLog(tag: String, message: String) {
     SimpleModeLogStore.log(tag, message)

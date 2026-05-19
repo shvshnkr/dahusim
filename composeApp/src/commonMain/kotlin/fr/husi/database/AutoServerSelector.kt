@@ -146,7 +146,36 @@ object AutoServerSelector {
         owner: PrepareOwner = PrepareOwner.CONNECT,
     ): PrepareForConnectResult {
         val session = newPrepareSession(owner)
+        val lockAttemptAt = System.currentTimeMillis()
+        // #region agent log
+        simpleModeDebugEvent(
+            runId = "handoff-reconnect",
+            hypothesisId = "H1_PREPARE_LOCK_WAIT",
+            location = "AutoServerSelector.prepareForConnect:before_mutex",
+            message = "Prepare requested",
+            data = mapOf(
+                "owner" to owner.name,
+                "networkHandoff" to networkHandoff.toString(),
+                "gen" to session.id.toString(),
+            ),
+        )
+        // #endregion
         return prepareMutex.withLock {
+            val lockWaitMs = (System.currentTimeMillis() - lockAttemptAt).coerceAtLeast(0)
+            // #region agent log
+            simpleModeDebugEvent(
+                runId = "handoff-reconnect",
+                hypothesisId = "H1_PREPARE_LOCK_WAIT",
+                location = "AutoServerSelector.prepareForConnect:entered_mutex",
+                message = "Prepare entered mutex",
+                data = mapOf(
+                    "owner" to owner.name,
+                    "networkHandoff" to networkHandoff.toString(),
+                    "gen" to session.id.toString(),
+                    "lockWaitMs" to lockWaitMs.toString(),
+                ),
+            )
+            // #endregion
             probeUiActive = true
             try {
                 ensurePrepareCurrent(session)
