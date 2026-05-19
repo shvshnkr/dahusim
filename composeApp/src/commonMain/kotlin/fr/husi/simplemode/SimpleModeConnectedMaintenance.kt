@@ -116,7 +116,9 @@ object SimpleModeConnectedMaintenance {
             Logs.w("simple mode background subscription refresh", it)
             null
         }
-        DataStore.simpleModeLastBackgroundSubRefreshAt = System.currentTimeMillis()
+        if (outcome?.allSucceeded == true) {
+            DataStore.simpleModeLastBackgroundSubRefreshAt = System.currentTimeMillis()
+        }
 
         val proxiesAfter = SagerDatabase.proxyDao.getAll()
         val hashAfter = AutoServerSelectorProbePolicy.computeProxyIdSetHash(proxiesAfter)

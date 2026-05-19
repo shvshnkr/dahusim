@@ -1,6 +1,7 @@
 package fr.husi.bootstrap
 
 import fr.husi.GroupType
+import fr.husi.RouteQuickProfile
 import fr.husi.SubscriptionType
 import fr.husi.database.DataStore
 import fr.husi.database.GroupManager
@@ -52,6 +53,9 @@ object DefaultUserBootstrap {
         ensureStandaloneSeVlessProfile()
         bootstrapPerAppDefaults()
         ProfileManager.ensureBootstrapRoutingDefaults()
+        if (DataStore.routeQuickProfile != RouteQuickProfile.MANUAL) {
+            ProfileManager.applyRouteQuickProfile(DataStore.routeQuickProfile)
+        }
         WhitelistBuiltinBootstrap.ensureGroupAndProfiles()
     }
 

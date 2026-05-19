@@ -447,6 +447,10 @@ object ProfileManager {
      * - ru-blocked / ai services -> proxy
      * Proxy exceptions must be evaluated before RU direct bypass.
      */
+    suspend fun stabilizeBlockedAndAiRulesBeforeRuDirect() {
+        ensureBlockedAndAiRulesBeforeRuDirect()
+    }
+
     private suspend fun ensureBlockedAndAiRulesBeforeRuDirect() {
         val rules = SagerDatabase.rulesDao.allRules().first().sortedBy { it.userOrder }
         val conflictRules = rules.filter { isBlockedOrAiProxyRule(it) }
@@ -488,7 +492,8 @@ object ProfileManager {
         val ip = rule.ip.lowercase()
         return domains.contains(RULESET_GEOSITE_RU_BLOCKED) ||
             domains.contains(RULESET_GEOSITE_RU_BLOCKED_ALL) ||
-            ip.contains(RULESET_GEOIP_RU_BLOCKED)
+            ip.contains(RULESET_GEOIP_RU_BLOCKED) ||
+            ip.contains(RULESET_GEOIP_RU_BLOCKED_COMMUNITY)
     }
 
     private fun isAiProxyRule(rule: RuleEntity): Boolean {

@@ -100,6 +100,7 @@ class RouteScreenViewModel : ViewModel() {
                 enabled = !rule.enabled,
             ),
         )
+        ProfileManager.stabilizeBlockedAndAiRulesBeforeRuDirect()
     }
 
     fun submitReorder(changes: List<OrderedItem<RuleEntity>>) = runOnDefaultDispatcher {

@@ -2,14 +2,19 @@ package fr.husi.bg
 
 import android.net.Network
 import fr.husi.database.DataStore
-import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.libcore.InterfaceUpdateListener
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.NetworkInterface
+import java.util.concurrent.atomic.AtomicInteger
 
 object DefaultNetworkMonitor {
     var defaultNetwork: Network? = null
@@ -21,13 +26,15 @@ object DefaultNetworkMonitor {
     private var lastConnectedState: Boolean = false
     private val access = Mutex()
     private var refCount = 0
+    private val monitorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val interfaceCheckGeneration = AtomicInteger(0)
 
     suspend fun start() {
         access.withLock {
             if (refCount++ > 0) return
             AndroidDefaultNetworkListener.start(this) {
                 defaultNetwork = it
-                checkDefaultInterfaceUpdate(it)
+                scheduleDefaultInterfaceCheck(it)
             }
             defaultNetwork = resolveAndroidRepository().connectivity.activeNetwork
         }
@@ -60,10 +67,18 @@ object DefaultNetworkMonitor {
 
     fun setListener(listener: InterfaceUpdateListener?) {
         this.listener = listener
-        checkDefaultInterfaceUpdate(defaultNetwork)
+        scheduleDefaultInterfaceCheck(defaultNetwork)
     }
 
-    private fun checkDefaultInterfaceUpdate(newNetwork: Network?) {
+    private fun scheduleDefaultInterfaceCheck(newNetwork: Network?) {
+        val generation = interfaceCheckGeneration.incrementAndGet()
+        monitorScope.launch {
+            checkDefaultInterfaceUpdate(newNetwork, generation)
+        }
+    }
+
+    private suspend fun checkDefaultInterfaceUpdate(newNetwork: Network?, generation: Int) {
+        if (generation != interfaceCheckGeneration.get()) return
         val listener = listener ?: return
         if (newNetwork != null) {
             val interfaceName =
@@ -86,11 +101,12 @@ object DefaultNetworkMonitor {
             )
             // #endregion
             for (times in 0 until 10) {
+                if (generation != interfaceCheckGeneration.get()) return
                 var interfaceIndex: Int
                 try {
                     interfaceIndex = NetworkInterface.getByName(interfaceName).index
                 } catch (_: Exception) {
-                    Thread.sleep(100)
+                    delay(100)
                     continue
                 }
                 val ifaceChanged =

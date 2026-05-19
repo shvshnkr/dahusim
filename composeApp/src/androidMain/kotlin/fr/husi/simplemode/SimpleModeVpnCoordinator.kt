@@ -62,7 +62,8 @@ internal object SimpleModeVpnCoordinator {
             ),
         )
         // #endregion
-        if (adaptJob?.isActive == true) {
+        val supersedeActiveAdapt = adaptJob?.isActive == true
+        if (supersedeActiveAdapt) {
             adaptGeneration.incrementAndGet()
             AutoServerSelector.cancelAdaptPrepare("adapt_supersede")
         }
@@ -72,7 +73,7 @@ internal object SimpleModeVpnCoordinator {
                 adaptMutex.withLock {
                     if (!isActive) return@withLock
                     val now = System.currentTimeMillis()
-                    if (now - lastAdaptAt < ADAPT_DEBOUNCE_MS) {
+                    if (!supersedeActiveAdapt && now - lastAdaptAt < ADAPT_DEBOUNCE_MS) {
                         simpleModeLog("SimpleMode", "H30 wl_adapt_skipped reason=debounce trigger=$reason")
                         return@withLock
                     }

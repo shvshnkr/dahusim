@@ -59,6 +59,7 @@ Upstream (`husi`) живет и развивается на Codeberg, а это�
 - Сборка и CI: [BUILD.md](./BUILD.md)
 - Вклад и стиль кода: [CONTRIBUTING.md](./CONTRIBUTING.md)
 - Синхронизация с апстримом: [docs/UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md)
+- Промпт для AI code review (diff/PR и аудит по волнам): [docs/CODE_REVIEW_PROMPT.md](docs/CODE_REVIEW_PROMPT.md)
 
 ## Технические детали (для разработчиков)
 

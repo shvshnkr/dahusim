@@ -29,6 +29,8 @@ go.work*
 docs/AUTO_SERVER_SELECTION_PROMPT.md
 # Локальный справочник по источникам подписок (личные URL, заметки)
 docs/SUBSCRIPTION_SOURCES_LOCAL.md
+# Локальные отчёты аудита / промежуточные review (не в репозитории)
+docs/local/
 
 # Vibe coding
 .claude

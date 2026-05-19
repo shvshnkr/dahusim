@@ -51,6 +51,7 @@ fun RuleEntity.isProtectedBuiltinRule(): Boolean {
                     // ru-blocked split mode
                     d.contains("geosite-ru-blocked") ||
                     ipLower.contains("geoip-ru-blocked") ||
+                    ipLower.contains("geoip-ru-blocked-community") ||
                     // ai split mode
                     AI_RULESET_TAGS.any { tag -> d.contains(tag) }
             }
