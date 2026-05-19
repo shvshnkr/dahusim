@@ -64,6 +64,7 @@ import fr.husi.resources.app_update_channel_sum
 import fr.husi.resources.menu_app_update
 import fr.husi.resources.update
 import fr.husi.resources.*
+import fr.husi.utils.clearSimpleModeLogs
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
@@ -172,6 +173,20 @@ fun AboutScreen(
                             title = stringResource(Res.string.menu_app_update),
                             description = stringResource(Res.string.app_update_channel_sum),
                             onCLick = onNavigateToAppUpdate,
+                        )
+                        CardItem(
+                            icon = { Icon(vectorResource(Res.drawable.delete_sweep), null) },
+                            title = stringResource(Res.string.simple_mode_clear_log),
+                            onCLick = {
+                                scope.launch {
+                                    clearSimpleModeLogs()
+                                    snackbarState.showSnackbar(
+                                        message = resolveRepository().getString(Res.string.simple_mode_clear_log_done),
+                                        actionLabel = resolveRepository().getString(Res.string.ok),
+                                        duration = SnackbarDuration.Short,
+                                    )
+                                }
+                            },
                         )
                         CardItem(
                             icon = {

@@ -836,6 +836,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_connect">Connect</string>
     <string name="simple_mode_disconnect">Disconnect</string>
     <string name="simple_mode_logs">Send logs</string>
+    <string name="simple_mode_clear_log">Clear simple-mode log</string>
+    <string name="simple_mode_clear_log_done">Simple-mode log cleared</string>
     <string name="simple_mode_full_ui">Open full interface</string>
     <string name="simple_mode_switch">Switch to simple mode</string>
     <string name="simple_mode_no_profile">No available profile yet. Wait for subscription refresh.</string>

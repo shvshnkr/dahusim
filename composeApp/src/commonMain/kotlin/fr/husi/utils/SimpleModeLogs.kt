@@ -13,3 +13,5 @@ internal expect fun simpleModeDebugEvent(
 internal expect fun canShareSimpleModeLogs(): Boolean
 
 internal expect suspend fun shareSimpleModeLogs()
+
+internal expect suspend fun clearSimpleModeLogs()

@@ -28,3 +28,7 @@ internal actual suspend fun shareSimpleModeLogs() {
     shareFile.appendText(appendix, Charsets.UTF_8)
     openFilePath(shareFile.absolutePath)
 }
+
+internal actual suspend fun clearSimpleModeLogs() {
+    SimpleModeLogStore.clearAppLog()
+}

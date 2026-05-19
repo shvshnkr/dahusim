@@ -58,6 +58,26 @@ internal object SimpleModeLogStore {
         }
     }
 
+    fun clearAppLog() {
+        synchronized(lock) {
+            runCatching {
+                val dir = logDir()
+                val appLog = appLogFile()
+                if (appLog.exists()) {
+                    appLog.delete()
+                }
+                dir.listFiles { child ->
+                    child.isFile &&
+                        child.name.startsWith("husi_simple_log_") &&
+                        child.name.endsWith(".txt")
+                }?.forEach { it.delete() }
+                lastSessionBuildCode = null
+            }.onFailure {
+                Logs.w("simple-mode log clear failed", it)
+            }
+        }
+    }
+
     fun logDir(): File = File(resolveRepository().cacheDir, "simple-mode").apply { mkdirs() }
 
     private fun appLogFile(): File = File(logDir(), APP_LOG_FILE)

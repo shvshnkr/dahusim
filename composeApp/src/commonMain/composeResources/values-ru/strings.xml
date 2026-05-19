@@ -758,6 +758,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_connect">Подключить</string>
     <string name="simple_mode_disconnect">Отключить</string>
     <string name="simple_mode_logs">Отправить логи</string>
+    <string name="simple_mode_clear_log">Очистить лог simple-mode</string>
+    <string name="simple_mode_clear_log_done">Лог simple-mode очищен</string>
     <string name="simple_mode_full_ui">Открыть полный интерфейс</string>
     <string name="simple_mode_switch">Переключиться в простой режим</string>
     <string name="simple_mode_no_profile">Нет доступного профиля. Дождитесь обновления подписок.</string>

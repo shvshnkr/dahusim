@@ -71,3 +71,7 @@ internal actual suspend fun shareSimpleModeLogs() {
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     appContext.startActivity(chooser)
 }
+
+internal actual suspend fun clearSimpleModeLogs() {
+    SimpleModeLogStore.clearAppLog()
+}
