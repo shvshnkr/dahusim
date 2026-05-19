@@ -139,6 +139,10 @@ class BaseService {
                     }
                 }
 
+                Intent.ACTION_USER_PRESENT -> runOnDefaultDispatcher {
+                    SimpleModeSessionHealth.triggerQuickCheck("user_present")
+                }
+
                 else -> service.stopRunner()
             }
         }
@@ -452,6 +456,7 @@ class BaseService {
                     addAction(Action.CLOSE)
                     // addAction(Action.SWITCH_WAKE_LOCK)
                     addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+                    addAction(Intent.ACTION_USER_PRESENT)
                     addAction(Action.RESET_UPSTREAM_CONNECTIONS)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

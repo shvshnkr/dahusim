@@ -3,6 +3,7 @@ package fr.husi.ui
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
+import fr.husi.simplemode.SimpleModeSessionHealth
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import java.lang.ref.WeakReference
@@ -35,6 +36,7 @@ object UiActivityTracker {
     fun onResume(activity: Activity) {
         activityRef = WeakReference(activity)
         resumed = true
+        SimpleModeSessionHealth.triggerQuickCheck("ui_resume")
         // #region agent log
         simpleModeDebugEvent(
             runId = "handoff-reconnect",

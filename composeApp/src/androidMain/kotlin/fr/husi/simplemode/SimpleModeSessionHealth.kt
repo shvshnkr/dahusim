@@ -1,8 +1,6 @@
 package fr.husi.simplemode
 
-import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceRegistry
-import fr.husi.bg.ServiceState
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
 import fr.husi.ktx.readableMessage
@@ -19,6 +17,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Periodic URL health check while simple-mode VPN stays connected.
@@ -26,44 +26,79 @@ import kotlinx.coroutines.launch
  */
 internal object SimpleModeSessionHealth {
 
-    private const val CHECK_INTERVAL_MS = 4L * 60 * 1000
+    private const val CHECK_INTERVAL_MS = 30_000L
     private const val CONSECUTIVE_FAIL_LIMIT = 2
     private const val WARMUP_MS = 400L
+    private const val ON_DEMAND_MIN_GAP_MS = 15_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val checkLock = Mutex()
     private var job: Job? = null
+    private var monitoredProfileId: Long = -1L
+    private var monitoredOutboundTag: String = ""
+    private var consecutiveFails: Int = 0
+    private var lastOnDemandAt: Long = 0L
 
     fun schedule(profileId: Long, outboundTag: String) {
         if (!DataStore.simpleMode || outboundTag.isBlank()) return
         cancel()
+        monitoredProfileId = profileId
+        monitoredOutboundTag = outboundTag
+        consecutiveFails = 0
         job = scope.launch {
-            var consecutiveFails = 0
             delay(CHECK_INTERVAL_MS)
             while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
-                if (DataStore.selectedProxy != profileId) break
-                if (BackendState.status.value.state != ServiceState.Connected) break
-                val ok = runUrlHealthCheck(outboundTag)
-                if (ok) {
-                    consecutiveFails = 0
-                } else {
-                    consecutiveFails++
-                    simpleModeLog(
-                        "SimpleMode",
-                        "H34 session_health_fail profileId=$profileId streak=$consecutiveFails",
-                    )
-                    if (consecutiveFails >= CONSECUTIVE_FAIL_LIMIT) {
-                        handleUnhealthySession(profileId)
-                        break
-                    }
-                }
+                val keepRunning = runHealthCheck(profileId, outboundTag)
+                if (!keepRunning) break
                 delay(CHECK_INTERVAL_MS)
             }
+        }
+    }
+
+    fun triggerQuickCheck(reason: String) {
+        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return
+        val profileId = monitoredProfileId
+        val outboundTag = monitoredOutboundTag
+        if (profileId <= 0L || outboundTag.isBlank()) return
+        val now = System.currentTimeMillis()
+        if (now - lastOnDemandAt < ON_DEMAND_MIN_GAP_MS) return
+        lastOnDemandAt = now
+        scope.launch {
+            simpleModeLog(
+                "SimpleMode",
+                "H34 session_health_quick_check reason=$reason profileId=$profileId",
+            )
+            runHealthCheck(profileId, outboundTag)
         }
     }
 
     fun cancel() {
         job?.cancel()
         job = null
+        monitoredProfileId = -1L
+        monitoredOutboundTag = ""
+        consecutiveFails = 0
+        lastOnDemandAt = 0L
+    }
+
+    private suspend fun runHealthCheck(profileId: Long, outboundTag: String): Boolean = checkLock.withLock {
+        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return@withLock false
+        if (DataStore.selectedProxy != profileId) return@withLock false
+        val ok = runUrlHealthCheck(outboundTag)
+        if (ok) {
+            consecutiveFails = 0
+            return@withLock true
+        }
+        consecutiveFails++
+        simpleModeLog(
+            "SimpleMode",
+            "H34 session_health_fail profileId=$profileId streak=$consecutiveFails",
+        )
+        if (consecutiveFails >= CONSECUTIVE_FAIL_LIMIT) {
+            handleUnhealthySession(profileId)
+            return@withLock false
+        }
+        true
     }
 
     private suspend fun runUrlHealthCheck(outboundTag: String): Boolean {
