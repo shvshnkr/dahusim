@@ -12,6 +12,7 @@ import fr.husi.database.SagerDatabase
 import fr.husi.ktx.onIoDispatcher
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.ktx.runOnIoDispatcher
+import fr.husi.routing.isProtectedBuiltinRule
 import fr.husi.utils.enableRussianPerAppBypass
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -103,6 +104,7 @@ class RouteScreenViewModel : ViewModel() {
 
     fun submitReorder(changes: List<OrderedItem<RuleEntity>>) = runOnDefaultDispatcher {
         val toUpdate = changes.mapNotNull { orderedItem ->
+            if (orderedItem.value.isProtectedBuiltinRule()) return@mapNotNull null
             val newUserOrder = orderedItem.newIndex.toLong()
             if (orderedItem.value.userOrder != newUserOrder) {
                 orderedItem.value.copy(
@@ -124,6 +126,9 @@ class RouteScreenViewModel : ViewModel() {
                 val ruleIndex = rules.indexOfFirst { it.id == id }
                 if (ruleIndex >= 0) {
                     val rule = rules.removeAt(ruleIndex)
+                    if (rule.isProtectedBuiltinRule()) {
+                        return@update state
+                    }
                     hiddenRules.add(rule.id)
                 }
                 state.copy(

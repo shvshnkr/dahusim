@@ -54,6 +54,7 @@ object Key {
 
     // const val FORCED_SEARCH_PROCESS = "forcedSearchProcess"
     const val RULES_PROVIDER = "rulesProvider"
+    const val ROUTE_QUICK_PROFILE = "routeQuickProfile"
     const val CUSTOM_RULE_PROVIDER = "customRuleProvider"
     const val ROUTE_ASSETS_AUTO_UPDATE_DELAY = "routeAssetsAutoUpdateDelay"
     const val ROUTE_ASSETS_LAST_UPDATED = "routeAssetsLastUpdated"
@@ -264,6 +265,12 @@ object RuleProvider {
     fun hasUnstableBranch(provider: Int): Boolean {
         return provider in OFFICIAL..LOYALSOLDIER
     }
+}
+
+object RouteQuickProfile {
+    const val MANUAL = 0
+    const val RU_DIRECT_ONLY = 1
+    const val RU_DIRECT_WITH_BLOCKED_AND_AI_PROXY = 2
 }
 
 object NetworkInterfaceStrategy {

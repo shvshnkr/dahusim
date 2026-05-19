@@ -12,6 +12,7 @@ import fr.husi.fmt.SingBoxOptions.NetworkUDP
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.repository.resolveRepository
 import fr.husi.RuleProvider
+import fr.husi.RouteQuickProfile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -25,6 +26,16 @@ object ProfileManager {
 
     private val defaultGroupLock = Any()
     private val repository get() = resolveRepository()
+    private const val RULESET_GEOSITE_RU_BLOCKED = "geosite-ru-blocked"
+    private const val RULESET_GEOSITE_RU_BLOCKED_ALL = "geosite-ru-blocked-all"
+    private const val RULESET_GEOIP_RU_BLOCKED = "geoip-ru-blocked"
+    private const val RULESET_GEOIP_RU_BLOCKED_COMMUNITY = "geoip-ru-blocked-community"
+    private val AI_RULESET_TAGS = listOf(
+        "geosite-openai",
+        "geosite-anthropic",
+        "geosite-google-gemini",
+        "geosite-xai",
+    )
 
     suspend fun createProfile(groupId: Long, bean: AbstractBean): ProxyEntity {
         bean.applyDefaultValues()
@@ -181,6 +192,27 @@ object ProfileManager {
         } else {
             mergeChinaPresetRules()
         }
+    }
+
+    suspend fun applyRouteQuickProfile(profile: Int) {
+        when (profile) {
+            RouteQuickProfile.RU_DIRECT_ONLY -> applyRuDirectOnlyProfile()
+            RouteQuickProfile.RU_DIRECT_WITH_BLOCKED_AND_AI_PROXY -> applyRuDirectWithBlockedAndAiProxyProfile()
+            else -> Unit
+        }
+    }
+
+    private suspend fun applyRuDirectOnlyProfile() {
+        applyRussianPreset()
+        toggleRulesByPredicate(enabled = false, predicate = ::isBlockedOrAiProxyRule)
+    }
+
+    private suspend fun applyRuDirectWithBlockedAndAiProxyProfile() {
+        applyRussianPreset()
+        ensureRuBlockedProxyRuleMerged()
+        ensureAiProxyRuleMerged()
+        ensureBlockedAndAiRulesBeforeRuDirect()
+        toggleRulesByPredicate(enabled = true, predicate = ::isBlockedOrAiProxyRule)
     }
 
     private suspend fun mergeRussianPresetRules() {
@@ -353,6 +385,122 @@ object ProfileManager {
                 updateRule(rule)
             }
         }
+    }
+
+    private suspend fun ensureRuBlockedProxyRuleMerged() {
+        val rules = SagerDatabase.rulesDao.allRules().first()
+        if (rules.any(::isRuBlockedProxyRule)) return
+        createRule(
+            RuleEntity(
+                enabled = true,
+                name = repository.getString(Res.string.route_proxy_ru_blocked),
+                action = ACTION_ROUTE,
+                domains = buildString {
+                    append("set+dns:")
+                    append(RULESET_GEOSITE_RU_BLOCKED_ALL)
+                    append('\n')
+                    append("set+dns:")
+                    append(RULESET_GEOSITE_RU_BLOCKED)
+                },
+                ip = buildString {
+                    append("set-dns:")
+                    append(RULESET_GEOIP_RU_BLOCKED)
+                    append('\n')
+                    append("set-dns:")
+                    append(RULESET_GEOIP_RU_BLOCKED_COMMUNITY)
+                },
+                outbound = RuleEntity.OUTBOUND_PROXY,
+            ),
+            false,
+        )
+    }
+
+    private suspend fun ensureAiProxyRuleMerged() {
+        val rules = SagerDatabase.rulesDao.allRules().first()
+        if (rules.any(::isAiProxyRule)) return
+        createRule(
+            RuleEntity(
+                enabled = true,
+                name = repository.getString(Res.string.route_proxy_ai_services),
+                action = ACTION_ROUTE,
+                domains = AI_RULESET_TAGS.joinToString(separator = "\n") { "set+dns:$it" },
+                outbound = RuleEntity.OUTBOUND_PROXY,
+            ),
+            false,
+        )
+    }
+
+    private suspend fun toggleRulesByPredicate(
+        enabled: Boolean,
+        predicate: (RuleEntity) -> Boolean,
+    ) {
+        val rules = SagerDatabase.rulesDao.allRules().first()
+        for (rule in rules) {
+            if (!predicate(rule) || rule.enabled == enabled) continue
+            updateRule(rule.copy(enabled = enabled))
+        }
+    }
+
+    /**
+     * Conflict guard for the 4 core split-routing rules:
+     * - geosite-ru / geoip-ru -> direct
+     * - ru-blocked / ai services -> proxy
+     * Proxy exceptions must be evaluated before RU direct bypass.
+     */
+    private suspend fun ensureBlockedAndAiRulesBeforeRuDirect() {
+        val rules = SagerDatabase.rulesDao.allRules().first().sortedBy { it.userOrder }
+        val conflictRules = rules.filter { isBlockedOrAiProxyRule(it) }
+        if (conflictRules.isEmpty()) return
+        val insertIndex = rules.indexOfFirst(::isRuGeoDirectRule).takeIf { it >= 0 } ?: return
+        val conflictIds = conflictRules.map { it.id }.toHashSet()
+        val reordered = buildList(rules.size) {
+            addAll(rules.take(insertIndex).filterNot { conflictIds.contains(it.id) })
+            addAll(conflictRules)
+            addAll(rules.drop(insertIndex).filterNot { conflictIds.contains(it.id) })
+        }
+        val toUpdate = reordered.mapIndexedNotNull { index, rule ->
+            val newOrder = index.toLong()
+            if (rule.userOrder == newOrder) {
+                null
+            } else {
+                rule.copy(userOrder = newOrder)
+            }
+        }
+        if (toUpdate.isNotEmpty()) {
+            SagerDatabase.rulesDao.updateRules(toUpdate)
+        }
+    }
+
+    private fun isRuGeoDirectRule(rule: RuleEntity): Boolean {
+        if (rule.dnsOnly || rule.action != ACTION_ROUTE || rule.outbound != RuleEntity.OUTBOUND_DIRECT) {
+            return false
+        }
+        val domains = rule.domains.lowercase()
+        val ip = rule.ip.lowercase()
+        return domains.contains("geosite-category-ru") || domains.contains("geosite-ru") || ip.contains("geoip-ru")
+    }
+
+    private fun isRuBlockedProxyRule(rule: RuleEntity): Boolean {
+        if (rule.dnsOnly || rule.action != ACTION_ROUTE || rule.outbound != RuleEntity.OUTBOUND_PROXY) {
+            return false
+        }
+        val domains = rule.domains.lowercase()
+        val ip = rule.ip.lowercase()
+        return domains.contains(RULESET_GEOSITE_RU_BLOCKED) ||
+            domains.contains(RULESET_GEOSITE_RU_BLOCKED_ALL) ||
+            ip.contains(RULESET_GEOIP_RU_BLOCKED)
+    }
+
+    private fun isAiProxyRule(rule: RuleEntity): Boolean {
+        if (rule.dnsOnly || rule.action != ACTION_ROUTE || rule.outbound != RuleEntity.OUTBOUND_PROXY) {
+            return false
+        }
+        val domains = rule.domains.lowercase()
+        return AI_RULESET_TAGS.any { tag -> domains.contains(tag) }
+    }
+
+    private fun isBlockedOrAiProxyRule(rule: RuleEntity): Boolean {
+        return isRuBlockedProxyRule(rule) || isAiProxyRule(rule)
     }
 
     private suspend fun seedDefaultRules(

@@ -26,8 +26,14 @@ private const val DEFAULT_RULESET_GEOSITE_BASE =
     "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set"
 private const val DEFAULT_RULESET_GEOIP_BASE =
     "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set"
+private const val RUNETFREEDOM_RULESET_GEOSITE_BASE =
+    "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite"
+private const val RUNETFREEDOM_RULESET_GEOIP_BASE =
+    "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip"
 
 private fun ruleSetRemoteBaseForTag(tag: String, ipURL: String?, domainURL: String?): String {
+    if (tag.startsWith("geosite-ru-blocked")) return RUNETFREEDOM_RULESET_GEOSITE_BASE
+    if (tag.startsWith("geoip-ru-blocked")) return RUNETFREEDOM_RULESET_GEOIP_BASE
     val isIp = tag.startsWith("geoip-")
     val primary = (if (isIp) ipURL else domainURL)?.takeIf { it.isNotBlank() }
     if (primary != null) return primary

@@ -302,9 +302,15 @@
     <string name="route_apply_ru_preset">Apply Russia preset</string>
     <string name="route_apply_cn_preset">Apply China preset</string>
     <string name="route_apply_preset_applied">Routing preset applied</string>
+    <string name="route_quick_profile">Quick routing profile</string>
+    <string name="route_quick_profile_manual">Manual (quick profile off)</string>
+    <string name="route_quick_profile_ru_direct_only">Russia direct only</string>
+    <string name="route_quick_profile_ru_direct_blocked_ai_proxy">Russia direct + blocked and AI via proxy</string>
     <string name="route_enable_ru_mode">Enable Russia mode</string>
     <string name="route_enable_ru_mode_confirm">This will replace current routing rules with the Russia preset (geosite-ru / geoip-ru bypass, block ads and QUIC), switch the rule-set provider to Chocolate4U, set Cloudflare DoH as the remote DNS, generate a SOCKS5 login/password if missing, and on Android select common Russian apps for per-app bypass. Continue?</string>
     <string name="route_enable_ru_mode_done">Russia mode enabled. %1$d Russian apps added to per-app bypass.</string>
+    <string name="route_proxy_ru_blocked">Proxy blocked in Russia (domains + IP)</string>
+    <string name="route_proxy_ai_services">Proxy AI services unavailable from RU IP</string>
     <string name="route_ru_bypass_nspk">RU payment / banking (geosite)</string>
     <string name="custom_rule_provider_hint">One archive URL per line. Community RU lists:
 https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/sing-box-rules.zip

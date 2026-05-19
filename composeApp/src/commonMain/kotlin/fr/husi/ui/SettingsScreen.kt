@@ -58,6 +58,7 @@ import fr.husi.CertProvider
 import fr.husi.Key
 import fr.husi.NetworkInterfaceStrategy
 import fr.husi.ProtocolProvider
+import fr.husi.RouteQuickProfile
 import fr.husi.RuleProvider
 import fr.husi.TunImplementation
 import fr.husi.bg.BackendState
@@ -87,6 +88,7 @@ import fr.husi.compose.theme.themeString
 import fr.husi.compose.theme.themes
 import fr.husi.compose.withNavigation
 import fr.husi.database.DataStore
+import fr.husi.database.ProfileManager
 import fr.husi.database.SagerDatabase
 import fr.husi.ktx.contentOrUnset
 import fr.husi.ktx.intListN
@@ -201,6 +203,10 @@ import fr.husi.resources.public_icon
 import fr.husi.resources.push_pin
 import fr.husi.resources.remote_dns
 import fr.husi.resources.route_options
+import fr.husi.resources.route_quick_profile
+import fr.husi.resources.route_quick_profile_manual
+import fr.husi.resources.route_quick_profile_ru_direct_blocked_ai_proxy
+import fr.husi.resources.route_quick_profile_ru_direct_only
 import fr.husi.resources.route_rules_official
 import fr.husi.resources.route_rules_provider
 import fr.husi.resources.router
@@ -700,6 +706,48 @@ fun SettingsScreen(
 
                     item(Key.ROUTE_SETTINGS, PreferenceType.CATEGORY) {
                         PreferenceCategory(text = { Text(stringResource(Res.string.route_options)) })
+                    }
+                    item(Key.ROUTE_QUICK_PROFILE, PreferenceType.LIST) {
+                        fun routeQuickProfileTextRes(value: Int): StringResource = when (value) {
+                            RouteQuickProfile.MANUAL -> Res.string.route_quick_profile_manual
+                            RouteQuickProfile.RU_DIRECT_ONLY -> Res.string.route_quick_profile_ru_direct_only
+                            RouteQuickProfile.RU_DIRECT_WITH_BLOCKED_AND_AI_PROXY -> {
+                                Res.string.route_quick_profile_ru_direct_blocked_ai_proxy
+                            }
+
+                            else -> Res.string.route_quick_profile_manual
+                        }
+
+                        val value by DataStore.configurationStore
+                            .intFlow(Key.ROUTE_QUICK_PROFILE, RouteQuickProfile.MANUAL)
+                            .collectAsStateWithLifecycle(RouteQuickProfile.MANUAL)
+                        ListPreference(
+                            value = value,
+                            onValueChange = { selected ->
+                                scope.launch {
+                                    onIoDispatcher {
+                                        ProfileManager.applyRouteQuickProfile(selected)
+                                        DataStore.routeQuickProfile = selected
+                                    }
+                                    needReload()
+                                }
+                            },
+                            values = listOf(
+                                RouteQuickProfile.MANUAL,
+                                RouteQuickProfile.RU_DIRECT_ONLY,
+                                RouteQuickProfile.RU_DIRECT_WITH_BLOCKED_AND_AI_PROXY,
+                            ),
+                            title = { Text(stringResource(Res.string.route_quick_profile)) },
+                            icon = {
+                                Icon(
+                                    vectorResource(Res.drawable.rule_folder),
+                                    null,
+                                )
+                            },
+                            summary = { Text(stringResource(routeQuickProfileTextRes(value))) },
+                            type = ListPreferenceType.DROPDOWN_MENU,
+                            valueToText = { AnnotatedString(stringResource(routeQuickProfileTextRes(it))) },
+                        )
                     }
                     proxyAppsPreferences(openAppManager)
                     platformRouteOptions(

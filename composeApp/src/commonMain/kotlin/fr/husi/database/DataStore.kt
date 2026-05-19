@@ -7,6 +7,7 @@ import fr.husi.GroupType
 import fr.husi.Key
 import fr.husi.NetworkInterfaceStrategy
 import fr.husi.ProtocolProvider
+import fr.husi.RouteQuickProfile
 import fr.husi.SPEED_TEST_UPLOAD_URL
 import fr.husi.SPEED_TEST_URL
 import fr.husi.TrafficSortMode
@@ -193,6 +194,7 @@ object DataStore {
 
     var securityAdvisory by configurationStore.boolean(Key.SECURITY_ADVISORY) { true }
     var rulesProvider by configurationStore.int(Key.RULES_PROVIDER)
+    var routeQuickProfile by configurationStore.int(Key.ROUTE_QUICK_PROFILE) { RouteQuickProfile.MANUAL }
     var customRuleProvider by configurationStore.string(Key.CUSTOM_RULE_PROVIDER)
     var routeAssetsAutoUpdateDelay by configurationStore.int(Key.ROUTE_ASSETS_AUTO_UPDATE_DELAY) { 0 }
     var routeAssetsLastUpdated by configurationStore.long(Key.ROUTE_ASSETS_LAST_UPDATED) { 0L }

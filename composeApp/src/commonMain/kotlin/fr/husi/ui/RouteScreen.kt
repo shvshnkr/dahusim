@@ -87,6 +87,7 @@ import fr.husi.fmt.SingBoxOptions
 import fr.husi.ktx.showAndDismissOld
 import fr.husi.platform.PlatformInfo
 import fr.husi.repository.resolveRepository
+import fr.husi.routing.isProtectedBuiltinRule
 import fr.husi.resources.Res
 import fr.husi.resources.add_road
 import fr.husi.resources.apply
@@ -385,6 +386,7 @@ fun RouteScreen(
                         needReload()
                     },
                 ) { _, rule ->
+                    val protectedBuiltinRule = rule.isProtectedBuiltinRule()
                     val swipeState = rememberSwipeToDismissBoxState()
 
                     // Monitor swipe state changes and perform deletion when user completes swipe gesture.
@@ -393,6 +395,10 @@ fun RouteScreen(
                     // (due to stable key) would cause onDismiss to fire again on recomposition.
                     LaunchedEffect(swipeState.currentValue) {
                         if (swipeState.currentValue != SwipeToDismissBoxValue.Settled) {
+                            if (protectedBuiltinRule) {
+                                swipeState.snapTo(SwipeToDismissBoxValue.Settled)
+                                return@LaunchedEffect
+                            }
                             viewModel.undoableRemove(rule.id)
                             swipeState.snapTo(SwipeToDismissBoxValue.Settled)
                         }
@@ -407,8 +413,8 @@ fun RouteScreen(
                     ) {
                         SwipeToDismissBox(
                             state = swipeState,
-                            enableDismissFromStartToEnd = true,
-                            enableDismissFromEndToStart = true,
+                            enableDismissFromStartToEnd = !protectedBuiltinRule,
+                            enableDismissFromEndToStart = !protectedBuiltinRule,
                             backgroundContent = {
                                 Box(
                                     modifier = Modifier
@@ -423,6 +429,7 @@ fun RouteScreen(
                         ) {
                             RuleCard(
                                 rule = rule,
+                                protectedBuiltinRule = protectedBuiltinRule,
                                 viewModel = viewModel,
                                 onNeedReload = { needReload() },
                                 openRouteSettings = openRouteSettings,
@@ -525,6 +532,7 @@ fun RouteScreen(
 private fun DraggableSwipeableItemScope<RuleEntity>.RuleCard(
     modifier: Modifier = Modifier,
     rule: RuleEntity,
+    protectedBuiltinRule: Boolean,
     viewModel: RouteScreenViewModel,
     onNeedReload: () -> Unit,
     openRouteSettings: (Long) -> Unit,
@@ -547,7 +555,13 @@ private fun DraggableSwipeableItemScope<RuleEntity>.RuleCard(
                 modifier = Modifier
                     .size(40.dp)
                     .padding(8.dp)
-                    .dragDropModifier(),
+                    .let {
+                        if (protectedBuiltinRule) {
+                            it
+                        } else {
+                            it.dragDropModifier()
+                        }
+                    },
             )
 
             Column(
@@ -570,7 +584,9 @@ private fun DraggableSwipeableItemScope<RuleEntity>.RuleCard(
                     )
 
                     IconButton(
+                        enabled = !protectedBuiltinRule,
                         onClick = {
+                            if (protectedBuiltinRule) return@IconButton
                             openRouteSettings(rule.id)
                         },
                         modifier = Modifier.size(40.dp),

@@ -263,9 +263,15 @@
     <string name="route_apply_ru_preset">Применить профиль для России</string>
     <string name="route_apply_cn_preset">Применить профиль для Китая</string>
     <string name="route_apply_preset_applied">Профиль маршрутизации применён</string>
+    <string name="route_quick_profile">Быстрый профиль маршрутизации</string>
+    <string name="route_quick_profile_manual">Ручной (быстрый профиль выключен)</string>
+    <string name="route_quick_profile_ru_direct_only">Только Россия напрямую</string>
+    <string name="route_quick_profile_ru_direct_blocked_ai_proxy">Россия напрямую + заблокированные и AI через прокси</string>
     <string name="route_enable_ru_mode">Включить режим РФ</string>
     <string name="route_enable_ru_mode_confirm">Это действие перезапишет текущие правила маршрутизации профилем для России (прямой доступ к geosite-ru / geoip-ru; блок рекламы и QUIC), переключит источник rule-set на Chocolate4U, пропишет Cloudflare DoH как удалённый DNS, сгенерирует логин/пароль для SOCKS5 при их отсутствии и на Android добавит распространённые российские приложения в исключения bypass. Продолжить?</string>
     <string name="route_enable_ru_mode_done">Режим РФ включён. Добавлено %1$d российских приложений в исключения.</string>
+    <string name="route_proxy_ru_blocked">Через прокси: заблокированное в РФ (домены + IP)</string>
+    <string name="route_proxy_ai_services">Через прокси: AI-сервисы, режущие RU IP</string>
     <string name="route_ru_bypass_nspk">Платежи и банки РФ (geosite)</string>
     <string name="custom_rule_provider_hint">Один URL архива на строку. Сообщество RU-списков:
 https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/sing-box-rules.zip
