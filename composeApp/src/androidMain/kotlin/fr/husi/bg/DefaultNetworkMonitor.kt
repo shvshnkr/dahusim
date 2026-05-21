@@ -23,6 +23,8 @@ object DefaultNetworkMonitor {
     private var lastInterfaceIndex: Int = -2
     /** Kept across brief default-network loss so Wi‑Fi→cellular handoff still runs while VPN is up. */
     private var previousInterfaceForHandoff: String? = null
+    /** Set when default network is lost while VPN is up (same-iface Wi‑Fi reconnect, DHCP renew, etc.). */
+    private var underlyingCarrierLostWhileConnected = false
     private var lastConnectedState: Boolean = false
     private val access = Mutex()
     private var refCount = 0
@@ -111,18 +113,26 @@ object DefaultNetworkMonitor {
                 }
                 val ifaceChanged =
                     interfaceName != lastInterfaceName || interfaceIndex != lastInterfaceIndex
+                val handoffReason = UnderlyingNetworkHandoffPolicy.evaluate(
+                    UnderlyingNetworkHandoffPolicy.Snapshot(
+                        vpnConnected = DataStore.serviceState.connected,
+                        interfaceName = interfaceName,
+                        interfaceIndex = interfaceIndex,
+                        lastInterfaceName = lastInterfaceName,
+                        lastInterfaceIndex = lastInterfaceIndex,
+                        previousInterfaceForHandoff = previousInterfaceForHandoff,
+                        underlyingCarrierLostWhileConnected = underlyingCarrierLostWhileConnected,
+                    ),
+                )
                 if (ifaceChanged) {
                     val prevHandoff = previousInterfaceForHandoff
-                    val handoffWhileConnected = DataStore.serviceState.connected &&
-                        prevHandoff != null &&
-                        interfaceName != null &&
-                        prevHandoff != interfaceName
                     // #region agent log
                     simpleModeLog(
                         "SimpleMode",
                         "H15 net_iface_changed old=${lastInterfaceName ?: "none"}:$lastInterfaceIndex " +
                             "new=${interfaceName ?: "unknown"}:$interfaceIndex connected=${DataStore.serviceState.connected} " +
-                            "handoffFrom=${prevHandoff ?: "none"} handoff=$handoffWhileConnected",
+                            "handoffFrom=${prevHandoff ?: "none"} handoff=${handoffReason != null} " +
+                            "handoffReason=${handoffReason ?: "none"} carrierLost=$underlyingCarrierLostWhileConnected",
                     )
                     simpleModeDebugEvent(
                         runId = "network-switch",
@@ -135,16 +145,19 @@ object DefaultNetworkMonitor {
                             "newName" to (interfaceName ?: "unknown"),
                             "newIndex" to interfaceIndex.toString(),
                             "connected" to DataStore.serviceState.connected.toString(),
+                            "handoffReason" to (handoffReason ?: "none"),
                         ),
                     )
                     // #endregion
-                    if (handoffWhileConnected) {
-                        simpleModeLog(
-                            "SimpleMode",
-                            "H-D2 network_handoff_triggered from=$prevHandoff to=$interfaceName",
-                        )
-                        WhitelistNetworkRoutingState.onUnderlyingInterfaceHandoff(interfaceName)
-                    }
+                }
+                if (handoffReason != null) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H-D2 network_handoff_triggered from=${previousInterfaceForHandoff ?: "none"} " +
+                            "to=$interfaceName reason=$handoffReason",
+                    )
+                    underlyingCarrierLostWhileConnected = false
+                    WhitelistNetworkRoutingState.onUnderlyingInterfaceHandoff(interfaceName)
                 }
                 if (interfaceName != null) {
                     previousInterfaceForHandoff = interfaceName
@@ -173,8 +186,11 @@ object DefaultNetworkMonitor {
                 ),
             )
             // #endregion
-            if (!DataStore.serviceState.connected) {
+            if (DataStore.serviceState.connected) {
+                underlyingCarrierLostWhileConnected = true
+            } else {
                 previousInterfaceForHandoff = null
+                underlyingCarrierLostWhileConnected = false
             }
             lastInterfaceName = null
             lastInterfaceIndex = -1
