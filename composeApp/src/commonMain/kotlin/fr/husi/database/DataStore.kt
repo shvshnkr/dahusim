@@ -293,6 +293,10 @@ object DataStore {
     var autoSelectLastProbeWhitelistOnly by configurationStore.boolean(Key.AUTO_SELECT_LAST_PROBE_WHITELIST_ONLY) { false }
     var autoSelectLastKnownGoodUrlAt by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_AT) { 0L }
     var autoSelectLastKnownGoodUrlProfileId by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_PROFILE_ID) { 0L }
+    var probe2kPersistenceEnabled by configurationStore.boolean(Key.PROBE_2K_PERSISTENCE_ENABLED) { true }
+    var probe2kWarmRankingEnabled by configurationStore.boolean(Key.PROBE_2K_WARM_RANKING_ENABLED) { false }
+    var probe2kBuiltinFallbackCapEnabled by configurationStore.boolean(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED) { false }
+    var probe2kBackgroundSchedulerEnabled by configurationStore.boolean(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED) { false }
     var simpleModeLastBackgroundSubRefreshAt by configurationStore.long(Key.SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT) { 0L }
     var autoConnectPausedUntilGoogle by configurationStore.boolean(Key.AUTO_CONNECT_PAUSED_UNTIL_GOOGLE) { false }
     var simpleModeActivity by configurationStore.string(Key.SIMPLE_MODE_ACTIVITY) { "" }
