@@ -97,7 +97,8 @@ object SubscriptionCatalogApplier {
                     type = record.subscriptionType
                     link = record.link
                     if (isBuiltinManagedSourceId()) {
-                        // Built-in managed groups are never re-owned by GitHub catalog.
+                        // Promote built-ins to gh.* ownership so future catalog updates match by source_id.
+                        this.sourceId = sourceId
                         managedByRemote = true
                     } else if (isGithubManagedSourceId()) {
                         this.sourceId = sourceId

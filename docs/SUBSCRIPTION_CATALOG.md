@@ -54,8 +54,9 @@ REMOVE|legacy-id
   - actual deletion happens on a later successful sync or after grace period.
 - Only GitHub-catalog-managed subscriptions (`source_id` stored with internal `gh.` prefix)
   can be auto-removed.
-- Built-in subscriptions are marked as managed with internal `builtin.` source ids and are
-  never auto-removed by GitHub catalog sync.
+- Built-in subscriptions are initially marked with internal `builtin.` source ids.
+  On first matching `UPSERT` by link, ownership is promoted to `gh.<source_id>` so later updates
+  are tracked by stable `source_id` (not by link matching).
 - If catalog adds an already existing link, app updates the existing group instead of creating
   a duplicate.
 

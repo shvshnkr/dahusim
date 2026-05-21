@@ -1,0 +1,12 @@
+HUSI_SUBSCRIPTION_CATALOG_V1
+generation=1
+allow_empty=false
+UPSERT|mifa-main|Mifa Main|https://mifa.world/vless|RAW|default
+UPSERT|mifa-hysteria|Mifa Hysteria|https://mifa.world/hysteria|RAW|default
+UPSERT|swordware-main|Swordware|https://raw.githubusercontent.com/mbelspb-gif/gdffgd/refs/heads/main/Swordware.net|RAW|default
+UPSERT|black-vless-rus-mobile|BLACK VLESS RUS mobile|https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt|RAW|default
+UPSERT|aetris-vpn|AetrisVPN|https://gist.githubusercontent.com/flaafix/c79a81037d15163360571c7a7331b153/raw/AetrisVPN.txt|RAW|default
+UPSERT|tri-228|tri_228|https://raw.githubusercontent.com/nzea243/ikoV31tud_vpn/refs/heads/main/tri_228.txt|RAW|default
+UPSERT|white-lattice|WhiteLattice|https://raw.githubusercontent.com/HikaruApps/WhiteLattice/refs/heads/main/subscriptions/config.txt|RAW|default
+UPSERT|white-list-vpn-black|WhiteListVpn BlackList|https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/BlackList.txt|RAW|default
+UPSERT|wlrus-blackl|wlrus blackl|https://wlrus.lol/confs/blackl.txt|RAW|default

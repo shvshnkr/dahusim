@@ -23,21 +23,49 @@ object DefaultUserBootstrap {
     private const val AUTO_UPDATE_MINUTES = 60
     private const val STANDALONE_SE_GROUP = "Quick standalone SE"
     private const val STANDALONE_SE_PROFILE = "SE relay builtin"
-    /** Swordware.txt now serves `happ://crypt4/...` which RawUpdater does not parse; use plain vless list reserve. */
+    /** Legacy Swordware.txt now serves `happ://crypt4/...` which RawUpdater does not parse. */
     private const val brokenSwordwareTxtLink =
         "https://raw.githubusercontent.com/mbelspb-gif/dddddad/refs/heads/main/Swordware.txt"
-    private const val swordwareVlessReserveLink =
+    private const val swordwareLegacyReserveLink =
         "https://raw.githubusercontent.com/mbelspb-gif/ffsfsfssdf/refs/heads/main/TG-swordware"
-    private val defaultSubscriptionLinks = listOf(
-        "https://mifa.world/vless",
-        "https://mifa.world/hysteria",
-        swordwareVlessReserveLink,
-        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt",
-        "https://gist.githubusercontent.com/flaafix/c79a81037d15163360571c7a7331b153/raw/AetrisVPN.txt",
-        "https://raw.githubusercontent.com/nzea243/ikoV31tud_vpn/refs/heads/main/tri_228.txt",
-        "https://raw.githubusercontent.com/HikaruApps/WhiteLattice/refs/heads/main/subscriptions/config.txt",
-        "https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/BlackList.txt",
-        "https://wlrus.lol/confs/blackl.txt",
+    private const val swordwareCanonicalRawLink =
+        "https://raw.githubusercontent.com/mbelspb-gif/gdffgd/refs/heads/main/Swordware.net"
+
+    private data class BuiltinSubscriptionSeed(
+        val sourceKey: String,
+        val link: String,
+        val legacyLinks: Set<String> = emptySet(),
+    )
+
+    private val defaultSubscriptionSeeds = listOf(
+        BuiltinSubscriptionSeed(sourceKey = "mifa-main", link = "https://mifa.world/vless"),
+        BuiltinSubscriptionSeed(sourceKey = "mifa-hysteria", link = "https://mifa.world/hysteria"),
+        BuiltinSubscriptionSeed(
+            sourceKey = "swordware-main",
+            link = swordwareCanonicalRawLink,
+            legacyLinks = setOf(brokenSwordwareTxtLink, swordwareLegacyReserveLink),
+        ),
+        BuiltinSubscriptionSeed(
+            sourceKey = "black-vless-rus-mobile",
+            link = "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt",
+        ),
+        BuiltinSubscriptionSeed(
+            sourceKey = "aetris-vpn",
+            link = "https://gist.githubusercontent.com/flaafix/c79a81037d15163360571c7a7331b153/raw/AetrisVPN.txt",
+        ),
+        BuiltinSubscriptionSeed(
+            sourceKey = "tri-228",
+            link = "https://raw.githubusercontent.com/nzea243/ikoV31tud_vpn/refs/heads/main/tri_228.txt",
+        ),
+        BuiltinSubscriptionSeed(
+            sourceKey = "white-lattice",
+            link = "https://raw.githubusercontent.com/HikaruApps/WhiteLattice/refs/heads/main/subscriptions/config.txt",
+        ),
+        BuiltinSubscriptionSeed(
+            sourceKey = "white-list-vpn-black",
+            link = "https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/BlackList.txt",
+        ),
+        BuiltinSubscriptionSeed(sourceKey = "wlrus-blackl", link = "https://wlrus.lol/confs/blackl.txt"),
     )
     private val obsoleteQuickSubscriptionLinks = setOf(
         "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/githubmirror/clean/vless.txt",
@@ -61,14 +89,15 @@ object DefaultUserBootstrap {
 
     private suspend fun bootstrapDefaultSubscriptions() {
         val subscriptions = SagerDatabase.groupDao.subscriptions()
-        migrateBrokenSwordwareSubscription(subscriptions)
+        migrateLegacyBuiltinLinks(subscriptions)
         ensureBuiltinManagedMarkers(subscriptions)
         val existingLinks = SagerDatabase.groupDao.subscriptions()
             .mapNotNull { it.subscription?.link }
             .toSet()
 
         var createdAny = false
-        defaultSubscriptionLinks.forEachIndexed { index, link ->
+        defaultSubscriptionSeeds.forEachIndexed { index, seed ->
+            val link = seed.link
             if (link in existingLinks) return@forEachIndexed
             val created = GroupManager.createGroup(
                 ProxyGroup(
@@ -83,7 +112,7 @@ object DefaultUserBootstrap {
                         deduplication = true
                         updateWhenConnectedOnly = false
                         managedByRemote = true
-                        sourceId = builtinSourceId(index)
+                        sourceId = builtinSourceId(seed.sourceKey)
                     }
                 },
                 notifySubscriptionScheduler = false,
@@ -111,12 +140,13 @@ object DefaultUserBootstrap {
 
     private suspend fun ensureBuiltinManagedMarkers(subscriptions: List<ProxyGroup>) {
         val byLink = subscriptions.associateBy { it.subscription?.link.orEmpty() }
-        defaultSubscriptionLinks.forEachIndexed { index, link ->
-            val group = byLink[link] ?: return@forEachIndexed
-            val sub = group.subscription ?: return@forEachIndexed
-            if (sub.sourceId.startsWith(BUILTIN_SOURCE_PREFIX) && sub.managedByRemote) return@forEachIndexed
+        defaultSubscriptionSeeds.forEach { seed ->
+            val group = byLink[seed.link] ?: return@forEach
+            val sub = group.subscription ?: return@forEach
+            val targetSourceId = builtinSourceId(seed.sourceKey)
+            if (sub.sourceId == targetSourceId && sub.managedByRemote) return@forEach
             sub.managedByRemote = true
-            sub.sourceId = builtinSourceId(index)
+            sub.sourceId = targetSourceId
             GroupManager.updateGroup(group)
         }
     }
@@ -148,18 +178,26 @@ object DefaultUserBootstrap {
         }
     }
 
-    private suspend fun migrateBrokenSwordwareSubscription(subscriptions: List<ProxyGroup>) {
+    private suspend fun migrateLegacyBuiltinLinks(subscriptions: List<ProxyGroup>) {
+        val legacyLinkToCanonical = buildMap<String, String> {
+            defaultSubscriptionSeeds.forEach { seed ->
+                seed.legacyLinks.forEach { legacy ->
+                    put(legacy, seed.link)
+                }
+            }
+        }
         for (group in subscriptions) {
             val sub = group.subscription ?: continue
-            if (sub.link != brokenSwordwareTxtLink) continue
-            sub.link = swordwareVlessReserveLink
+            val canonical = legacyLinkToCanonical[sub.link] ?: continue
+            if (canonical == sub.link) continue
+            sub.link = canonical
             GroupManager.updateGroup(group)
             GroupUpdater.executeUpdate(group, byUser = false)
-            Logs.d("DefaultUserBootstrap: migrated group id=${group.id} from broken Swordware.txt to vless reserve")
+            Logs.d("DefaultUserBootstrap: migrated group id=${group.id} to canonical link")
         }
     }
 
-    private fun builtinSourceId(index: Int): String = "$BUILTIN_SOURCE_PREFIX${index + 1}"
+    private fun builtinSourceId(sourceKey: String): String = "$BUILTIN_SOURCE_PREFIX$sourceKey"
 }
 
 internal expect suspend fun bootstrapPerAppDefaults()
