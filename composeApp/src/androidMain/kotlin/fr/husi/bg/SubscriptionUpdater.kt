@@ -18,6 +18,7 @@ import fr.husi.lib.R
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
+import fr.husi.database.ProbeScheduler
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
@@ -88,6 +89,7 @@ actual object SubscriptionUpdater {
                 }
             }
             SubscriptionCatalogCoordinator.syncIfDue(manual = false)
+            runCatching { ProbeScheduler.runBackgroundMaintenanceIfDue() }
 
             val outcome = SubscriptionAutoUpdateRunner.runWithResult(
                 mode = SubscriptionUpdateMode.BackgroundEco,

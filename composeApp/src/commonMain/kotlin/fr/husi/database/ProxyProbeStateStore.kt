@@ -42,6 +42,34 @@ object ProxyProbeStateStore {
         if (updates.isNotEmpty()) {
             SagerDatabase.probeStateDao.upsertAll(updates)
         }
+        Probe2kProgress.refreshPoolCounts()
+    }
+
+    suspend fun persistTcpFailures(
+        proxies: List<ProxyEntity>,
+        builtinProfileIds: Set<Long>,
+        probedIds: Set<Long>,
+    ) {
+        if (!DataStore.probe2kPersistenceEnabled) return
+        val now = System.currentTimeMillis()
+        val existing = loadMap(proxies.map { it.id })
+        val failures = ArrayList<ProxyProbeState>()
+        for (proxy in proxies) {
+            if (proxy.id in probedIds) continue
+            failures += applyProbeResult(
+                prev = existing[proxy.id],
+                profileId = proxy.id,
+                tcpMs = null,
+                urlMs = null,
+                sourcePriority = resolveSourcePriority(proxy, builtinProfileIds),
+                errorClass = "tcp_timeout",
+                nowMs = now,
+            )
+        }
+        if (failures.isNotEmpty()) {
+            SagerDatabase.probeStateDao.upsertAll(failures)
+            Probe2kProgress.refreshPoolCounts()
+        }
     }
 
     suspend fun recordFailure(profileId: Long, errorClass: String = "connect_fail") {
@@ -58,6 +86,7 @@ object ProxyProbeStateStore {
             nowMs = now,
         )
         SagerDatabase.probeStateDao.upsertAll(listOf(next))
+        Probe2kProgress.refreshPoolCounts()
     }
 
     suspend fun recordConnected(profileId: Long) {
@@ -76,6 +105,7 @@ object ProxyProbeStateStore {
                 ),
             ),
         )
+        Probe2kProgress.refreshPoolCounts()
     }
 
     suspend fun recordUrlSuccess(profileId: Long, urlMs: Int) {
@@ -122,15 +152,17 @@ object ProxyProbeStateStore {
 
     suspend fun logPoolSnapshot(tag: String = "prepare") {
         if (!DataStore.probe2kPersistenceEnabled) return
-        val alive = SagerDatabase.probeStateDao.countByState(ProbeState.ALIVE)
-        val candidate = SagerDatabase.probeStateDao.countByState(ProbeState.CANDIDATE)
-        val suspect = SagerDatabase.probeStateDao.countByState(ProbeState.SUSPECT)
-        val dead = SagerDatabase.probeStateDao.countByState(ProbeState.DEAD)
-        val cemetery = SagerDatabase.probeStateDao.countByState(ProbeState.CEMETERY)
+        Probe2kProgress.refreshPoolCounts()
         simpleModeLog(
             "SimpleMode",
-            "H35 probe_pool_snapshot tag=$tag alive=$alive candidate=$candidate suspect=$suspect dead=$dead cemetery=$cemetery",
+            "H35 probe_pool_snapshot tag=$tag alive=${DataStore.probe2kPoolAlive} candidate=${DataStore.probe2kPoolCandidate} " +
+                "suspect=${DataStore.probe2kPoolSuspect} dead=${DataStore.probe2kPoolDead} cemetery=${DataStore.probe2kPoolCemetery} " +
+                "unknown=${DataStore.probe2kPoolUnknown} reason=${DataStore.probe2kLastSelectionReason}",
         )
+    }
+
+    fun recordSelectionReason(reason: String) {
+        DataStore.probe2kLastSelectionReason = reason
     }
 
     private fun resolveSourcePriority(proxy: ProxyEntity, builtinProfileIds: Set<Long>): Int {

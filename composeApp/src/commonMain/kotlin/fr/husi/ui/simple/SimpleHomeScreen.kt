@@ -30,6 +30,7 @@ import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
 import fr.husi.compose.rememberVpnServiceLauncher
 import fr.husi.database.DataStore
+import fr.husi.database.Probe2kProgress
 import fr.husi.ktx.exitApplication
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.Res
@@ -45,6 +46,7 @@ import fr.husi.resources.simple_mode_no_profile
 import fr.husi.resources.simple_mode_permission_pending
 import fr.husi.resources.simple_mode_status
 import fr.husi.resources.simple_mode_stopped
+import fr.husi.resources.probe_2k_pool_line
 import fr.husi.resources.vpn_permission_denied
 import fr.husi.ui.MainViewModel
 import fr.husi.ui.SimpleModeAllServersDeadChoice
@@ -163,9 +165,21 @@ fun SimpleHomeScreen(
                 StatusTone.CONNECTING -> stringResource(Res.string.simple_mode_connecting)
                 StatusTone.STOPPED -> stringResource(Res.string.simple_mode_stopped)
             }
+            val poolLine = if (Probe2kProgress.hasPoolSummary()) {
+                stringResource(
+                    Res.string.probe_2k_pool_line,
+                    DataStore.probe2kPoolAlive,
+                    DataStore.probe2kPoolCandidate,
+                    DataStore.probe2kPoolDead,
+                    DataStore.probe2kPoolUnknown,
+                )
+            } else {
+                null
+            }
             val detailText = when {
                 permissionPending && !status.state.canStop -> stringResource(Res.string.simple_mode_permission_pending)
                 activityText.isNotBlank() -> activityText
+                poolLine != null -> poolLine
                 else -> null
             }
             Column(

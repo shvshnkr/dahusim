@@ -11,6 +11,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import fr.husi.database.ProbeScheduler
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 
 /**
@@ -58,6 +59,7 @@ internal object DesktopBackgroundCoordinator {
             if (!currentCoroutineContext().isActive) return
             runCatching {
                 SubscriptionCatalogCoordinator.syncIfDue(manual = false)
+                ProbeScheduler.runBackgroundMaintenanceIfDue()
                 SubscriptionAutoUpdateRunner.run(mode = SubscriptionUpdateMode.BackgroundEco)
             }.onFailure {
                 if (it.isCoroutineCancellation()) return@onFailure

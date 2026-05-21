@@ -297,6 +297,22 @@ object DataStore {
     var probe2kWarmRankingEnabled by configurationStore.boolean(Key.PROBE_2K_WARM_RANKING_ENABLED) { false }
     var probe2kBuiltinFallbackCapEnabled by configurationStore.boolean(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED) { false }
     var probe2kBackgroundSchedulerEnabled by configurationStore.boolean(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED) { false }
+    var probe2kPowerPreset by configurationStore.string(Key.PROBE_2K_POWER_PRESET) { Probe2kDefaults.POWER_NORMAL }
+    var probe2kBackgroundBatchSize by configurationStore.int(Key.PROBE_2K_BACKGROUND_BATCH_SIZE) {
+        Probe2kDefaults.BACKGROUND_BATCH_SIZE
+    }
+    var probe2kBackgroundTcpWorkers by configurationStore.int(Key.PROBE_2K_BACKGROUND_TCP_WORKERS) {
+        Probe2kDefaults.BACKGROUND_TCP_WORKERS
+    }
+    var probe2kLastSelectionReason by configurationStore.string(Key.PROBE_2K_LAST_SELECTION_REASON) { "" }
+    var probe2kScanChecked by configurationStore.int(Key.PROBE_2K_SCAN_CHECKED) { 0 }
+    var probe2kScanTotal by configurationStore.int(Key.PROBE_2K_SCAN_TOTAL) { 0 }
+    var probe2kPoolAlive by configurationStore.int(Key.PROBE_2K_POOL_ALIVE) { 0 }
+    var probe2kPoolCandidate by configurationStore.int(Key.PROBE_2K_POOL_CANDIDATE) { 0 }
+    var probe2kPoolSuspect by configurationStore.int(Key.PROBE_2K_POOL_SUSPECT) { 0 }
+    var probe2kPoolDead by configurationStore.int(Key.PROBE_2K_POOL_DEAD) { 0 }
+    var probe2kPoolCemetery by configurationStore.int(Key.PROBE_2K_POOL_CEMETERY) { 0 }
+    var probe2kPoolUnknown by configurationStore.int(Key.PROBE_2K_POOL_UNKNOWN) { 0 }
     var simpleModeLastBackgroundSubRefreshAt by configurationStore.long(Key.SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT) { 0L }
     var autoConnectPausedUntilGoogle by configurationStore.boolean(Key.AUTO_CONNECT_PAUSED_UNTIL_GOOGLE) { false }
     var simpleModeActivity by configurationStore.string(Key.SIMPLE_MODE_ACTIVITY) { "" }

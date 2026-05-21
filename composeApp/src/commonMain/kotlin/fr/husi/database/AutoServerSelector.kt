@@ -262,6 +262,7 @@ object AutoServerSelector {
                 session = session,
                 selectedBefore = selectedBefore,
             )?.let { best ->
+                ProxyProbeStateStore.recordSelectionReason("lkg_fast_path")
                 simpleModeLog("SimpleMode", "H26 lkg_fast_path best=$best reason=url_verified")
                 return PrepareForConnectResult.Success(best)
             }
@@ -478,10 +479,6 @@ object AutoServerSelector {
             )
             ProxyProbeStateStore.logPoolSnapshot("prepare")
         }
-        if (DataStore.probe2kBackgroundSchedulerEnabled) {
-            ProbeScheduler.logDueProbeBudget()
-        }
-
         if (urlTestCandidates.isNotEmpty()) {
             val urlOk = urlTestDelays.size
             val urlHead = urlTestDelays.entries
@@ -633,7 +630,34 @@ object AutoServerSelector {
         if (shouldQuickProbe && !effectiveHandoff) {
             AutoServerSelectorProbePolicy.recordFullProbe(proxies, whitelistBuiltinOnly)
         }
+        recordPrepareSelectionReason(
+            initialCount = initialCount,
+            proxyCount = proxies.size,
+            quickProbeAlive = quickProbeAlive,
+            urlTestOk = urlTestDelays.size,
+            effectiveHandoff = effectiveHandoff,
+            forceFullProbeReason = forceFullProbeReason,
+        )
         return PrepareForConnectResult.Success(best)
+    }
+
+    private fun recordPrepareSelectionReason(
+        initialCount: Int,
+        proxyCount: Int,
+        quickProbeAlive: Int,
+        urlTestOk: Int,
+        effectiveHandoff: Boolean,
+        forceFullProbeReason: String?,
+    ) {
+        val reason = when {
+            initialCount == proxyCount -> "all_initial"
+            effectiveHandoff -> "handoff_probe"
+            forceFullProbeReason != null -> "full_probe:$forceFullProbeReason"
+            quickProbeAlive == 0 && urlTestOk == 0 && DataStore.probe2kWarmRankingEnabled -> "warm_persisted_only"
+            quickProbeAlive == 0 && urlTestOk == 0 -> "heuristic_only"
+            else -> "live_probe_rank"
+        }
+        ProxyProbeStateStore.recordSelectionReason(reason)
     }
 
     private fun buildHandoffPriorityIds(selectedBefore: Long): Set<Long> {
@@ -1013,45 +1037,12 @@ object AutoServerSelector {
         session: PrepareSession,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Map<Long, Int> = coroutineScope {
-        val total = proxies.size
-        if (total == 0) return@coroutineScope emptyMap()
-        val semaphore = Semaphore(concurrency)
-        val result = HashMap<Long, Int>()
-        val done = AtomicInteger(0)
-        var lastReported = 0
-        fun reportProgress() {
-            val count = done.incrementAndGet()
-            if (count == total || count - lastReported >= 8) {
-                lastReported = count
-                onProgress(count, total)
-            }
-        }
-        onProgress(0, total)
-        proxies.map { proxy ->
-            async(Dispatchers.IO) {
-                semaphore.withPermit {
-                    if (!isPrepareCurrent(session) || !currentCoroutineContext().isActive) {
-                        return@withPermit
-                    }
-                    try {
-                        val bean = runCatching { proxy.requireBean() }.getOrNull() ?: return@withPermit
-                        val address = bean.serverAddress.takeIf { it.isNotBlank() } ?: return@withPermit
-                        val port = bean.serverPort
-                        if (port <= 0) return@withPermit
-                        val ping = runCatching {
-                            Libcore.tcpPing(address, port.toString(), 1200)
-                        }.getOrNull() ?: return@withPermit
-                        if (ping > 0) {
-                            synchronized(result) {
-                                result[proxy.id] = ping
-                            }
-                        }
-                    } finally {
-                        reportProgress()
-                    }
-                }
-            }
-        }.awaitAll()
-        result.toMap()
+        ProfileTcpProber.probeTcpBatch(
+            proxies = proxies,
+            concurrency = concurrency,
+            timeoutMs = 1200,
+            isActive = { isPrepareCurrent(session) },
+            onProgress = onProgress,
+        )
     }
 }

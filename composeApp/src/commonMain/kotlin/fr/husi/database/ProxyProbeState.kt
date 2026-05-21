@@ -57,6 +57,16 @@ interface ProxyProbeStateDao {
     @Query("SELECT * FROM proxy_probe_states WHERE nextProbeAt > 0 AND nextProbeAt <= :nowMs ORDER BY nextProbeAt ASC LIMIT :limit")
     suspend fun dueForProbe(nowMs: Long, limit: Int): List<ProxyProbeState>
 
+    @Query(
+        """
+        SELECT id FROM proxy_entities
+        WHERE id NOT IN (SELECT profileId FROM proxy_probe_states)
+        ORDER BY userOrder ASC
+        LIMIT :limit
+        """,
+    )
+    suspend fun unprobedProfileIds(limit: Int): List<Long>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(states: List<ProxyProbeState>)
 

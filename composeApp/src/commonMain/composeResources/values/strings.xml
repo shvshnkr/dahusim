@@ -51,6 +51,23 @@
     <string name="subscription_catalog_sync_skipped">Catalog is already up to date</string>
     <string name="subscription_catalog_sync_blocked">Catalog blocked by safety checks: %1$s</string>
     <string name="subscription_catalog_error">Catalog sync failed: %1$s</string>
+    <string name="probe_2k_settings">2K server probe</string>
+    <string name="probe_2k_persistence_enabled">Persist probe state</string>
+    <string name="probe_2k_persistence_summary">Stores TCP/URL probe results per profile for large pools</string>
+    <string name="probe_2k_warm_ranking_enabled">Warm ranking (skip fresh probes)</string>
+    <string name="probe_2k_warm_ranking_summary">Uses saved probe state before live URL tests</string>
+    <string name="probe_2k_builtin_cap_enabled">Cap built-in fallback share</string>
+    <string name="probe_2k_background_scheduler_enabled">Background TCP maintenance</string>
+    <string name="probe_2k_background_scheduler_summary">Light TCP scan while disconnected (no VPN)</string>
+    <string name="probe_2k_power_preset">Power preset</string>
+    <string name="probe_2k_power_low">Low</string>
+    <string name="probe_2k_power_normal">Normal</string>
+    <string name="probe_2k_power_high">High</string>
+    <string name="probe_2k_run_background_now">Run background TCP scan now</string>
+    <string name="probe_2k_background_done">Background scan finished</string>
+    <string name="probe_2k_last_reason">Last selection: %1$s</string>
+    <string name="probe_2k_activity_scan">Scanning servers %1$d/%2$d…</string>
+    <string name="probe_2k_pool_line">Pool: %1$d alive · %2$d candidate · %3$d dead · %4$d unknown</string>
     <!-- themes -->
     <string name="theme">Theme</string>
     <string name="themes_amber">Pine Tears</string>
