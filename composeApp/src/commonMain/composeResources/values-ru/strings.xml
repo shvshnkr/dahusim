@@ -777,4 +777,21 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_all_servers_dead_message">Встроенные узлы и профили из подписок не ответили на проверки. Можно ждать интернета без БС (для обычных обновлений списков) или выйти из приложения.</string>
     <string name="simple_mode_wait_for_google_action">Ждать интернета без БС</string>
     <string name="simple_mode_exit_app_action">Выйти из приложения</string>
+    <string name="probe_2k_settings">Проверка серверов (2K)</string>
+    <string name="probe_2k_persistence_enabled">Сохранять состояние проверок</string>
+    <string name="probe_2k_persistence_summary">Хранит результаты TCP/URL-проверок по каждому профилю для больших пулов</string>
+    <string name="probe_2k_warm_ranking_enabled">Тёплое ранжирование (пропуск свежих проверок)</string>
+    <string name="probe_2k_warm_ranking_summary">Использует сохранённые проверки перед живым URL-тестом</string>
+    <string name="probe_2k_builtin_cap_enabled">Ограничить долю встроенных в fallback</string>
+    <string name="probe_2k_background_scheduler_enabled">Фоновое TCP-обслуживание</string>
+    <string name="probe_2k_background_scheduler_summary">Лёгкое TCP-сканирование без VPN (когда отключено)</string>
+    <string name="probe_2k_power_preset">Пресет нагрузки</string>
+    <string name="probe_2k_power_low">Низкая</string>
+    <string name="probe_2k_power_normal">Обычная</string>
+    <string name="probe_2k_power_high">Высокая</string>
+    <string name="probe_2k_run_background_now">Запустить фоновое TCP-сканирование</string>
+    <string name="probe_2k_background_done">Фоновое сканирование завершено</string>
+    <string name="probe_2k_last_reason">Последний выбор: %1$s</string>
+    <string name="probe_2k_activity_scan">Сканирование серверов %1$d/%2$d…</string>
+    <string name="probe_2k_pool_line">Пул: %1$d живых · %2$d кандидатов · %3$d мёртвых · %4$d неизвестно</string>
 </resources>

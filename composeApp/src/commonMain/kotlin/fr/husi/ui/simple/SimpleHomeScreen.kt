@@ -46,6 +46,7 @@ import fr.husi.resources.simple_mode_no_profile
 import fr.husi.resources.simple_mode_permission_pending
 import fr.husi.resources.simple_mode_status
 import fr.husi.resources.simple_mode_stopped
+import fr.husi.resources.probe_2k_activity_scan
 import fr.husi.resources.probe_2k_pool_line
 import fr.husi.resources.vpn_permission_denied
 import fr.husi.ui.MainViewModel
@@ -74,6 +75,12 @@ fun SimpleHomeScreen(
         .stringFlow(Key.SIMPLE_MODE_ACTIVITY)
         .collectAsStateWithLifecycle("")
         .value
+    val scanTotal by DataStore.configurationStore
+        .intFlow(Key.PROBE_2K_SCAN_TOTAL, 0)
+        .collectAsStateWithLifecycle(0)
+    val scanChecked by DataStore.configurationStore
+        .intFlow(Key.PROBE_2K_SCAN_CHECKED, 0)
+        .collectAsStateWithLifecycle(0)
     val connector = rememberVpnServiceLauncher {
         permissionPending = false
         simpleModeLog("SimpleMode", "permission_denied")
@@ -165,6 +172,11 @@ fun SimpleHomeScreen(
                 StatusTone.CONNECTING -> stringResource(Res.string.simple_mode_connecting)
                 StatusTone.STOPPED -> stringResource(Res.string.simple_mode_stopped)
             }
+            val scanLine = if (scanTotal > 0) {
+                stringResource(Res.string.probe_2k_activity_scan, scanChecked, scanTotal)
+            } else {
+                null
+            }
             val poolLine = if (Probe2kProgress.hasPoolSummary()) {
                 stringResource(
                     Res.string.probe_2k_pool_line,
@@ -178,6 +190,7 @@ fun SimpleHomeScreen(
             }
             val detailText = when {
                 permissionPending && !status.state.canStop -> stringResource(Res.string.simple_mode_permission_pending)
+                scanLine != null -> scanLine
                 activityText.isNotBlank() -> activityText
                 poolLine != null -> poolLine
                 else -> null

@@ -5,9 +5,7 @@ object Probe2kProgress {
     fun publishScan(checked: Int, total: Int) {
         DataStore.probe2kScanChecked = checked.coerceAtLeast(0)
         DataStore.probe2kScanTotal = total.coerceAtLeast(0)
-        if (total > 0 && DataStore.simpleMode && !DataStore.serviceState.connected) {
-            DataStore.simpleModeActivity = "Scanning servers $checked/$total…"
-        }
+        // Progress text is rendered in SimpleHomeScreen from probe_2k_activity_scan (localized).
     }
 
     fun clearScan() {
