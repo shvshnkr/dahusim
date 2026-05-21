@@ -782,8 +782,7 @@ object AutoServerSelector {
         DataStore.autoSelectLastKnownGood = profileId
         recentProbeFailures.remove(profileId)
         AutoServerSelectorProbePolicy.recordPostConnectUrlVerified(profileId)
-        DataStore.autoSelectFallbackQueue = ""
-        DataStore.autoSelectFallbackIndex = 0
+        AutoServerSelectorSessionFallback.syncIndexForConnected(profileId)
         if (DataStore.probe2kPersistenceEnabled) {
             runBlocking { ProxyProbeStateStore.recordConnected(profileId) }
         }

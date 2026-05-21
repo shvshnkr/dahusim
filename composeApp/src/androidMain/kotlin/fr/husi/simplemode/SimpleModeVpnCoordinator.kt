@@ -73,7 +73,8 @@ internal object SimpleModeVpnCoordinator {
                 adaptMutex.withLock {
                     if (!isActive) return@withLock
                     val now = System.currentTimeMillis()
-                    if (!supersedeActiveAdapt && now - lastAdaptAt < ADAPT_DEBOUNCE_MS) {
+                    val bypassDebounce = bypassAdaptDebounce(reason)
+                    if (!supersedeActiveAdapt && !bypassDebounce && now - lastAdaptAt < ADAPT_DEBOUNCE_MS) {
                         simpleModeLog("SimpleMode", "H30 wl_adapt_skipped reason=debounce trigger=$reason")
                         return@withLock
                     }
@@ -92,37 +93,40 @@ internal object SimpleModeVpnCoordinator {
     }
 
     /**
-     * After a failed post-connect URL test on a restricted network: reselect and restart
-     * instead of pausing until Google is reachable.
+     * Re-runs auto-select and reloads the tunnel after a failed health/post-connect check.
      */
-    suspend fun tryRecoverAfterUnhealthyPostConnect(
-        failedProfileId: Long,
-        whitelistOnly: Boolean,
-    ): Boolean {
-        if (!DataStore.simpleMode || !whitelistOnly) return false
-        DataStore.autoConnectPausedUntilGoogle = false
-        DataStore.simpleModeActivity = "Restricted network: trying another server…"
+    suspend fun tryRecoverAfterUnhealthySession(failedProfileId: Long): Boolean {
+        if (!DataStore.simpleMode) return false
+        val whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
+        if (whitelistOnly) {
+            DataStore.autoConnectPausedUntilGoogle = false
+        }
+        DataStore.simpleModeActivity = if (whitelistOnly) {
+            "Restricted network: trying another server…"
+        } else {
+            "Server degraded, reselecting…"
+        }
         simpleModeLog(
             "SimpleMode",
-            "H30 wl_post_connect_recover start failedProfileId=$failedProfileId",
+            "H30 session_recover start failedProfileId=$failedProfileId wl=$whitelistOnly",
         )
         val recoverGen = adaptGeneration.incrementAndGet()
-        AutoServerSelector.cancelAdaptPrepare("post_connect_recover")
-        if (applyReselectAndRestart("post_connect_unhealthy", whitelistOnly, failedProfileId, recoverGen)) {
+        AutoServerSelector.cancelAdaptPrepare("session_recover")
+        if (applyReselectAndRestart("session_unhealthy", whitelistOnly, failedProfileId, recoverGen)) {
             return true
         }
         val fallback = AutoServerSelector.tryMoveToFallback(failedProfileId)
         if (fallback != null) {
             simpleModeLog(
                 "SimpleMode",
-                "H30 wl_post_connect_fallback failedProfileId=$failedProfileId nextId=$fallback",
+                "H30 session_recover_fallback failedProfileId=$failedProfileId nextId=$fallback",
             )
             if (!DataStore.simpleMode) {
                 simpleModeLog("SimpleMode", "H30 wl_adapt_reload_skipped reason=simple_mode_off")
                 return true
             }
-            SimpleModeTunnelRestart.markModeReconnect(whitelistOnly)
-            ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()
+            DataStore.selectedProxy = fallback
+            requestTunnelReload(whitelistOnly, "session_recover_fallback", fallback)
             return true
         }
         return false
@@ -173,6 +177,18 @@ internal object SimpleModeVpnCoordinator {
 
     private fun isAdaptCurrent(adaptGen: Int): Boolean = adaptGen == adaptGeneration.get()
 
+    private fun bypassAdaptDebounce(reason: String): Boolean =
+        reason == "network_handoff" ||
+            reason == "reachability_flip" ||
+            reason == "session_health_exhausted"
+
+    private fun requiresTunnelRebuild(reason: String): Boolean =
+        reason == "network_handoff" ||
+            reason == "reachability_flip" ||
+            reason == "session_unhealthy" ||
+            reason == "session_recover_fallback" ||
+            reason == "session_health_exhausted"
+
     private suspend fun applyReselectAndRestart(
         reason: String,
         whitelistOnly: Boolean,
@@ -183,17 +199,22 @@ internal object SimpleModeVpnCoordinator {
             simpleModeLog("SimpleMode", "H30 wl_adapt_superseded before_prepare gen=$adaptGen reason=$reason")
             return false
         }
+        val networkHandoff = reason == "network_handoff" || reason == "reachability_flip"
         val prep = try {
             withTimeoutOrNull(ADAPT_PREPARE_TIMEOUT_MS) {
                 SimpleModeNetworkAdaptation.reselectForNetwork(
                     whitelistBuiltinOnly = whitelistOnly,
-                    networkHandoff = reason == "network_handoff" || reason == "reachability_flip",
+                    networkHandoff = networkHandoff,
                 )
             } ?: run {
                 simpleModeLog(
                     "SimpleMode",
                     "H30 wl_adapt_prepare_timeout reason=$reason gen=$adaptGen ms=$ADAPT_PREPARE_TIMEOUT_MS",
                 )
+                if (requiresTunnelRebuild(reason)) {
+                    requestTunnelReload(whitelistOnly, "${reason}_timeout", previousProfileId)
+                    return true
+                }
                 return false
             }
         } catch (_: CancellationException) {
@@ -225,7 +246,8 @@ internal object SimpleModeVpnCoordinator {
                     return false
                 }
                 val newId = prep.profileId
-                if (newId == previousProfileId) {
+                val sameProfile = newId == previousProfileId
+                if (sameProfile && !requiresTunnelRebuild(reason)) {
                     simpleModeLog(
                         "SimpleMode",
                         "H30 wl_adapt_unchanged reason=$reason profileId=$newId",
@@ -236,7 +258,11 @@ internal object SimpleModeVpnCoordinator {
                 DataStore.selectedProxy = newId
                 simpleModeLog(
                     "SimpleMode",
-                    "H30 wl_adapt_restart reason=$reason wl=$whitelistOnly prev=$previousProfileId new=$newId gen=$adaptGen",
+                    if (sameProfile) {
+                        "H30 wl_adapt_reload_same_profile reason=$reason profileId=$newId gen=$adaptGen"
+                    } else {
+                        "H30 wl_adapt_restart reason=$reason wl=$whitelistOnly prev=$previousProfileId new=$newId gen=$adaptGen"
+                    },
                 )
                 // #region agent log
                 simpleModeDebugEvent(
@@ -249,6 +275,7 @@ internal object SimpleModeVpnCoordinator {
                         "whitelistOnly" to whitelistOnly.toString(),
                         "prevProfileId" to previousProfileId.toString(),
                         "newProfileId" to newId.toString(),
+                        "sameProfile" to sameProfile.toString(),
                         "gen" to adaptGen.toString(),
                     ),
                 )
@@ -261,10 +288,19 @@ internal object SimpleModeVpnCoordinator {
                 if (!DataStore.serviceState.connected) {
                     return true
                 }
-                SimpleModeTunnelRestart.markModeReconnect(whitelistOnly)
-                ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()
+                requestTunnelReload(whitelistOnly, reason, newId)
                 return true
             }
         }
+    }
+
+    private fun requestTunnelReload(whitelistOnly: Boolean, reason: String, profileId: Long) {
+        DataStore.selectedProxy = profileId
+        SimpleModeTunnelRestart.markModeReconnect(whitelistOnly)
+        ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()
+        simpleModeLog(
+            "SimpleMode",
+            "H30 tunnel_reload reason=$reason profileId=$profileId wl=$whitelistOnly",
+        )
     }
 }

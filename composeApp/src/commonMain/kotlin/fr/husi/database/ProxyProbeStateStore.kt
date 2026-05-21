@@ -92,19 +92,27 @@ object ProxyProbeStateStore {
     suspend fun recordConnected(profileId: Long) {
         if (!DataStore.probe2kPersistenceEnabled || profileId <= 0L) return
         val now = System.currentTimeMillis()
-        val prev = SagerDatabase.probeStateDao.getByProfileId(profileId) ?: return
-        SagerDatabase.probeStateDao.upsertAll(
-            listOf(
-                prev.copy(
-                    state = ProbeState.ALIVE,
-                    lastOkAt = now,
-                    lastCheckedAt = now,
-                    failCountConsecutive = 0,
-                    nextProbeAt = now + Probe2kDefaults.ALIVE_URL_FRESH_MS,
-                    lastErrorClass = "",
-                ),
-            ),
-        )
+        val prev = SagerDatabase.probeStateDao.getByProfileId(profileId)
+        val next = if (prev != null) {
+            prev.copy(
+                state = ProbeState.ALIVE,
+                lastOkAt = now,
+                lastCheckedAt = now,
+                failCountConsecutive = 0,
+                nextProbeAt = now + Probe2kDefaults.ALIVE_URL_FRESH_MS,
+                lastErrorClass = "",
+            )
+        } else {
+            ProxyProbeState(
+                profileId = profileId,
+                state = ProbeState.ALIVE,
+                lastCheckedAt = now,
+                lastOkAt = now,
+                failCountConsecutive = 0,
+                nextProbeAt = now + Probe2kDefaults.ALIVE_URL_FRESH_MS,
+            )
+        }
+        SagerDatabase.probeStateDao.upsertAll(listOf(next))
         Probe2kProgress.refreshPoolCounts()
     }
 

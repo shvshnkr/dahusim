@@ -659,10 +659,9 @@ class BaseService {
                     if (!postConnectHealthy) {
                         val wlOnly = reachability.whitelistOnly ||
                             DataStore.activeWhitelistRestrictedNetwork
-                        if (DataStore.simpleMode && wlOnly) {
-                            val recovered = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthyPostConnect(
+                        if (DataStore.simpleMode) {
+                            val recovered = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                                 failedProfileId = profile.id,
-                                whitelistOnly = true,
                             )
                             if (recovered) {
                                 return@runOnDefaultDispatcher

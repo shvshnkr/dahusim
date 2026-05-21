@@ -134,12 +134,8 @@ internal object SimpleModeSessionHealth {
         AutoServerSelector.recordProbeFailure(profileId)
         DataStore.simpleModeActivity = "Server degraded, switching…"
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
-        if (wlOnly) {
-            val recovered = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthyPostConnect(
-                failedProfileId = profileId,
-                whitelistOnly = true,
-            )
-            if (recovered) return
+        if (SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(profileId)) {
+            return
         }
         val next = AutoServerSelector.tryMoveToFallback(profileId)
         if (next != null) {
@@ -147,11 +143,12 @@ internal object SimpleModeSessionHealth {
                 "SimpleMode",
                 "H34 session_health_switch profileId=$profileId nextId=$next",
             )
+            DataStore.selectedProxy = next
             SimpleModeTunnelRestart.markModeReconnect(wlOnly)
             ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()
         } else {
             simpleModeLog("SimpleMode", "H34 session_health_exhausted profileId=$profileId")
-            DataStore.simpleModeActivity = ""
+            SimpleModeVpnCoordinator.scheduleAdaptation("session_health_exhausted")
         }
     }
 }
