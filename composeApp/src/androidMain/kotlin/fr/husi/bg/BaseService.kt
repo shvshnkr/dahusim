@@ -22,6 +22,7 @@ import fr.husi.aidl.SpeedDisplayData
 import fr.husi.bg.proto.ProxyInstance
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
+import fr.husi.database.DirectProfileUrlProbe
 import fr.husi.database.ProxyEntity
 import fr.husi.database.SagerDatabase
 import fr.husi.ktx.Logs
@@ -597,12 +598,18 @@ class BaseService {
                             "outboundTagLen=${outboundTag.length} warmupMs=400",
                     )
                     delay(400)
+                    val useDirectProbe = DataStore.simpleMode && !reachability.whitelistOnly
                     runCatching {
-                        val client = Libcore.newClient(null)
-                        val latencyMs = try {
-                            client.urlTest(outboundTag, DataStore.connectionTestURL, postConnectTimeoutMs)
-                        } finally {
-                            runCatching { client.close() }
+                        val latencyMs = if (useDirectProbe) {
+                            DirectProfileUrlProbe.urlTestDelay(profile)?.toLong()
+                                ?: error("direct url test failed")
+                        } else {
+                            val client = Libcore.newClient(null)
+                            try {
+                                client.urlTest(outboundTag, DataStore.connectionTestURL, postConnectTimeoutMs)
+                            } finally {
+                                runCatching { client.close() }
+                            }
                         }
                         // #region agent log
                         simpleModeDebugEvent(
@@ -614,11 +621,15 @@ class BaseService {
                                 "profileId" to profile.id.toString(),
                                 "delayMs" to latencyMs.toString(),
                                 "url" to DataStore.connectionTestURL,
+                                "direct" to useDirectProbe.toString(),
                             ),
                         )
                         // #endregion
                         postConnectLatencyMs = latencyMs.toInt().coerceAtLeast(0)
-                        simpleModeLog("SimpleMode", "H3 post_connect_url_test_success profileId=${profile.id} delayMs=$latencyMs")
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H3 post_connect_url_test_success profileId=${profile.id} delayMs=$latencyMs direct=$useDirectProbe",
+                        )
                         DataStore.simpleModeActivity = ""
                     }.onFailure { err ->
                         // #region agent log
@@ -632,12 +643,14 @@ class BaseService {
                                 "errorClass" to err.javaClass.name,
                                 "error" to err.readableMessage,
                                 "url" to DataStore.connectionTestURL,
+                                "direct" to useDirectProbe.toString(),
                             ),
                         )
                         // #endregion
                         simpleModeLog(
                             "SimpleMode",
-                            "H3 post_connect_url_test_failed profileId=${profile.id} class=${err.javaClass.simpleName} error=${err.readableMessage}",
+                            "H3 post_connect_url_test_failed profileId=${profile.id} class=${err.javaClass.simpleName} " +
+                                "error=${err.readableMessage} direct=$useDirectProbe",
                         )
                         DataStore.simpleModeActivity = "Server unstable, switching..."
                         postConnectHealthy = false

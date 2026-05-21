@@ -198,6 +198,7 @@ object ProxyProbeStateStore {
                 (alpha * delaySample + (1.0 - alpha) * prev.ewmaDelayMs).toInt()
             }
         }
+        // Same fail-streak ladder for subscriptions and built-in helpers (sourcePriority is metadata only).
         val state = when {
             urlMs != null && urlMs > 0 -> ProbeState.ALIVE
             tcpMs != null && tcpMs > 0 -> ProbeState.CANDIDATE
@@ -207,6 +208,12 @@ object ProxyProbeStateStore {
             else -> prev?.state ?: ProbeState.UNKNOWN
         }
         val nextProbeAt = computeNextProbeAt(state, failStreak, nowMs)
+        if (prev?.state == ProbeState.CEMETERY && state != ProbeState.CEMETERY) {
+            simpleModeLog(
+                "SimpleMode",
+                "H35 probe_unjail profileId=$profileId from=CEMETERY to=$state tcp=${tcpMs ?: "-"} url=${urlMs ?: "-"}",
+            )
+        }
         return ProxyProbeState(
             profileId = profileId,
             state = state,

@@ -60,7 +60,7 @@ internal fun LazyListScope.probe2kSettings(
     }
     item(Key.PROBE_2K_WARM_RANKING_ENABLED, PreferenceType.SWITCH) {
         val enabled by DataStore.configurationStore
-            .booleanFlow(Key.PROBE_2K_WARM_RANKING_ENABLED, false)
+            .booleanFlow(Key.PROBE_2K_WARM_RANKING_ENABLED, true)
             .collectAsStateWithLifecycle(false)
         SwitchPreference(
             value = enabled,
@@ -72,7 +72,7 @@ internal fun LazyListScope.probe2kSettings(
     }
     item(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED, PreferenceType.SWITCH) {
         val enabled by DataStore.configurationStore
-            .booleanFlow(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED, false)
+            .booleanFlow(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED, true)
             .collectAsStateWithLifecycle(false)
         SwitchPreference(
             value = enabled,
@@ -83,7 +83,7 @@ internal fun LazyListScope.probe2kSettings(
     }
     item(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED, PreferenceType.SWITCH) {
         val enabled by DataStore.configurationStore
-            .booleanFlow(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED, false)
+            .booleanFlow(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED, true)
             .collectAsStateWithLifecycle(false)
         SwitchPreference(
             value = enabled,

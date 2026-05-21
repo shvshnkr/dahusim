@@ -2,17 +2,8 @@ package fr.husi.database
 
 import fr.husi.bootstrap.WhitelistBuiltinBootstrap
 import fr.husi.bg.BackendState
-import fr.husi.bg.GuardedProcessPool
 import fr.husi.bg.ServiceState
-import fr.husi.bg.initPlugins
-import fr.husi.bg.launchPlugins
-import fr.husi.fmt.buildConfig
 import fr.husi.ktx.Logs
-import fr.husi.ktx.readableMessage
-import fr.husi.libcore.Client
-import fr.husi.libcore.Libcore
-import fr.husi.plugin.PluginNotFoundException
-import fr.husi.utils.closeQuietly
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
@@ -21,14 +12,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withPermit
-import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -253,14 +242,29 @@ object AutoServerSelector {
                 "H25 compact_reprobe_proxy_set_changed pool=${proxies.size} graceMs=180000",
             )
         }
+        val probeStates = if (DataStore.probe2kPersistenceEnabled || DataStore.probe2kWarmRankingEnabled) {
+            ProxyProbeStateStore.loadMap(proxies.map { it.id })
+        } else {
+            emptyMap()
+        }
+        val connectPool = ProbePoolEligibility.filterSelectable(proxies, probeStates)
+        val buriedCount = ProbePoolEligibility.countBuried(probeStates)
+        if (buriedCount > 0) {
+            simpleModeLog(
+                "SimpleMode",
+                "H35 probe_pool_buried count=$buriedCount total=${proxies.size} selectable=${connectPool.size}",
+            )
+        }
         if (!effectiveHandoff && forceFullProbeReason?.contains("proxy_set_changed") != true &&
             forceFullProbeReason?.contains("wl_to_open") != true
         ) {
             tryLastKnownGoodFastPath(
-                proxies = proxies,
+                proxies = connectPool,
                 priorityFirstIds = priorityFirstIds,
                 session = session,
                 selectedBefore = selectedBefore,
+                builtinProfileIds = builtinFourIds,
+                whitelistBuiltinOnly = whitelistBuiltinOnly,
             )?.let { best ->
                 ProxyProbeStateStore.recordSelectionReason("lkg_fast_path")
                 simpleModeLog("SimpleMode", "H26 lkg_fast_path best=$best reason=url_verified")
@@ -292,15 +296,23 @@ object AutoServerSelector {
             return PrepareForConnectResult.NoProfiles
         }
 
-        val availableCount = proxies.count { it.status == ProxyEntity.STATUS_AVAILABLE }
-        val initialCount = proxies.count { it.status == ProxyEntity.STATUS_INITIAL }
-        val badCount = proxies.count {
+        if (connectPool.isEmpty()) {
+            simpleModeLog(
+                "SimpleMode",
+                "H22 prepare_all_buried_in_cemetery total=${proxies.size} buried=$buriedCount",
+            )
+            return PrepareForConnectResult.AllProbesDead
+        }
+
+        val availableCount = connectPool.count { it.status == ProxyEntity.STATUS_AVAILABLE }
+        val initialCount = connectPool.count { it.status == ProxyEntity.STATUS_INITIAL }
+        val badCount = connectPool.count {
             it.status == ProxyEntity.STATUS_UNREACHABLE ||
                 it.status == ProxyEntity.STATUS_UNAVAILABLE ||
                 it.status == ProxyEntity.STATUS_INVALID
         }
         val shouldQuickProbe = effectiveHandoff ||
-            initialCount == proxies.size ||
+            initialCount == connectPool.size ||
             availableCount == 0 ||
             forceFullProbeReason != null
         if (forceFullProbeReason != null) {
@@ -321,19 +333,19 @@ object AutoServerSelector {
             (probeConcurrency(whitelistBuiltinOnly) * 2).coerceIn(12, 32)
         }
         val extraUrlTestByTcp = if (effectiveHandoff) 4 else 8
-        val parallelUrlPoolSize = (urlTestCap + extraUrlTestByTcp).coerceAtMost(proxies.size)
+        val parallelUrlPoolSize = (urlTestCap + extraUrlTestByTcp).coerceAtMost(connectPool.size)
         val urlSupplementCap = if (effectiveHandoff) 6 else 10
-        val compactTcpProbe = whitelistBuiltinOnly || effectiveHandoff || proxies.size > OPEN_NET_TCP_PROBE_CAP
+        val compactTcpProbe = whitelistBuiltinOnly || effectiveHandoff || connectPool.size > OPEN_NET_TCP_PROBE_CAP
         val tcpCap = if (whitelistBuiltinOnly) 128 else OPEN_NET_TCP_PROBE_CAP
-        val probeStates = if (DataStore.probe2kPersistenceEnabled || DataStore.probe2kWarmRankingEnabled) {
-            ProxyProbeStateStore.loadMap(proxies.map { it.id })
-        } else {
-            emptyMap()
-        }
+        val probePoolOrdered = BuiltinPoolPolicy.reorderForCompactProbe(
+            proxies = connectPool,
+            builtinProfileIds = builtinFourIds,
+            whitelistBuiltinOnly = whitelistBuiltinOnly,
+        )
         val tcpProbeTargetsRaw = if (compactTcpProbe) {
-            buildCompactTcpProbePool(proxies, priorityFirstIds, maxTotal = tcpCap)
+            buildCompactTcpProbePool(probePoolOrdered, priorityFirstIds, maxTotal = tcpCap)
         } else {
-            proxies
+            probePoolOrdered
         }
         val tcpProbeTargets = ProbeScheduler.prioritizeTcpTargets(
             targets = tcpProbeTargetsRaw,
@@ -352,10 +364,12 @@ object AutoServerSelector {
             setSimpleModeActivity("Testing TCP 0/${tcpProbeTargets.size}")
             val parallelUrlPool = ProbeScheduler.filterUrlCandidatesForWarmState(
                 candidates = buildStratifiedUrlPool(
-                    proxies = proxies,
+                    proxies = connectPool,
                     cap = parallelUrlPoolSize,
                     priorityFirstIds = priorityFirstIds,
                     probeStates = probeStates,
+                    builtinProfileIds = builtinFourIds,
+                    whitelistBuiltinOnly = whitelistBuiltinOnly,
                 ),
                 probeStates = probeStates,
                 networkHandoff = effectiveHandoff,
@@ -399,7 +413,7 @@ object AutoServerSelector {
                 )
                 ensurePrepareCurrent(session)
                 var merged = urlJob.await().toMutableMap()
-                val preUrlSorted = proxies.sortedWith(
+                val preUrlSorted = connectPool.sortedWith(
                     compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
                         .thenBy { if (quickProbePings.containsKey(it.id)) 0 else 1 }
                         .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
@@ -411,10 +425,12 @@ object AutoServerSelector {
                     proxies = preUrlSorted,
                     cap = urlTestCap,
                     priorityFirstIds = priorityFirstIds,
+                    builtinProfileIds = builtinFourIds,
+                    whitelistBuiltinOnly = whitelistBuiltinOnly,
                 )
                 val baseIds = baseUrlTest.map { it.id }.toSet()
                 val extraTcpForUrlTest = if (quickProbePings.isNotEmpty()) {
-                    proxies
+                    connectPool
                         .asSequence()
                         .filter { it.id !in baseIds && quickProbePings.containsKey(it.id) }
                         .sortedBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
@@ -443,7 +459,7 @@ object AutoServerSelector {
             }
         } else {
             quickProbePings = emptyMap()
-            val preUrlSorted = proxies.sortedWith(
+            val preUrlSorted = connectPool.sortedWith(
                 compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
                     .thenBy { if (quickProbePings.containsKey(it.id)) 0 else 1 }
                     .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
@@ -455,6 +471,8 @@ object AutoServerSelector {
                 proxies = preUrlSorted,
                 cap = urlTestCap,
                 priorityFirstIds = priorityFirstIds,
+                builtinProfileIds = builtinFourIds,
+                whitelistBuiltinOnly = whitelistBuiltinOnly,
             )
             urlTestCandidates = baseUrlTest
             urlTestDelays = if (urlTestCandidates.isNotEmpty()) {
@@ -472,7 +490,7 @@ object AutoServerSelector {
         }
         if (DataStore.probe2kPersistenceEnabled && (quickProbePings.isNotEmpty() || urlTestDelays.isNotEmpty())) {
             ProxyProbeStateStore.persistPrepareResults(
-                proxies = proxies,
+                proxies = connectPool,
                 builtinProfileIds = builtinFourIds,
                 tcpMs = quickProbePings,
                 urlMs = urlTestDelays,
@@ -497,19 +515,19 @@ object AutoServerSelector {
         if (allProbesDead) {
             simpleModeLog(
                 "SimpleMode",
-                "H22 prepare_all_probes_dead count=${proxies.size} whitelistDual=$whitelistBuiltinOnly",
+                "H22 prepare_all_probes_dead count=${connectPool.size} buried=$buriedCount whitelistDual=$whitelistBuiltinOnly",
             )
             simpleModeDebugEvent(
                 runId = "run1",
                 hypothesisId = "H22",
                 location = "AutoServerSelector.kt:prepareForConnect",
                 message = "all tcp and url probes failed",
-                data = mapOf("count" to proxies.size.toString()),
+                data = mapOf("count" to connectPool.size.toString()),
             )
             return PrepareForConnectResult.AllProbesDead
         }
 
-        val ranked = proxies
+        val ranked = connectPool
             .sortedWith(
                 if (quickProbePings.isNotEmpty()) {
                     // Prefer low composite: real URL latency wins over TCP+synthetic when URL ran.
@@ -523,6 +541,9 @@ object AutoServerSelector {
                         .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
                         .thenByDescending { it.id == DataStore.autoSelectLastKnownGood }
                         .thenBy { if (it.id in priorityFirstIds) 0 else 1 }
+                        .thenBy {
+                            BuiltinPoolPolicy.openNetSelectionRank(it.id, builtinFourIds, whitelistBuiltinOnly)
+                        }
                         .thenBy { it.userOrder }
                 } else {
                     compareBy<ProxyEntity> { if (isInFailureCooldown(it.id)) 1 else 0 }
@@ -536,6 +557,9 @@ object AutoServerSelector {
                         .thenBy { pingRank(it.ping) }
                         .thenByDescending { it.id == DataStore.autoSelectLastKnownGood }
                         .thenBy { if (it.id in priorityFirstIds) 0 else 1 }
+                        .thenBy {
+                            BuiltinPoolPolicy.openNetSelectionRank(it.id, builtinFourIds, whitelistBuiltinOnly)
+                        }
                         .thenBy { it.userOrder }
                 },
             )
@@ -552,7 +576,7 @@ object AutoServerSelector {
         }
         val rankedFinal = rankedWithQuota
         val quickProbeAlive = quickProbePings.size
-        if (initialCount == proxies.size) {
+        if (initialCount == connectPool.size) {
             // #region agent log
             simpleModeDebugEvent(
                 runId = "run2",
@@ -560,18 +584,18 @@ object AutoServerSelector {
                 location = "AutoServerSelector.kt:prepareForConnect",
                 message = "all profiles untested, fallback to deterministic order",
                 data = mapOf(
-                    "count" to proxies.size.toString(),
+                    "count" to connectPool.size.toString(),
                     "selectedBefore" to selectedBefore.toString(),
                 ),
             )
             // #endregion
             simpleModeLog(
                 "SimpleMode",
-                "H1 all_initial count=${proxies.size} selectedBefore=$selectedBefore",
+                "H1 all_initial count=${connectPool.size} selectedBefore=$selectedBefore",
             )
         }
         val rankedHead = rankedFinal.take(5).joinToString(";") { id ->
-            val proxy = proxies.first { it.id == id }
+            val proxy = connectPool.first { it.id == id }
             val ut = urlTestDelays[id]?.toString() ?: "-"
             val qp = quickProbePings[id]?.toString() ?: "-"
             val co = if (quickProbePings.isNotEmpty()) {
@@ -584,7 +608,7 @@ object AutoServerSelector {
 
         if (quickProbePings.isNotEmpty()) {
             val h20 = rankedFinal.take(8).joinToString(";") { id ->
-                val proxy = proxies.first { it.id == id }
+                val proxy = connectPool.first { it.id == id }
                 val co = compositeSelectionScore(proxy, urlTestDelays, quickProbePings, probeStates)
                 "${proxy.id}:$co"
             }
@@ -612,13 +636,13 @@ object AutoServerSelector {
                 "selectedBefore" to selectedBefore.toString(),
                 "best" to best.toString(),
                 "queueSize" to rankedFinal.size.toString(),
-                "groupCount" to proxies.map { it.groupId }.toSet().size.toString(),
+                "groupCount" to connectPool.map { it.groupId }.toSet().size.toString(),
                 "availableCount" to availableCount.toString(),
                 "initialCount" to initialCount.toString(),
                 "badCount" to badCount.toString(),
                 "probeAlive" to quickProbeAlive.toString(),
                 "urlTestOk" to urlTestDelays.size.toString(),
-                "bestPing" to (proxies.firstOrNull { it.id == best }?.ping?.toString() ?: "0"),
+                "bestPing" to (connectPool.firstOrNull { it.id == best }?.ping?.toString() ?: "0"),
                 "rankedHead" to rankedHead,
             ),
         )
@@ -632,7 +656,7 @@ object AutoServerSelector {
         }
         recordPrepareSelectionReason(
             initialCount = initialCount,
-            proxyCount = proxies.size,
+            proxyCount = connectPool.size,
             quickProbeAlive = quickProbeAlive,
             urlTestOk = urlTestDelays.size,
             effectiveHandoff = effectiveHandoff,
@@ -690,10 +714,25 @@ object AutoServerSelector {
             simpleModeLog("SimpleMode", "H1 fallback_queue_empty currentId=$currentId")
             return null
         }
+        val probeStates = if (DataStore.probe2kPersistenceEnabled) {
+            runBlocking { ProxyProbeStateStore.loadMap(queue) }
+        } else {
+            emptyMap()
+        }
 
         val currentIndex = queue.indexOf(currentId).takeIf { it >= 0 } ?: DataStore.autoSelectFallbackIndex
-        val nextIndex = currentIndex + 1
-        if (nextIndex !in queue.indices) {
+        val startIndex = currentIndex + 1
+        var nextIndex = startIndex
+        var next = -1L
+        while (nextIndex < queue.size) {
+            val candidate = queue[nextIndex]
+            if (ProbePoolEligibility.isSelectableForConnect(probeStates[candidate])) {
+                next = candidate
+                break
+            }
+            nextIndex++
+        }
+        if (next < 0L) {
             // #region agent log
             simpleModeDebugEvent(
                 runId = "run1",
@@ -714,7 +753,6 @@ object AutoServerSelector {
             return null
         }
 
-        val next = queue[nextIndex]
         DataStore.autoSelectFallbackIndex = nextIndex
         DataStore.selectedProxy = next
         setSimpleModeActivity("Trying next server ${nextIndex + 1}/${queue.size}")
@@ -779,6 +817,8 @@ object AutoServerSelector {
         priorityFirstIds: Set<Long>,
         session: PrepareSession,
         selectedBefore: Long,
+        builtinProfileIds: Set<Long>,
+        whitelistBuiltinOnly: Boolean,
     ): Long? {
         val goodId = DataStore.autoSelectLastKnownGood
         if (goodId <= 0L || !AutoServerSelectorProbePolicy.isLastKnownGoodUrlFresh(goodId)) {
@@ -788,13 +828,15 @@ object AutoServerSelector {
         if (isInFailureCooldown(goodId)) return null
         ensurePrepareCurrent(session)
         setSimpleModeActivity("Verifying last server…")
-        val lkgDelay = profileUrlTestDelay(good) ?: return null
+        val lkgDelay = DirectProfileUrlProbe.urlTestDelay(good) ?: return null
         if (lkgDelay <= 0) return null
         ensurePrepareCurrent(session)
         val urlPool = buildStratifiedUrlPool(
             proxies = listOf(good) + proxies.filter { it.id != goodId },
             cap = 12,
             priorityFirstIds = priorityFirstIds + goodId,
+            builtinProfileIds = builtinProfileIds,
+            whitelistBuiltinOnly = whitelistBuiltinOnly,
         )
         val urlDelays = if (urlPool.size <= 1) {
             mapOf(goodId to lkgDelay)
@@ -811,6 +853,8 @@ object AutoServerSelector {
                 quickProbePings = emptyMap(),
                 urlTestDelays = urlDelays,
                 preferId = alt,
+                builtinProfileIds = builtinProfileIds,
+                whitelistBuiltinOnly = whitelistBuiltinOnly,
             )
         }
         if (urlDelays[goodId] == null) return null
@@ -821,6 +865,8 @@ object AutoServerSelector {
             quickProbePings = emptyMap(),
             urlTestDelays = urlDelays,
             preferId = goodId,
+            builtinProfileIds = builtinProfileIds,
+            whitelistBuiltinOnly = whitelistBuiltinOnly,
         )
     }
 
@@ -831,6 +877,8 @@ object AutoServerSelector {
         quickProbePings: Map<Long, Int>,
         urlTestDelays: Map<Long, Int>,
         preferId: Long? = null,
+        builtinProfileIds: Set<Long> = emptySet(),
+        whitelistBuiltinOnly: Boolean = false,
     ): Long {
         val ranked = proxies.sortedWith(
             compareBy<ProxyEntity> { if (it.id == preferId) 0 else 1 }
@@ -841,6 +889,9 @@ object AutoServerSelector {
                 .thenByDescending { throughputRank(it) }
                 .thenByDescending { it.id == DataStore.autoSelectLastKnownGood }
                 .thenBy { if (it.id in priorityFirstIds) 0 else 1 }
+                .thenBy {
+                    BuiltinPoolPolicy.openNetSelectionRank(it.id, builtinProfileIds, whitelistBuiltinOnly)
+                }
                 .thenBy { it.userOrder },
         ).map { it.id }
         DataStore.autoSelectFallbackQueue = ranked.joinToString(",")
@@ -861,11 +912,20 @@ object AutoServerSelector {
         cap: Int,
         priorityFirstIds: Set<Long>,
         probeStates: Map<Long, ProxyProbeState> = emptyMap(),
+        builtinProfileIds: Set<Long> = emptySet(),
+        whitelistBuiltinOnly: Boolean = false,
     ): List<ProxyEntity> {
         if (proxies.isEmpty() || cap <= 0) return emptyList()
         val byGroup = proxies.groupBy { it.groupId }
         val groupQueues = byGroup.mapValues { (_, list) ->
-            list.sortedWith(heuristicPreTcpOrder(priorityFirstIds, probeStates)).toMutableList()
+            list.sortedWith(
+                heuristicPreTcpOrder(
+                    priorityFirstIds = priorityFirstIds,
+                    probeStates = probeStates,
+                    builtinProfileIds = builtinProfileIds,
+                    whitelistBuiltinOnly = whitelistBuiltinOnly,
+                ),
+            ).toMutableList()
         }
         val groupOrder = groupQueues.keys.sorted()
         val picked = ArrayList<ProxyEntity>(cap.coerceAtMost(proxies.size))
@@ -946,12 +1006,17 @@ object AutoServerSelector {
     private fun heuristicPreTcpOrder(
         priorityFirstIds: Set<Long>,
         probeStates: Map<Long, ProxyProbeState> = emptyMap(),
+        builtinProfileIds: Set<Long> = emptySet(),
+        whitelistBuiltinOnly: Boolean = false,
     ): Comparator<ProxyEntity> =
         compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
             .thenBy { warmProbeStateRank(probeStates, it.id) }
             .thenBy { statusRank(it.status) }
             .thenBy { pingRank(it.ping) }
             .thenByDescending { throughputRank(it) }
+            .thenBy {
+                BuiltinPoolPolicy.openNetSelectionRank(it.id, builtinProfileIds, whitelistBuiltinOnly)
+            }
             .thenBy { it.userOrder }
 
     private suspend fun urlTestTopCandidates(
@@ -981,7 +1046,7 @@ object AutoServerSelector {
                         return@withPermit
                     }
                     try {
-                        val ms = profileUrlTestDelay(proxy)
+                        val ms = DirectProfileUrlProbe.urlTestDelay(proxy)
                         if (ms != null && ms > 0) {
                             synchronized(result) {
                                 result[proxy.id] = ms
@@ -994,41 +1059,6 @@ object AutoServerSelector {
             }
         }.awaitAll()
         result.toMap()
-    }
-
-    private suspend fun profileUrlTestDelay(profile: ProxyEntity): Int? = coroutineScope {
-        var client: Client? = null
-        var processes: GuardedProcessPool? = null
-        val cacheFiles = ArrayList<File>()
-        var out: Int? = null
-        try {
-            client = Libcore.newClient(null)
-            val config = buildConfig(profile, forTest = true)
-            if (config.externalIndex.any { it.chain.isNotEmpty() }) {
-                val pluginConfigs = initPlugins(config, false, cacheFiles)
-                processes = GuardedProcessPool { Logs.w(it) }
-                launchPlugins(config, pluginConfigs, processes, cacheFiles)
-                delay(500L)
-            }
-            val ms = client.newInstanceURLTest(
-                config.config,
-                "",
-                DataStore.connectionTestURL,
-                DataStore.connectionTestTimeout,
-            )
-            if (ms > 0) {
-                out = ms
-            }
-        } catch (e: PluginNotFoundException) {
-            Logs.w("AutoSelect urlTest plugin: ${e.plugin}")
-        } catch (e: Exception) {
-            Logs.d("AutoSelect urlTest ${profile.displayName()}: ${e.readableMessage}")
-        } finally {
-            client?.closeQuietly()
-            processes?.close(this@coroutineScope)
-            cacheFiles.forEach { runCatching { it.delete() } }
-        }
-        out
     }
 
     private suspend fun quickTcpProbe(

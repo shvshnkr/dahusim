@@ -782,7 +782,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="probe_2k_persistence_summary">Хранит результаты TCP/URL-проверок по каждому профилю для больших пулов</string>
     <string name="probe_2k_warm_ranking_enabled">Тёплое ранжирование (пропуск свежих проверок)</string>
     <string name="probe_2k_warm_ranking_summary">Использует сохранённые проверки перед живым URL-тестом</string>
-    <string name="probe_2k_builtin_cap_enabled">Ограничить долю встроенных в fallback</string>
+    <string name="probe_2k_builtin_cap_enabled">Ограничить долю встроенных в очереди переключения</string>
     <string name="probe_2k_background_scheduler_enabled">Фоновое TCP-обслуживание</string>
     <string name="probe_2k_background_scheduler_summary">Лёгкое TCP-сканирование без VPN (когда отключено)</string>
     <string name="probe_2k_power_preset">Пресет нагрузки</string>
@@ -793,5 +793,5 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="probe_2k_background_done">Фоновое сканирование завершено</string>
     <string name="probe_2k_last_reason">Последний выбор: %1$s</string>
     <string name="probe_2k_activity_scan">Сканирование серверов %1$d/%2$d…</string>
-    <string name="probe_2k_pool_line">Пул: %1$d живых · %2$d кандидатов · %3$d мёртвых · %4$d неизвестно</string>
+    <string name="probe_2k_pool_line">Пул: %1$d живых · %2$d кандидатов · %3$d в кладбище · %4$d неизвестно</string>
 </resources>

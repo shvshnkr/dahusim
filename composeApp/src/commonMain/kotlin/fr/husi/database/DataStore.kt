@@ -294,9 +294,10 @@ object DataStore {
     var autoSelectLastKnownGoodUrlAt by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_AT) { 0L }
     var autoSelectLastKnownGoodUrlProfileId by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_PROFILE_ID) { 0L }
     var probe2kPersistenceEnabled by configurationStore.boolean(Key.PROBE_2K_PERSISTENCE_ENABLED) { true }
-    var probe2kWarmRankingEnabled by configurationStore.boolean(Key.PROBE_2K_WARM_RANKING_ENABLED) { false }
-    var probe2kBuiltinFallbackCapEnabled by configurationStore.boolean(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED) { false }
-    var probe2kBackgroundSchedulerEnabled by configurationStore.boolean(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED) { false }
+    var probe2kWarmRankingEnabled by configurationStore.boolean(Key.PROBE_2K_WARM_RANKING_ENABLED) { true }
+    var probe2kBuiltinFallbackCapEnabled by configurationStore.boolean(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED) { true }
+    var probe2kBackgroundSchedulerEnabled by configurationStore.boolean(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED) { true }
+    var probe2kLastBackgroundRunAt by configurationStore.long(Key.PROBE_2K_LAST_BACKGROUND_RUN_AT) { 0L }
     var probe2kPowerPreset by configurationStore.string(Key.PROBE_2K_POWER_PRESET) { Probe2kDefaults.POWER_NORMAL }
     var probe2kBackgroundBatchSize by configurationStore.int(Key.PROBE_2K_BACKGROUND_BATCH_SIZE) {
         Probe2kDefaults.BACKGROUND_BATCH_SIZE

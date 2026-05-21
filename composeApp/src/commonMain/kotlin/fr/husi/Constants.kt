@@ -146,6 +146,7 @@ object Key {
     const val PROBE_2K_WARM_RANKING_ENABLED = "probe2kWarmRankingEnabled"
     const val PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED = "probe2kBuiltinFallbackCapEnabled"
     const val PROBE_2K_BACKGROUND_SCHEDULER_ENABLED = "probe2kBackgroundSchedulerEnabled"
+    const val PROBE_2K_LAST_BACKGROUND_RUN_AT = "probe2kLastBackgroundRunAt"
     const val PROBE_2K_POWER_PRESET = "probe2kPowerPreset"
     const val PROBE_2K_BACKGROUND_BATCH_SIZE = "probe2kBackgroundBatchSize"
     const val PROBE_2K_BACKGROUND_TCP_WORKERS = "probe2kBackgroundTcpWorkers"

@@ -56,7 +56,7 @@
     <string name="probe_2k_persistence_summary">Stores TCP/URL probe results per profile for large pools</string>
     <string name="probe_2k_warm_ranking_enabled">Warm ranking (skip fresh probes)</string>
     <string name="probe_2k_warm_ranking_summary">Uses saved probe state before live URL tests</string>
-    <string name="probe_2k_builtin_cap_enabled">Cap built-in fallback share</string>
+    <string name="probe_2k_builtin_cap_enabled">Limit built-in share in fallback queue</string>
     <string name="probe_2k_background_scheduler_enabled">Background TCP maintenance</string>
     <string name="probe_2k_background_scheduler_summary">Light TCP scan while disconnected (no VPN)</string>
     <string name="probe_2k_power_preset">Power preset</string>
@@ -67,7 +67,7 @@
     <string name="probe_2k_background_done">Background scan finished</string>
     <string name="probe_2k_last_reason">Last selection: %1$s</string>
     <string name="probe_2k_activity_scan">Scanning servers %1$d/%2$d…</string>
-    <string name="probe_2k_pool_line">Pool: %1$d alive · %2$d candidate · %3$d dead · %4$d unknown</string>
+    <string name="probe_2k_pool_line">Pool: %1$d alive · %2$d candidate · %3$d buried · %4$d unknown</string>
     <!-- themes -->
     <string name="theme">Theme</string>
     <string name="themes_amber">Pine Tears</string>

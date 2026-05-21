@@ -12,6 +12,7 @@ import fr.husi.bg.DeepLinkDispatcher
 import fr.husi.bg.SagerConnection
 import fr.husi.compose.theme.AppTheme
 import fr.husi.database.DataStore
+import fr.husi.database.ProbeScheduler
 import fr.husi.permission.LocalPermissionPlatform
 import fr.husi.permission.rememberAndroidPermissionPlatform
 import fr.husi.repository.resolveRepository
@@ -80,6 +81,11 @@ class MainActivity : ComposeActivity(), AndroidScopeComponent {
     override fun onStart() {
         serviceConnection.updateConnectionId(SagerConnection.CONNECTION_ID_MAIN_ACTIVITY_FOREGROUND)
         super.onStart()
+        if (!DataStore.serviceState.connected) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                runCatching { ProbeScheduler.runBackgroundMaintenanceIfDue() }
+            }
+        }
     }
 
     override fun onStop() {

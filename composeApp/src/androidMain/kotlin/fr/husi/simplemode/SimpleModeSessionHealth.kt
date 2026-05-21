@@ -3,6 +3,8 @@ package fr.husi.simplemode
 import fr.husi.bg.ServiceRegistry
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
+import fr.husi.database.DirectProfileUrlProbe
+import fr.husi.database.SagerDatabase
 import fr.husi.ktx.readableMessage
 import fr.husi.libcore.Client
 import fr.husi.libcore.Libcore
@@ -84,7 +86,7 @@ internal object SimpleModeSessionHealth {
     private suspend fun runHealthCheck(profileId: Long, outboundTag: String): Boolean = checkLock.withLock {
         if (!DataStore.simpleMode || !DataStore.serviceState.connected) return@withLock false
         if (DataStore.selectedProxy != profileId) return@withLock false
-        val ok = runUrlHealthCheck(outboundTag)
+        val ok = runUrlHealthCheck(profileId, outboundTag)
         if (ok) {
             consecutiveFails = 0
             return@withLock true
@@ -101,8 +103,13 @@ internal object SimpleModeSessionHealth {
         true
     }
 
-    private suspend fun runUrlHealthCheck(outboundTag: String): Boolean {
+    private suspend fun runUrlHealthCheck(profileId: Long, outboundTag: String): Boolean {
         delay(WARMUP_MS)
+        val wlOnly = DataStore.activeWhitelistRestrictedNetwork
+        if (!wlOnly) {
+            val profile = SagerDatabase.proxyDao.getById(profileId) ?: return false
+            return (DirectProfileUrlProbe.urlTestDelay(profile) ?: 0) > 0
+        }
         var client: Client? = null
         return try {
             client = Libcore.newClient(null)

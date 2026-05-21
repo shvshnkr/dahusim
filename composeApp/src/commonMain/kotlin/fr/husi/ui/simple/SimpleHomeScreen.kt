@@ -182,7 +182,7 @@ fun SimpleHomeScreen(
                     Res.string.probe_2k_pool_line,
                     DataStore.probe2kPoolAlive,
                     DataStore.probe2kPoolCandidate,
-                    DataStore.probe2kPoolDead,
+                    DataStore.probe2kPoolDead + DataStore.probe2kPoolCemetery,
                     DataStore.probe2kPoolUnknown,
                 )
             } else {

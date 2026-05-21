@@ -22,6 +22,7 @@ object Probe2kDefaults {
     const val SUSPECT_RETRY_MS = 90L * 1000L
     const val DEAD_BACKOFF_MS = 5L * 60L * 1000L
     const val CEMETERY_BACKOFF_MS = 2L * 60L * 60L * 1000L
+    const val BACKGROUND_MIN_INTERVAL_MS = 5L * 60L * 1000L
     const val BUILTIN_FALLBACK_MAX_FRACTION = 0.28
     const val EWMA_ALPHA = 0.35
 
