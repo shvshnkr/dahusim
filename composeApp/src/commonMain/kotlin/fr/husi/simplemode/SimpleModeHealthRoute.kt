@@ -9,27 +9,25 @@ internal object SimpleModeHealthRoute {
     const val WL_WHITELIST_TXT_URL =
         "https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/Whitelist.txt"
 
-    /** Works on open networks; avoids broken HTTP probes to cp.cloudflare.com. */
-    const val OPEN_NET_HEALTH_URL = "https://www.gstatic.com/generate_204"
+    /** Foreign target; must go through tunnel on whitelist networks. */
+    const val TUNNEL_HEALTH_CLOUDFLARE_HTTPS = "https://cp.cloudflare.com/"
 
-    /** Reachable on many RU whitelist uplinks; exercised through tunnel routing. */
-    private const val WL_DZEN_URL = "http://dzen.ru"
-    private const val WL_YA_URL = "https://ya.ru"
-    private const val WL_TELEGRAM_URL = "https://web.telegram.org"
+    const val TUNNEL_HEALTH_GSTATIC = "https://www.gstatic.com/generate_204"
+
+    const val TUNNEL_HEALTH_TELEGRAM = "https://web.telegram.org"
 
     fun healthCheckUrls(whitelistOnly: Boolean): List<String> = if (whitelistOnly) {
         buildList {
-            add(WL_DZEN_URL)
-            add(WL_YA_URL)
-            add(WL_TELEGRAM_URL)
             add(WL_WHITELIST_TXT_URL)
-            val custom = DataStore.connectionTestURL
-            if (custom.isNotBlank() && !isBlockedHealthHost(custom)) {
-                add(custom)
-            }
-        }.distinct()
+            add(TUNNEL_HEALTH_CLOUDFLARE_HTTPS)
+            add(TUNNEL_HEALTH_GSTATIC)
+            add(TUNNEL_HEALTH_TELEGRAM)
+            add(normalizeTunnelHealthUrl(DataStore.connectionTestURL))
+        }.distinct().filter { it.isNotBlank() }
     } else {
-        listOf(OPEN_NET_HEALTH_URL, DataStore.connectionTestURL).distinct()
+        listOf(TUNNEL_HEALTH_GSTATIC, normalizeTunnelHealthUrl(DataStore.connectionTestURL))
+            .distinct()
+            .filter { it.isNotBlank() }
     }
 
     fun postConnectWarmupMs(whitelistOnly: Boolean): Long = if (whitelistOnly) 1_500L else 400L
@@ -91,12 +89,12 @@ internal object SimpleModeHealthRoute {
         )
     }
 
-    private fun isBlockedHealthHost(url: String): Boolean {
-        val host = urlHost(url)
-        return host.contains("cloudflare.com", ignoreCase = true) ||
-            host.equals("cp.cloudflare.com", ignoreCase = true) ||
-            host.contains("google.com", ignoreCase = true) ||
-            host.contains("gstatic.com", ignoreCase = true)
+    private fun normalizeTunnelHealthUrl(raw: String): String {
+        if (raw.isBlank()) return raw
+        if (raw.startsWith("http://cp.cloudflare.com", ignoreCase = true)) {
+            return TUNNEL_HEALTH_CLOUDFLARE_HTTPS
+        }
+        return raw
     }
 
     private fun urlHost(url: String): String = runCatching { URL(url).host }.getOrDefault(url)
