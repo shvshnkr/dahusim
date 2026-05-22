@@ -71,13 +71,6 @@ internal object SimpleModePostConnectHealth {
                 break
             }
         }
-        if (SimpleModeHealthRoute.isProbeFailureInconclusive(lastError, whitelistOnly, "post_connect")) {
-            simpleModeLog(
-                "SimpleMode",
-                "H37 post_connect_inconclusive_accept profileId=${profile.id} error=${lastError.orEmpty()}",
-            )
-            return Result(ok = true, latencyMs = 1, lastError = lastError)
-        }
         return Result(ok = false, latencyMs = 0, lastError = lastError)
     }
 }

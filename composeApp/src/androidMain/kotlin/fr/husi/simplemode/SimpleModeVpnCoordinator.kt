@@ -32,6 +32,7 @@ internal object SimpleModeVpnCoordinator {
 
     private const val ADAPT_DEBOUNCE_MS = 2_500L
     private const val ADAPT_PREPARE_TIMEOUT_MS = 30_000L
+    private const val HANDOFF_PREPARE_TIMEOUT_MS = 45_000L
 
     private val adaptScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val adaptMutex = Mutex()
@@ -214,8 +215,13 @@ internal object SimpleModeVpnCoordinator {
             return false
         }
         val networkHandoff = reason == "network_handoff" || reason == "reachability_flip"
+        val prepareTimeoutMs = if (networkHandoff) {
+            HANDOFF_PREPARE_TIMEOUT_MS
+        } else {
+            ADAPT_PREPARE_TIMEOUT_MS
+        }
         val prep = try {
-            withTimeoutOrNull(ADAPT_PREPARE_TIMEOUT_MS) {
+            withTimeoutOrNull(prepareTimeoutMs) {
                 SimpleModeNetworkAdaptation.reselectForNetwork(
                     whitelistBuiltinOnly = whitelistOnly,
                     networkHandoff = networkHandoff,
@@ -223,10 +229,15 @@ internal object SimpleModeVpnCoordinator {
             } ?: run {
                 simpleModeLog(
                     "SimpleMode",
-                    "H30 wl_adapt_prepare_timeout reason=$reason gen=$adaptGen ms=$ADAPT_PREPARE_TIMEOUT_MS",
+                    "H30 wl_adapt_prepare_timeout reason=$reason gen=$adaptGen ms=$prepareTimeoutMs",
                 )
                 if (requiresTunnelRebuild(reason)) {
-                    requestTunnelReload(whitelistOnly, "${reason}_timeout", previousProfileId)
+                    val reloadProfileId = resolveProfileAfterPrepareTimeout(previousProfileId, networkHandoff)
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H30 wl_adapt_timeout_reload reason=$reason prev=$previousProfileId reload=$reloadProfileId",
+                    )
+                    requestTunnelReload(whitelistOnly, "${reason}_timeout", reloadProfileId)
                     return true
                 }
                 return false
@@ -306,6 +317,24 @@ internal object SimpleModeVpnCoordinator {
                 return true
             }
         }
+    }
+
+    private fun resolveProfileAfterPrepareTimeout(
+        previousProfileId: Long,
+        networkHandoff: Boolean,
+    ): Long {
+        val selected = DataStore.selectedProxy
+        if (selected > 0L && selected != previousProfileId) return selected
+        if (networkHandoff) {
+            val queueHead = DataStore.autoSelectFallbackQueue
+                .split(',')
+                .firstOrNull { it.isNotBlank() }
+                ?.toLongOrNull()
+            if (queueHead != null && queueHead > 0L && queueHead != previousProfileId) {
+                return queueHead
+            }
+        }
+        return previousProfileId
     }
 
     private fun requestTunnelReload(whitelistOnly: Boolean, reason: String, profileId: Long) {

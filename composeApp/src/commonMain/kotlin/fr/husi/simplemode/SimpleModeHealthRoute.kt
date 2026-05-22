@@ -38,9 +38,19 @@ internal object SimpleModeHealthRoute {
      */
     fun isLikelyUnderlyingProxyDialFailure(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
-        return error.contains("dial rmnet", ignoreCase = true) ||
+        val hasUplinkIface = error.contains("dial rmnet", ignoreCase = true) ||
             error.contains("dial wlan", ignoreCase = true) ||
             error.contains("dial eth", ignoreCase = true)
+        if (!hasUplinkIface) return false
+        // dial rmnet → proxy:port i/o timeout means the selected server is unreachable, not bootstrap noise.
+        val e = error.lowercase()
+        if (e.contains("i/o timeout") ||
+            e.contains("connection timed out") ||
+            e.contains("context deadline exceeded")
+        ) {
+            return false
+        }
+        return true
     }
 
     /** Passed to [fr.husi.database.AutoServerSelector.recordProbeFailure] when health failed inconclusively. */
