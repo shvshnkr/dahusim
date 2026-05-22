@@ -15,7 +15,7 @@ Upstream (`husi`) живет и развивается на Codeberg, а это�
 
 ### Android APK (pre-release, динамический список)
 
-- [Последние Android pre-release (rolling)](https://github.com/shvshnkr/dahusim/releases?q=rolling-+prerelease%3Atrue)
+- [Последние Android pre-release](https://github.com/shvshnkr/dahusim/releases?q=android-play+prerelease%3Atrue)
 - Обычно нужен файл `*_arm64_v8a.apk` (для большинства современных телефонов).
 - APK берите из блока `Assets`, не из исходников.
 
@@ -120,6 +120,6 @@ Google объявил о требованиях developer verification для An
 Dahusim is a Russia-oriented fork of husi with a simpler default UX, auto-selection/fallback logic, and network handoff adaptation.  
 Latest pre-releases:
 
-- Android rolling: <https://github.com/shvshnkr/dahusim/releases?q=rolling-+prerelease%3Atrue>
+- Android: <https://github.com/shvshnkr/dahusim/releases?q=android-play+prerelease%3Atrue>
 - Linux desktop: <https://github.com/shvshnkr/dahusim/releases?q=linux-desktop-linux-amd64+prerelease%3Atrue>
 - Windows desktop: <https://github.com/shvshnkr/dahusim/releases?q=windows-desktop-windows-amd64+prerelease%3Atrue>

@@ -40,4 +40,5 @@ OTA install requires the **same signing key** as the installed APK.
 ## Promote defaults
 
 - `min_version_code` empty → **0** (offer to all installed versions below `versionCode`).
-- Source tags default to `rolling-<run_id>`, `linux-desktop-linux-amd64-<run_id>`, `windows-desktop-windows-amd64-<run_id>`.
+- Source tags default to `android-<run_id>`, `linux-desktop-linux-amd64-<run_id>`, `windows-desktop-windows-amd64-<run_id>`.
+  Promote falls back to legacy `rolling-<run_id>` when the Android tag from an older CI run is still named that way.

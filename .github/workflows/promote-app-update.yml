@@ -8,7 +8,7 @@ on:
         required: false
         type: string
       source_android_tag:
-        description: "Optional override, e.g. rolling-123456789"
+        description: "Optional override, e.g. android-123456789 (legacy rolling-123456789)"
         required: false
         type: string
       source_linux_tag:
@@ -101,7 +101,15 @@ jobs:
             exit 1
           fi
 
-          ANDROID_TAG="${INPUT_ANDROID_TAG:-rolling-${RUN_ID}}"
+          ANDROID_TAG="${INPUT_ANDROID_TAG:-android-${RUN_ID}}"
+          if [ -z "${INPUT_ANDROID_TAG:-}" ]; then
+            if ! gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${ANDROID_TAG}" >/dev/null 2>&1; then
+              LEGACY_TAG="rolling-${RUN_ID}"
+              if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${LEGACY_TAG}" >/dev/null 2>&1; then
+                ANDROID_TAG="$LEGACY_TAG"
+              fi
+            fi
+          fi
           LINUX_TAG="${INPUT_LINUX_TAG:-linux-desktop-linux-amd64-${RUN_ID}}"
           WINDOWS_TAG="${INPUT_WINDOWS_TAG:-windows-desktop-windows-amd64-${RUN_ID}}"
 

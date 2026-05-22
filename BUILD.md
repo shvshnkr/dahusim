@@ -4,7 +4,7 @@
 
 **CI (GitHub):** workflow **Android (Play debug, all ABI, pre-release)** ([`.github/workflows/build.yml`](.github/workflows/build.yml)) — **четыре** Play debug APK (arm64-v8a, armeabi-v7a, x86_64, x86) и публикуется pre-release. Файлы во **вложениях (Assets)** на **[Releases / Latest](https://github.com/shvshnkr/dahusim/releases/latest)** — скачивайте оттуда, не из клонирования репо. См. [README](README.md).
 
-**Linux desktop (отдельный тестовый канал):** [`.github/workflows/desktop-linux-test.yml`](.github/workflows/desktop-linux-test.yml) — пакеты deb/rpm/pacman для `linux/amd64`, pre-release с тегами вида `linux-desktop-test-<run_id>` (не смешивается с rolling APK). Синхронизация с апстримом: [docs/UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md).
+**Linux desktop (отдельный тестовый канал):** [`.github/workflows/desktop-linux-test.yml`](.github/workflows/desktop-linux-test.yml) — пакеты deb/rpm/pacman для `linux/amd64`, pre-release с тегами вида `linux-desktop-test-<run_id>` (не смешивается с Android APK pre-release). Синхронизация с апстримом: [docs/UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md).
 
 ## Как выбирается ABI
 

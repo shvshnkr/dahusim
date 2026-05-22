@@ -192,7 +192,7 @@ jobs:
             echo
             echo "## Expected release tags for this run"
             echo
-            echo "- android tag: \`rolling-${{ github.run_id }}\`"
+            echo "- android tag: \`android-${{ github.run_id }}\`"
             echo "- linux tag: \`linux-desktop-linux-amd64-${{ github.run_id }}\`"
             echo "- windows tag: \`windows-desktop-windows-amd64-${{ github.run_id }}\`"
             echo
