@@ -43,7 +43,7 @@ internal object SimpleModeHealthRoute {
         outboundTag: String,
         url: String,
         ok: Boolean,
-        delayMs: Long = 0L,
+        delayMs: Int = 0,
         error: String? = null,
     ) {
         val result = if (ok) "ok delayMs=$delayMs" else "fail error=${error.orEmpty()}"

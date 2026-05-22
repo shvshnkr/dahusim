@@ -126,7 +126,7 @@ internal object SimpleModeSessionHealth {
                 outboundTag = outboundTag,
                 url = DataStore.connectionTestURL,
                 ok = ok,
-                delayMs = delay,
+                delayMs = delay.toInt(),
                 error = if (ok) null else "direct url test failed",
             )
             return ok

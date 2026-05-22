@@ -624,14 +624,14 @@ class BaseService {
                                 outboundTag = outboundTag,
                                 url = postConnectUrls.first(),
                                 ok = delay != null && delay > 0L,
-                                delayMs = delay ?: 0L,
+                                delayMs = (delay ?: 0L).toInt(),
                                 error = if (delay == null || delay <= 0L) "direct url test failed" else null,
                             )
                             delay ?: error("direct url test failed")
                         } else {
                             val client = Libcore.newClient(null)
                             try {
-                                    var successLatency = -1L
+                                    var successLatency = -1
                                     var lastError: Throwable? = null
                                     for (testUrl in postConnectUrls) {
                                         val attempt = runCatching {
@@ -663,8 +663,8 @@ class BaseService {
                                             error = err?.readableMessage,
                                         )
                                     }
-                                    if (successLatency > 0L) {
-                                        successLatency
+                                    if (successLatency > 0) {
+                                        successLatency.toLong()
                                     } else {
                                         throw (lastError ?: IllegalStateException("post-connect url test failed"))
                                     }
