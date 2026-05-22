@@ -18,6 +18,18 @@ class UnderlyingNetworkHandoffPolicyTest {
     }
 
     @Test
+    fun crossInterfaceHandoffWhileVpnConnecting() {
+        val reason = UnderlyingNetworkHandoffPolicy.evaluate(
+            snapshot(
+                vpnSessionActive = true,
+                previousInterfaceForHandoff = "wlan0",
+                interfaceName = "rmnet_data1",
+            ),
+        )
+        assertEquals(UnderlyingNetworkHandoffPolicy.REASON_CROSS_INTERFACE, reason)
+    }
+
+    @Test
     fun carrierRestoreAfterWifiReconnect() {
         val reason = UnderlyingNetworkHandoffPolicy.evaluate(
             snapshot(
@@ -48,7 +60,7 @@ class UnderlyingNetworkHandoffPolicyTest {
     fun noHandoffWhenVpnDown() {
         assertNull(
             UnderlyingNetworkHandoffPolicy.evaluate(
-                snapshot(vpnConnected = false, underlyingCarrierLostWhileConnected = true),
+                snapshot(vpnSessionActive = false, underlyingCarrierLostWhileConnected = true),
             ),
         )
     }
@@ -84,7 +96,7 @@ class UnderlyingNetworkHandoffPolicyTest {
     }
 
     private fun snapshot(
-        vpnConnected: Boolean = true,
+        vpnSessionActive: Boolean = true,
         interfaceName: String? = "wlan0",
         interfaceIndex: Int = 26,
         lastInterfaceName: String? = "wlan0",
@@ -92,7 +104,7 @@ class UnderlyingNetworkHandoffPolicyTest {
         previousInterfaceForHandoff: String? = "wlan0",
         underlyingCarrierLostWhileConnected: Boolean = false,
     ) = UnderlyingNetworkHandoffPolicy.Snapshot(
-        vpnConnected = vpnConnected,
+        vpnSessionActive = vpnSessionActive,
         interfaceName = interfaceName,
         interfaceIndex = interfaceIndex,
         lastInterfaceName = lastInterfaceName,

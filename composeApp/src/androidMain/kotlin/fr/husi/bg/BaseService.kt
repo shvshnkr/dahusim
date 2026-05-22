@@ -37,7 +37,7 @@ import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeHealthRoute
-import fr.husi.simplemode.SimpleModeTunnelHealthCheck
+import fr.husi.simplemode.SimpleModePostConnectHealth
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.simplemode.SimpleModeSessionHealth
 import fr.husi.simplemode.SimpleModeTunnelRestart
@@ -600,6 +600,7 @@ class BaseService {
                         urls = postConnectUrls,
                         timeoutMs = postConnectTimeoutMs,
                     )
+                    val warmupMs = SimpleModeHealthRoute.postConnectWarmupMs(reachability.whitelistOnly)
                     // #region agent log
                     simpleModeDebugEvent(
                         runId = "post-connect-probe",
@@ -611,93 +612,41 @@ class BaseService {
                             "baseTimeoutMs" to baseTimeoutMs.toString(),
                             "postConnectTimeoutMs" to postConnectTimeoutMs.toString(),
                             "outboundTagLen" to outboundTag.length.toString(),
-                            "warmupMs" to "400",
+                            "warmupMs" to warmupMs.toString(),
                             "url" to postConnectUrls.joinToString(","),
                         ),
                     )
                     // #endregion
-                    val warmupMs = SimpleModeHealthRoute.postConnectWarmupMs(reachability.whitelistOnly)
                     simpleModeLog(
                         "SimpleMode",
                         "H3b post_connect_probe_cfg baseTimeoutMs=$baseTimeoutMs postTimeoutMs=$postConnectTimeoutMs " +
                             "outboundTagLen=${outboundTag.length} warmupMs=$warmupMs",
                     )
-                    delay(warmupMs)
-                    val useDirectProbe = healthRoute == SimpleModeHealthRoute.Route.DIRECT_PROFILE
-                    runCatching {
-                        val latencyMs: Long = if (useDirectProbe) {
-                            val delay = DirectProfileUrlProbe.urlTestDelay(profile)?.toLong()
-                            SimpleModeHealthRoute.logProbeAttempt(
-                                phase = "post_connect",
-                                whitelistOnly = reachability.whitelistOnly,
-                                route = healthRoute,
-                                outboundTag = outboundTag,
-                                url = postConnectUrls.first(),
-                                ok = delay != null && delay > 0L,
-                                delayMs = (delay ?: 0L).toInt(),
-                                error = if (delay == null || delay <= 0L) "direct url test failed" else null,
-                            )
-                            if (delay == null || delay <= 0L) {
-                                error("post-connect url test failed")
-                            }
-                            delay
-                        } else {
-                            val delay = SimpleModeTunnelHealthCheck.firstSuccessLatencyMs(
-                                phase = "post_connect",
-                                whitelistOnly = reachability.whitelistOnly,
-                                outboundTag = outboundTag,
-                                urls = postConnectUrls,
-                                timeoutMs = postConnectTimeoutMs,
-                            ).toLong()
-                            if (delay <= 0L) {
-                                error("post-connect url test failed")
-                            }
-                            delay
-                        }
-                        // #region agent log
-                        simpleModeDebugEvent(
-                            runId = "post-connect-probe",
-                            hypothesisId = "H3",
-                            location = "BaseService.kt:post_connect_url_test",
-                            message = "post-connect url test success",
-                            data = mapOf(
-                                "profileId" to profile.id.toString(),
-                                "delayMs" to latencyMs.toString(),
-                                "url" to postConnectUrls.joinToString(","),
-                                "direct" to useDirectProbe.toString(),
-                            ),
-                        )
-                        // #endregion
-                        postConnectLatencyMs = latencyMs.toInt().coerceAtLeast(0)
+                    val postConnectProbe = SimpleModePostConnectHealth.verify(
+                        profile = profile,
+                        whitelistOnly = reachability.whitelistOnly,
+                        healthRoute = healthRoute,
+                        outboundTag = outboundTag,
+                        urls = postConnectUrls,
+                        postConnectTimeoutMs = postConnectTimeoutMs,
+                        warmupMs = warmupMs,
+                    )
+                    if (postConnectProbe.ok) {
+                        postConnectLatencyMs = postConnectProbe.latencyMs.coerceAtLeast(0)
                         simpleModeLog(
                             "SimpleMode",
-                            "H3 post_connect_url_test_success profileId=${profile.id} delayMs=$latencyMs direct=$useDirectProbe",
+                            "H3 post_connect_url_test_success profileId=${profile.id} delayMs=${postConnectProbe.latencyMs} " +
+                                "direct=${healthRoute == SimpleModeHealthRoute.Route.DIRECT_PROFILE}",
                         )
                         DataStore.simpleModeActivity = ""
-                    }.onFailure { err ->
-                        // #region agent log
-                        simpleModeDebugEvent(
-                            runId = "run2",
-                            hypothesisId = "H3",
-                            location = "BaseService.kt:post_connect_url_test",
-                            message = "post-connect url test failed",
-                            data = mapOf(
-                                "profileId" to profile.id.toString(),
-                                "errorClass" to err.javaClass.name,
-                                "error" to err.readableMessage,
-                                "url" to postConnectUrls.joinToString(","),
-                                "direct" to useDirectProbe.toString(),
-                            ),
-                        )
-                        // #endregion
+                    } else {
                         simpleModeLog(
                             "SimpleMode",
-                            "H3 post_connect_url_test_failed profileId=${profile.id} class=${err.javaClass.simpleName} " +
-                                "error=${err.readableMessage} direct=$useDirectProbe",
+                            "H3 post_connect_url_test_failed profileId=${profile.id} " +
+                                "error=${postConnectProbe.lastError.orEmpty()}",
                         )
                         DataStore.simpleModeActivity = "Server unstable, switching..."
                         postConnectHealthy = false
-                        AutoServerSelector.recordHealthProbeFailure(profile.id, err.readableMessage)
                     }
                     if (!postConnectHealthy) {
                         val wlOnly = reachability.whitelistOnly ||
@@ -705,6 +654,7 @@ class BaseService {
                         if (DataStore.simpleMode) {
                             val recovered = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                                 failedProfileId = profile.id,
+                                lastHealthError = postConnectProbe.lastError,
                             )
                             if (recovered) {
                                 return@runOnDefaultDispatcher

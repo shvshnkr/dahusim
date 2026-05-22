@@ -551,6 +551,7 @@ object AutoServerSelector {
                 if (quickProbePings.isNotEmpty()) {
                     // Prefer low composite: real URL latency wins over TCP+synthetic when URL ran.
                     compareBy<ProxyEntity> { if (isInFailureCooldown(it.id)) 1 else 0 }
+                        .thenBy { if (it.id in quickProbePings) 0 else 1 }
                         .thenBy { warmProbeStateRank(probeStates, it.id) }
                         .thenBy { compositeSelectionScore(it, urlTestDelays, quickProbePings, probeStates) }
                         .thenBy { statusRank(it.status) }
@@ -1051,6 +1052,9 @@ object AutoServerSelector {
             else -> null
         }
         if (live != null) return live
+        if (quickProbePings.isNotEmpty()) {
+            return Int.MAX_VALUE / 2
+        }
         if (!DataStore.probe2kWarmRankingEnabled) return Int.MAX_VALUE / 4
         return ProxyProbeStateStore.persistedDelayScore(probeStates[proxy.id])
     }

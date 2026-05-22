@@ -14,7 +14,8 @@ internal object UnderlyingNetworkHandoffPolicy {
     const val REASON_LINK_REBOUND = "link_rebound"
 
     data class Snapshot(
-        val vpnConnected: Boolean,
+        /** True when VPN is up or still finishing the connect job (underlying iface may flip mid-connect). */
+        val vpnSessionActive: Boolean,
         val interfaceName: String?,
         val interfaceIndex: Int,
         val lastInterfaceName: String?,
@@ -25,7 +26,7 @@ internal object UnderlyingNetworkHandoffPolicy {
 
     /** Non-null reason when the tunnel should be rebuilt; null when unchanged. */
     fun evaluate(snapshot: Snapshot): String? {
-        if (!snapshot.vpnConnected) return null
+        if (!snapshot.vpnSessionActive) return null
         val name = snapshot.interfaceName?.takeIf { it.isNotBlank() } ?: return null
 
         val previous = snapshot.previousInterfaceForHandoff

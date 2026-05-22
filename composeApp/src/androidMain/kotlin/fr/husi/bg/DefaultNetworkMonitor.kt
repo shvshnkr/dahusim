@@ -113,9 +113,11 @@ object DefaultNetworkMonitor {
                 }
                 val ifaceChanged =
                     interfaceName != lastInterfaceName || interfaceIndex != lastInterfaceIndex
+                val vpnSessionActive = DataStore.serviceState.connected ||
+                    DataStore.serviceState.state == ServiceState.Connecting
                 val handoffReason = UnderlyingNetworkHandoffPolicy.evaluate(
                     UnderlyingNetworkHandoffPolicy.Snapshot(
-                        vpnConnected = DataStore.serviceState.connected,
+                        vpnSessionActive = vpnSessionActive,
                         interfaceName = interfaceName,
                         interfaceIndex = interfaceIndex,
                         lastInterfaceName = lastInterfaceName,

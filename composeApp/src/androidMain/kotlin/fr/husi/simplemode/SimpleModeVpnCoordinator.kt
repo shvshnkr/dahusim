@@ -95,11 +95,28 @@ internal object SimpleModeVpnCoordinator {
     /**
      * Re-runs auto-select and reloads the tunnel after a failed health/post-connect check.
      */
-    suspend fun tryRecoverAfterUnhealthySession(failedProfileId: Long): Boolean {
+    suspend fun tryRecoverAfterUnhealthySession(
+        failedProfileId: Long,
+        lastHealthError: String? = null,
+    ): Boolean {
         if (!DataStore.simpleMode) return false
         val whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
         if (whitelistOnly) {
             DataStore.autoConnectPausedUntilGoogle = false
+        }
+        val inconclusive = SimpleModeHealthRoute.isProbeFailureInconclusive(
+            error = lastHealthError,
+            whitelistOnly = whitelistOnly,
+            phase = "post_connect",
+        )
+        if (inconclusive) {
+            simpleModeLog(
+                "SimpleMode",
+                "H30 session_recover_inconclusive_skip profileId=$failedProfileId error=${lastHealthError.orEmpty()}",
+            )
+            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError)
+            DataStore.simpleModeActivity = ""
+            return true
         }
         DataStore.simpleModeActivity = if (whitelistOnly) {
             "Restricted network: trying another server…"
@@ -110,23 +127,20 @@ internal object SimpleModeVpnCoordinator {
             "SimpleMode",
             "H30 session_recover start failedProfileId=$failedProfileId wl=$whitelistOnly",
         )
-        val recoverGen = adaptGeneration.incrementAndGet()
-        AutoServerSelector.cancelAdaptPrepare("session_recover")
-        if (applyReselectAndRestart("session_unhealthy", whitelistOnly, failedProfileId, recoverGen)) {
-            return true
-        }
+        AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError)
         val fallback = AutoServerSelector.tryMoveToFallback(failedProfileId)
         if (fallback != null) {
             simpleModeLog(
                 "SimpleMode",
                 "H30 session_recover_fallback failedProfileId=$failedProfileId nextId=$fallback",
             )
-            if (!DataStore.simpleMode) {
-                simpleModeLog("SimpleMode", "H30 wl_adapt_reload_skipped reason=simple_mode_off")
-                return true
-            }
             DataStore.selectedProxy = fallback
             requestTunnelReload(whitelistOnly, "session_recover_fallback", fallback)
+            return true
+        }
+        val recoverGen = adaptGeneration.incrementAndGet()
+        AutoServerSelector.cancelAdaptPrepare("session_recover")
+        if (applyReselectAndRestart("session_unhealthy", whitelistOnly, failedProfileId, recoverGen)) {
             return true
         }
         return false

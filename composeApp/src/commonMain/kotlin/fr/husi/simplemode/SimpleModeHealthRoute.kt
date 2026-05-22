@@ -45,7 +45,28 @@ internal object SimpleModeHealthRoute {
 
     /** Passed to [fr.husi.database.AutoServerSelector.recordProbeFailure] when health failed inconclusively. */
     fun probeFailureSkipReason(error: String?): String? =
-        if (isLikelyUnderlyingProxyDialFailure(error)) "underlying_proxy_dial" else null
+        if (isProbeFailureInconclusive(error, whitelistOnly = true)) "underlying_proxy_dial" else null
+
+    /**
+     * WL tunnel health during bootstrap / handoff: uplink dial and short transport timeouts
+     * are not proof the selected outbound is dead.
+     */
+    fun isProbeFailureInconclusive(
+        error: String?,
+        whitelistOnly: Boolean,
+        phase: String = "",
+    ): Boolean {
+        if (error.isNullOrBlank()) return false
+        if (isLikelyUnderlyingProxyDialFailure(error)) return true
+        if (!whitelistOnly) return false
+        val bootstrapPhase = phase.isBlank() || phase == "post_connect" || phase == "session_periodic"
+        if (!bootstrapPhase) return false
+        val e = error.lowercase()
+        return e.contains("i/o timeout") ||
+            e.contains("no recent network activity") ||
+            e.contains("context deadline exceeded") ||
+            e.contains("connection timed out")
+    }
 
     fun logInconclusivePass(phase: String, whitelistOnly: Boolean, reason: String) {
         simpleModeLog(

@@ -18,6 +18,11 @@ internal object SimpleModeTunnelHealthCheck {
         timeoutMs = timeoutMs,
     ) > 0
 
+    data class TunnelProbeOutcome(
+        val latencyMs: Int,
+        val lastError: String?,
+    )
+
     /** First successful URL latency; 1 on inconclusive WL pass; 0 if failed. */
     suspend fun firstSuccessLatencyMs(
         phase: String,
@@ -25,11 +30,20 @@ internal object SimpleModeTunnelHealthCheck {
         outboundTag: String,
         urls: List<String>,
         timeoutMs: Int,
-    ): Int {
-        if (outboundTag.isBlank()) return 0
+    ): Int = probeTunnel(phase, whitelistOnly, outboundTag, urls, timeoutMs).latencyMs
+
+    suspend fun probeTunnel(
+        phase: String,
+        whitelistOnly: Boolean,
+        outboundTag: String,
+        urls: List<String>,
+        timeoutMs: Int,
+    ): TunnelProbeOutcome {
+        if (outboundTag.isBlank()) return TunnelProbeOutcome(0, "missing outbound tag")
         val client = Libcore.newClient(null)
         return try {
             var sawRealFailure = false
+            var lastError: String? = null
             for (url in urls) {
                 val attempt = runCatching {
                     client.urlTest(outboundTag, url, timeoutMs)
@@ -45,10 +59,11 @@ internal object SimpleModeTunnelHealthCheck {
                         ok = true,
                         delayMs = latency,
                     )
-                    return latency
+                    return TunnelProbeOutcome(latency, null)
                 }
                 val errText = attempt.exceptionOrNull()?.message
-                if (!SimpleModeHealthRoute.isLikelyUnderlyingProxyDialFailure(errText)) {
+                lastError = errText
+                if (!SimpleModeHealthRoute.isProbeFailureInconclusive(errText, whitelistOnly, phase)) {
                     sawRealFailure = true
                 }
                 SimpleModeHealthRoute.logProbeAttempt(
@@ -67,9 +82,9 @@ internal object SimpleModeTunnelHealthCheck {
                     whitelistOnly = true,
                     reason = "underlying_proxy_dial_only",
                 )
-                1
+                TunnelProbeOutcome(1, lastError)
             } else {
-                0
+                TunnelProbeOutcome(0, lastError)
             }
         } finally {
             runCatching { client.close() }
