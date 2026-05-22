@@ -6,12 +6,8 @@ import fr.husi.database.DataStore
 import fr.husi.database.DirectProfileUrlProbe
 import fr.husi.database.SagerDatabase
 import fr.husi.ktx.readableMessage
-import fr.husi.libcore.Client
-import fr.husi.libcore.Libcore
 import fr.husi.repository.resolveRepository
-import fr.husi.utils.closeQuietly
 import fr.husi.utils.simpleModeLog
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,7 +26,6 @@ internal object SimpleModeSessionHealth {
 
     private const val CHECK_INTERVAL_MS = 30_000L
     private const val CONSECUTIVE_FAIL_LIMIT = 2
-    private const val WARMUP_MS = 400L
     private const val ON_DEMAND_MIN_GAP_MS = 15_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -104,8 +99,8 @@ internal object SimpleModeSessionHealth {
     }
 
     private suspend fun runUrlHealthCheck(profileId: Long, outboundTag: String): Boolean {
-        delay(WARMUP_MS)
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
+        delay(SimpleModeHealthRoute.postConnectWarmupMs(wlOnly))
         if (!wlOnly) {
             val profile = SagerDatabase.proxyDao.getById(profileId) ?: return false
             val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
@@ -131,58 +126,23 @@ internal object SimpleModeSessionHealth {
             )
             return ok
         }
-        var client: Client? = null
-        return try {
-            client = Libcore.newClient(null)
-            val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
-            val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = true)
-            SimpleModeHealthRoute.logProbeConfig(
-                phase = "session_periodic",
-                whitelistOnly = true,
-                route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
-                outboundTag = outboundTag,
-                urls = healthUrls,
-                timeoutMs = timeoutMs,
-            )
-            for (url in healthUrls) {
-                val attempt = runCatching {
-                    client.urlTest(outboundTag, url, timeoutMs)
-                }
-                val latencyMs = attempt.getOrNull()
-                if (latencyMs != null && latencyMs > 0) {
-                    SimpleModeHealthRoute.logProbeAttempt(
-                        phase = "session_periodic",
-                        whitelistOnly = true,
-                        route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
-                        outboundTag = outboundTag,
-                        url = url,
-                        ok = true,
-                        delayMs = latencyMs,
-                    )
-                    return true
-                }
-                SimpleModeHealthRoute.logProbeAttempt(
-                    phase = "session_periodic",
-                    whitelistOnly = true,
-                    route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
-                    outboundTag = outboundTag,
-                    url = url,
-                    ok = false,
-                    error = attempt.exceptionOrNull()?.readableMessage,
-                )
-            }
-            false
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            simpleModeLog(
-                "SimpleMode",
-                "H34 session_health_error class=${e.javaClass.simpleName} error=${e.readableMessage}",
-            )
-            false
-        } finally {
-            client?.closeQuietly()
-        }
+        val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
+        val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = true)
+        SimpleModeHealthRoute.logProbeConfig(
+            phase = "session_periodic",
+            whitelistOnly = true,
+            route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
+            outboundTag = outboundTag,
+            urls = healthUrls,
+            timeoutMs = timeoutMs,
+        )
+        return SimpleModeTunnelHealthCheck.check(
+            phase = "session_periodic",
+            whitelistOnly = true,
+            outboundTag = outboundTag,
+            urls = healthUrls,
+            timeoutMs = timeoutMs,
+        )
     }
 
     private suspend fun handleUnhealthySession(profileId: Long) {
