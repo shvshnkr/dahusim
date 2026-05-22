@@ -3,6 +3,7 @@ package fr.husi.update
 import fr.husi.bg.currentEpochSeconds
 import fr.husi.database.DataStore
 import fr.husi.ktx.onDefaultDispatcher
+import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +30,10 @@ object AppUpdateCoordinator {
             val manifest = repository.fetchManifest()
             AppUpdateEvaluator.evaluate(manifest)
         }.getOrElse { error ->
+            simpleModeLog(
+                "SimpleMode",
+                "H36 app_update_check_fail error=${error.message ?: error.javaClass.simpleName}",
+            )
             AppUpdateCheckResult.Error(error.message ?: error.toString())
         }
 

@@ -10,12 +10,16 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import fr.husi.ktx.onDefaultDispatcher
-import fr.husi.repository.resolveAndroidRepository
+import fr.husi.repository.Repository
+import fr.husi.repository.resolveRepository
+import fr.husi.resources.Res
+import fr.husi.utils.simpleModeLog
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
+import org.jetbrains.compose.resources.StringResource
 
 actual object AppUpdatePlatform {
 
@@ -39,30 +43,40 @@ actual object AppUpdatePlatform {
     }
 
     actual suspend fun installOffer(offer: AppUpdateOffer): AppUpdateInstallResult = onDefaultDispatcher {
+        val repo = resolveRepository()
         val apkInfo = offer.androidApk
-            ?: return@onDefaultDispatcher AppUpdateInstallResult.Failed("No Android APK in update manifest")
+            ?: return@onDefaultDispatcher failed(repo, Res.string.app_update_no_apk)
 
         if (!canRequestPackageInstalls()) {
             openInstallPermissionSettings()
-            return@onDefaultDispatcher AppUpdateInstallResult.Failed(
-                "Allow installing updates for this app, then try again",
-            )
+            return@onDefaultDispatcher failed(repo, Res.string.app_update_install_permission_required)
         }
 
         val cacheDir = File(appContext.cacheDir, "app-update").apply { mkdirs() }
         val apkFile = File(cacheDir, "update-${offer.versionCode}.apk")
 
         runCatching {
+            simpleModeLog(
+                "SimpleMode",
+                "H36 app_update_install_start version=${offer.versionCode} urlHost=${apkHost(apkInfo.url)}",
+            )
             AppUpdateDownload.download(apkInfo.url, apkFile)
             if (!sha256Matches(apkFile, apkInfo.sha256)) {
-                error("Downloaded APK hash mismatch")
+                throw IllegalStateException(repo.getString(Res.string.app_update_apk_hash_mismatch))
             }
-            verifySigning(offer, apkFile)
-            installApkAndAwait(apkFile)
+            verifySigning(repo, offer, apkFile)
+            installApkAndAwait(repo, apkFile)
         }.fold(
-            onSuccess = { result -> result },
+            onSuccess = { result ->
+                simpleModeLog("SimpleMode", "H36 app_update_install_done result=${result::class.simpleName}")
+                result
+            },
             onFailure = { error ->
                 apkFile.delete()
+                simpleModeLog(
+                    "SimpleMode",
+                    "H36 app_update_install_fail error=${error.message ?: error.javaClass.simpleName}",
+                )
                 AppUpdateInstallResult.Failed(error.message ?: error.toString())
             },
         )
@@ -71,6 +85,13 @@ actual object AppUpdatePlatform {
     actual suspend fun reopenDownloadedArtifact(): AppUpdateInstallResult {
         return AppUpdateInstallResult.Failed("Not supported on Android")
     }
+
+    private suspend fun failed(repo: Repository, message: StringResource): AppUpdateInstallResult.Failed =
+        AppUpdateInstallResult.Failed(repo.getString(message))
+
+    private fun apkHost(url: String): String = runCatching {
+        java.net.URL(url).host
+    }.getOrDefault("unknown")
 
     private fun canRequestPackageInstalls(): Boolean {
         return appContext.packageManager.canRequestPackageInstalls()
@@ -84,22 +105,22 @@ actual object AppUpdatePlatform {
         appContext.startActivity(intent)
     }
 
-    private fun verifySigning(offer: AppUpdateOffer, apkFile: File) {
+    private suspend fun verifySigning(repo: Repository, offer: AppUpdateOffer, apkFile: File) {
         val pm = appContext.packageManager
         val apkCert = readApkCertSha256(pm, apkFile)
-            ?: error("Cannot read APK signing certificate")
+            ?: throw IllegalStateException(repo.getString(Res.string.app_update_cannot_read_apk_cert))
 
         val allowed = offer.manifest.signing?.androidCertSha256.orEmpty()
             .map(::normalizeCertSha256)
             .filter { it.isNotEmpty() }
         if (allowed.isNotEmpty() && apkCert !in allowed) {
-            error("APK certificate is not trusted")
+            throw IllegalStateException(repo.getString(Res.string.app_update_apk_cert_untrusted))
         }
 
         val installedCert = readInstalledCertSha256(pm)
-            ?: error("Cannot read installed app certificate")
+            ?: throw IllegalStateException(repo.getString(Res.string.app_update_cannot_read_installed_cert))
         if (apkCert != installedCert) {
-            error("APK signature does not match installed app")
+            throw IllegalStateException(repo.getString(Res.string.app_update_apk_sig_mismatch))
         }
     }
 
@@ -134,7 +155,7 @@ actual object AppUpdatePlatform {
             .joinToString(":")
     }
 
-    private suspend fun installApkAndAwait(apkFile: File): AppUpdateInstallResult {
+    private suspend fun installApkAndAwait(repo: Repository, apkFile: File): AppUpdateInstallResult {
         val pm = appContext.packageManager
         val installer = pm.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
@@ -167,7 +188,7 @@ actual object AppUpdatePlatform {
         session.commit(pendingIntent.intentSender)
         session.close()
         return withTimeoutOrNull(120_000L) { deferred.await() }
-            ?: AppUpdateInstallResult.Failed("Installer callback timeout")
+            ?: failed(repo, Res.string.app_update_installer_timeout)
     }
 }
 

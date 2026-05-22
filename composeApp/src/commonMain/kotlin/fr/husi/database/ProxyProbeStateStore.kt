@@ -164,7 +164,7 @@ object ProxyProbeStateStore {
         simpleModeLog(
             "SimpleMode",
             "H35 probe_pool_snapshot tag=$tag alive=${DataStore.probe2kPoolAlive} candidate=${DataStore.probe2kPoolCandidate} " +
-                "suspect=${DataStore.probe2kPoolSuspect} dead=${DataStore.probe2kPoolDead} cemetery=${DataStore.probe2kPoolCemetery} " +
+                "suspect=${DataStore.probe2kPoolSuspect} dead=${DataStore.probe2kPoolDead} jail=${DataStore.probe2kPoolCemetery} " +
                 "unknown=${DataStore.probe2kPoolUnknown} reason=${DataStore.probe2kLastSelectionReason}",
         )
     }
@@ -219,7 +219,7 @@ object ProxyProbeStateStore {
         if (prev?.state == ProbeState.CEMETERY && state != ProbeState.CEMETERY) {
             simpleModeLog(
                 "SimpleMode",
-                "H35 probe_unjail profileId=$profileId from=CEMETERY to=$state tcp=${tcpMs ?: "-"} url=${urlMs ?: "-"}",
+                "H35 probe_unjail profileId=$profileId from=JAIL to=$state tcp=${tcpMs ?: "-"} url=${urlMs ?: "-"}",
             )
         }
         return ProxyProbeState(

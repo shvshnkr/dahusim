@@ -41,6 +41,14 @@
     <string name="app_update_install_permission_sum">Opens Android settings for unknown app installs (required for in-app APK updates)</string>
     <string name="app_update_install_permission_granted">Installation from this app is allowed</string>
     <string name="app_update_install_permission_denied">Installation not allowed — open settings to enable</string>
+    <string name="app_update_install_permission_required">Allow installing updates for this app, then try again</string>
+    <string name="app_update_apk_hash_mismatch">Downloaded APK hash mismatch</string>
+    <string name="app_update_apk_cert_untrusted">APK certificate is not trusted</string>
+    <string name="app_update_apk_sig_mismatch">APK signature does not match installed app</string>
+    <string name="app_update_installer_timeout">Installer callback timeout</string>
+    <string name="app_update_no_apk">No Android APK in update manifest</string>
+    <string name="app_update_cannot_read_apk_cert">Cannot read APK signing certificate</string>
+    <string name="app_update_cannot_read_installed_cert">Cannot read installed app certificate</string>
     <string name="subscription_catalog_settings">Subscription catalog</string>
     <string name="subscription_catalog_check_enabled">Sync subscriptions from catalog</string>
     <string name="subscription_catalog_summary">Fetches a managed subscription list from a GitHub text file</string>
@@ -67,7 +75,7 @@
     <string name="probe_2k_background_done">Background scan finished</string>
     <string name="probe_2k_last_reason">Last selection: %1$s</string>
     <string name="probe_2k_activity_scan">Scanning servers %1$d/%2$d…</string>
-    <string name="probe_2k_pool_line">Pool: %1$d alive · %2$d candidate · %3$d buried · %4$d unknown</string>
+    <string name="probe_2k_pool_line">Pool: %1$d alive · %2$d candidate · %3$d jail · %4$d unknown</string>
     <!-- themes -->
     <string name="theme">Theme</string>
     <string name="themes_amber">Pine Tears</string>

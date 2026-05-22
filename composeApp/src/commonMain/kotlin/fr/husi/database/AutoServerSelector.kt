@@ -248,11 +248,11 @@ object AutoServerSelector {
             emptyMap()
         }
         val connectPool = ProbePoolEligibility.filterSelectable(proxies, probeStates)
-        val buriedCount = ProbePoolEligibility.countBuried(probeStates)
-        if (buriedCount > 0) {
+        val jailedCount = ProbePoolEligibility.countJailed(probeStates)
+        if (jailedCount > 0) {
             simpleModeLog(
                 "SimpleMode",
-                "H35 probe_pool_buried count=$buriedCount total=${proxies.size} selectable=${connectPool.size}",
+                "H35 probe_pool_jail count=$jailedCount total=${proxies.size} selectable=${connectPool.size}",
             )
         }
         if (!effectiveHandoff && forceFullProbeReason?.contains("proxy_set_changed") != true &&
@@ -299,7 +299,7 @@ object AutoServerSelector {
         if (connectPool.isEmpty()) {
             simpleModeLog(
                 "SimpleMode",
-                "H22 prepare_all_buried_in_cemetery total=${proxies.size} buried=$buriedCount",
+                "H22 prepare_all_in_jail total=${proxies.size} jailed=$jailedCount",
             )
             return PrepareForConnectResult.AllProbesDead
         }
@@ -515,7 +515,7 @@ object AutoServerSelector {
         if (allProbesDead) {
             simpleModeLog(
                 "SimpleMode",
-                "H22 prepare_all_probes_dead count=${connectPool.size} buried=$buriedCount whitelistDual=$whitelistBuiltinOnly",
+                "H22 prepare_all_probes_dead count=${connectPool.size} jailed=$jailedCount whitelistDual=$whitelistBuiltinOnly",
             )
             simpleModeDebugEvent(
                 runId = "run1",

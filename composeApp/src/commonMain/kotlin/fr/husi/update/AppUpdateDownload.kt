@@ -1,18 +1,11 @@
 package fr.husi.update
 
-import fr.husi.ktx.USER_AGENT
-import fr.husi.libcore.Libcore
 import java.io.File
 
 internal object AppUpdateDownload {
 
     suspend fun download(url: String, destination: File) {
-        destination.parentFile?.mkdirs()
-        val client = Libcore.newHttpClient().apply { keepAlive() }
-        client.newRequest().apply {
-            setURL(url)
-            setUserAgent(USER_AGENT)
-        }.execute().writeTo(destination.absolutePath, null)
+        AppUpdateHttp.downloadToFile(url, destination)
     }
 }
 

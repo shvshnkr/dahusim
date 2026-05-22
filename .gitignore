@@ -32,6 +32,9 @@ docs/SUBSCRIPTION_SOURCES_LOCAL.md
 # Локальные отчёты аудита / промежуточные review (не в репозитории)
 docs/local/
 
+# Local architecture kit (not committed)
+docs/2K_*.md
+
 # Vibe coding
 .claude
 .gemini

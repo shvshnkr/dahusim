@@ -6,7 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * 2K background TCP maintenance while VPN is down. Uses the same [ProxyProbeState] cemetery
+ * 2K background TCP maintenance while VPN is down. Uses the same [ProxyProbeState] jail
  * and backoff rules as connect-time probes (built-in helpers included).
  */
 object ProbeScheduler {

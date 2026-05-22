@@ -8,8 +8,8 @@ import kotlin.test.assertTrue
 class ProbePoolEligibilityTest {
 
     @Test
-    fun cemeteryNotSelectableEvenWhenDue() {
-        val due = cemeteryState(nextProbeAt = 0L)
+    fun jailedNotSelectableEvenWhenDue() {
+        val due = jailedState(nextProbeAt = 0L)
         assertFalse(ProbePoolEligibility.isSelectableForConnect(due))
     }
 
@@ -23,19 +23,19 @@ class ProbePoolEligibilityTest {
     }
 
     @Test
-    fun builtinUsesSameCemeteryRules() {
-        val builtinBuried = cemeteryState(
+    fun builtinUsesSameJailRules() {
+        val builtinJailed = jailedState(
             profileId = 42L,
             sourcePriority = ProbeSourcePriority.BUILTIN,
         )
-        assertFalse(ProbePoolEligibility.isSelectableForConnect(builtinBuried))
+        assertFalse(ProbePoolEligibility.isSelectableForConnect(builtinJailed))
     }
 
     @Test
-    fun filterSelectableRemovesCemeteryOnly() {
+    fun filterSelectableRemovesJailOnly() {
         val proxies = listOf(proxy(1L), proxy(2L), proxy(3L))
         val states = mapOf(
-            1L to cemeteryState(profileId = 1L),
+            1L to jailedState(profileId = 1L),
             2L to ProxyProbeState(profileId = 2L, state = ProbeState.DEAD),
             3L to ProxyProbeState(profileId = 3L, state = ProbeState.ALIVE),
         )
@@ -43,7 +43,7 @@ class ProbePoolEligibilityTest {
         assertEquals(listOf(2L, 3L), filtered.map { it.id })
     }
 
-    private fun cemeteryState(
+    private fun jailedState(
         profileId: Long = 1L,
         sourcePriority: Int = ProbeSourcePriority.SUBSCRIPTION,
         nextProbeAt: Long = 9_000_000_000L,

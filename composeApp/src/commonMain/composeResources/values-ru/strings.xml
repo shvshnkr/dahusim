@@ -104,6 +104,21 @@
     <string name="app_update_up_to_date">Установлена актуальная версия</string>
     <string name="app_update_error">Ошибка проверки: %1$s</string>
     <string name="app_update_available_title">Доступно обновление</string>
+    <string name="app_update_available_message">Доступна версия %1$s (%2$d). Установить сейчас?</string>
+    <string name="app_update_install">Установить</string>
+    <string name="app_update_install_pending">Подтвердите установку в системном установщике пакетов</string>
+    <string name="app_update_later">Позже</string>
+    <string name="app_update_install_failed">Не удалось установить обновление: %1$s</string>
+    <string name="app_update_disable_checks">Отключить проверку обновлений</string>
+    <string name="app_update_checking">Проверка обновлений…</string>
+    <string name="app_update_install_permission_required">Разрешите установку обновлений для этого приложения и повторите попытку</string>
+    <string name="app_update_apk_hash_mismatch">Хеш скачанного APK не совпадает</string>
+    <string name="app_update_apk_cert_untrusted">Сертификат APK не доверен</string>
+    <string name="app_update_apk_sig_mismatch">Подпись APK не совпадает с установленным приложением</string>
+    <string name="app_update_installer_timeout">Таймаут ожидания системного установщика</string>
+    <string name="app_update_no_apk">В манифесте нет APK для Android</string>
+    <string name="app_update_cannot_read_apk_cert">Не удалось прочитать сертификат APK</string>
+    <string name="app_update_cannot_read_installed_cert">Не удалось прочитать сертификат установленного приложения</string>
     <string name="menu_group">Группы</string>
     <string name="menu_configuration">Конфигурация</string>
     <string name="logcat">Экспорт отладочной информации</string>
@@ -793,5 +808,5 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="probe_2k_background_done">Фоновое сканирование завершено</string>
     <string name="probe_2k_last_reason">Последний выбор: %1$s</string>
     <string name="probe_2k_activity_scan">Сканирование серверов %1$d/%2$d…</string>
-    <string name="probe_2k_pool_line">Пул: %1$d живых · %2$d кандидатов · %3$d в кладбище · %4$d неизвестно</string>
+    <string name="probe_2k_pool_line">Пул: %1$d живых · %2$d кандидатов · %3$d jail · %4$d неизвестно</string>
 </resources>
