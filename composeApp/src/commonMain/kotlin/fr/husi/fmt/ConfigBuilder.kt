@@ -121,7 +121,10 @@ class ConfigBuildResult(
 }
 
 fun buildConfig(
-    proxy: ProxyEntity, forTest: Boolean = false, forExport: Boolean = false,
+    proxy: ProxyEntity,
+    forTest: Boolean = false,
+    forExport: Boolean = false,
+    preferLocalRuleSet: Boolean = false,
 ): ConfigBuildResult {
     val repository = resolveRepository()
 
@@ -1373,10 +1376,19 @@ fun buildConfig(
         var ruleSetResource: String? = null
         var geositeLink: String? = null
         var geoipLink: String? = null
+        if (preferLocalRuleSet && !forExport && !forTest) {
+            val localGeoDir = repository.externalAssetsDir.resolve("geo")
+            val hasLocalRuleSets = localGeoDir.exists() &&
+                localGeoDir.isDirectory &&
+                localGeoDir.listFiles()?.any { it.extension.equals("srs", ignoreCase = true) } == true
+            if (hasLocalRuleSets) {
+                ruleSetResource = localGeoDir.invariantPathString()
+            }
+        }
         // Remote rule-set bases for export and for any live VPN/proxy config (!forTest).
         // Local geo/*.srs is optional: RU preset etc. must not depend on Route → Update first.
         // Profile URL tests (forTest) keep local geo/ to avoid GitHub fetches per probe.
-        if (forExport || !forTest) {
+        if (ruleSetResource == null && (forExport || !forTest)) {
             // "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
             val pathPrefix = "https://raw.githubusercontent.com"
             val provider = DataStore.rulesProvider

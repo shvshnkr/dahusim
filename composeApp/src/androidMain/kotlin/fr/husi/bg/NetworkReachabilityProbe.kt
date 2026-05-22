@@ -3,6 +3,7 @@ package fr.husi.bg
 import android.net.Network
 import android.os.Build
 import fr.husi.repository.resolveAndroidRepository
+import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -76,9 +77,9 @@ internal object NetworkReachabilityProbe {
             if (google.await()) {
                 return@withTimeoutOrNull NetworkReachability(
                     googleReachable = true,
-                    dzenReachable = false,
-                    yaReachable = false,
-                    whitelistSourceReachable = false,
+                    dzenReachable = dzenOk,
+                    yaReachable = yaOk,
+                    whitelistSourceReachable = whitelistOk,
                 )
             }
             dzen.await()
@@ -92,19 +93,34 @@ internal object NetworkReachabilityProbe {
             )
         }
 
-        if (completed != null) {
-            return@coroutineScope completed
+        val result = if (completed != null) {
+            completed
+        } else {
+            google.cancel()
+            dzen.cancel()
+            ya.cancel()
+            whitelist.cancel()
+            NetworkReachability(
+                googleReachable = googleOk,
+                dzenReachable = dzenOk,
+                yaReachable = yaOk,
+                whitelistSourceReachable = whitelistOk,
+            )
         }
+        logReachabilityResult(fast, probeNetwork != null, result)
+        return@coroutineScope result
+    }
 
-        google.cancel()
-        dzen.cancel()
-        ya.cancel()
-        whitelist.cancel()
-        NetworkReachability(
-            googleReachable = googleOk,
-            dzenReachable = dzenOk,
-            yaReachable = yaOk,
-            whitelistSourceReachable = whitelistOk,
+    private fun logReachabilityResult(
+        fast: Boolean,
+        probeNetBound: Boolean,
+        r: NetworkReachability,
+    ) {
+        simpleModeLog(
+            "SimpleMode",
+            "H37 reachability_route fast=$fast underlyingNet=$probeNetBound route=direct_probe " +
+                "google=${r.googleReachable} dzen=${r.dzenReachable} ya=${r.yaReachable} " +
+                "wlSource=${r.whitelistSourceReachable} wlOnly=${r.whitelistOnly}",
         )
     }
 

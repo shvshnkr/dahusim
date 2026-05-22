@@ -108,14 +108,70 @@ internal object SimpleModeSessionHealth {
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
         if (!wlOnly) {
             val profile = SagerDatabase.proxyDao.getById(profileId) ?: return false
-            return (DirectProfileUrlProbe.urlTestDelay(profile) ?: 0) > 0
+            val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
+            SimpleModeHealthRoute.logProbeConfig(
+                phase = "session_periodic",
+                whitelistOnly = false,
+                route = SimpleModeHealthRoute.Route.DIRECT_PROFILE,
+                outboundTag = outboundTag,
+                urls = listOf(DataStore.connectionTestURL),
+                timeoutMs = timeoutMs,
+            )
+            val delay = DirectProfileUrlProbe.urlTestDelay(profile)?.toLong() ?: 0L
+            val ok = delay > 0L
+            SimpleModeHealthRoute.logProbeAttempt(
+                phase = "session_periodic",
+                whitelistOnly = false,
+                route = SimpleModeHealthRoute.Route.DIRECT_PROFILE,
+                outboundTag = outboundTag,
+                url = DataStore.connectionTestURL,
+                ok = ok,
+                delayMs = delay,
+                error = if (ok) null else "direct url test failed",
+            )
+            return ok
         }
         var client: Client? = null
         return try {
             client = Libcore.newClient(null)
             val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
-            val latencyMs = client.urlTest(outboundTag, DataStore.connectionTestURL, timeoutMs)
-            latencyMs > 0
+            val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = true)
+            SimpleModeHealthRoute.logProbeConfig(
+                phase = "session_periodic",
+                whitelistOnly = true,
+                route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
+                outboundTag = outboundTag,
+                urls = healthUrls,
+                timeoutMs = timeoutMs,
+            )
+            for (url in healthUrls) {
+                val attempt = runCatching {
+                    client.urlTest(outboundTag, url, timeoutMs)
+                }
+                val latencyMs = attempt.getOrNull()
+                if (latencyMs != null && latencyMs > 0) {
+                    SimpleModeHealthRoute.logProbeAttempt(
+                        phase = "session_periodic",
+                        whitelistOnly = true,
+                        route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
+                        outboundTag = outboundTag,
+                        url = url,
+                        ok = true,
+                        delayMs = latencyMs,
+                    )
+                    return true
+                }
+                SimpleModeHealthRoute.logProbeAttempt(
+                    phase = "session_periodic",
+                    whitelistOnly = true,
+                    route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
+                    outboundTag = outboundTag,
+                    url = url,
+                    ok = false,
+                    error = attempt.exceptionOrNull()?.readableMessage,
+                )
+            }
+            false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

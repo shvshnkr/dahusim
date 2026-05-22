@@ -8,6 +8,7 @@ import fr.husi.bg.ServiceState
 import fr.husi.bg.initPlugins
 import fr.husi.bg.launchPlugins
 import fr.husi.bg.proto.TrafficLooper
+import fr.husi.RuleProvider
 import fr.husi.database.DataStore
 import fr.husi.database.ProfileManager
 import fr.husi.ktx.Logs
@@ -99,10 +100,20 @@ internal class DesktopServiceRuntime(
         BackendState.setConnected(false)
 
         var bindRetries = 0
+        var localRuleSetRetry = false
         while (true) {
             try {
                 ensureMixedPortAvailable()
-                val config = fr.husi.fmt.buildConfig(profile)
+                simpleModeLog(
+                    "SimpleMode",
+                    "H36 desktop_ruleset_bootstrap profileId=${profile.id} rulesProvider=${DataStore.rulesProvider} " +
+                        "preferLocal=$localRuleSetRetry localGeo=${hasLocalRuleSetFiles()} " +
+                        "route=singbox_remote_http provider=${rulesProviderLabel(DataStore.rulesProvider)}",
+                )
+                val config = fr.husi.fmt.buildConfig(
+                    profile,
+                    preferLocalRuleSet = localRuleSetRetry,
+                )
                 cacheFiles.clear()
                 val pluginConfigs = initPlugins(
                     config = config,
@@ -136,6 +147,23 @@ internal class DesktopServiceRuntime(
                 BackendState.setConnected(true)
                 return
             } catch (e: Throwable) {
+                if (isRuleSetBootstrapFailure(e)) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H36 desktop_ruleset_bootstrap_failed preferLocal=$localRuleSetRetry " +
+                            "localGeo=${hasLocalRuleSetFiles()} err=${e.readableMessage}",
+                    )
+                }
+                if (!localRuleSetRetry && isRuleSetBootstrapFailure(e) && hasLocalRuleSetFiles()) {
+                    localRuleSetRetry = true
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H36 desktop_ruleset_retry mode=local reason=remote_ruleset_bootstrap_failed " +
+                            "note=github_may_be_reachable_via_browser",
+                    )
+                    cleanupLocked()
+                    continue
+                }
                 if (bindRetries < 1 && isMixedPortBindFailure(e)) {
                     bindRetries++
                     val nextPort = DataStore.mixedPort + 1
@@ -159,6 +187,26 @@ internal class DesktopServiceRuntime(
                 return
             }
         }
+    }
+
+    private fun isRuleSetBootstrapFailure(error: Throwable): Boolean {
+        val text = error.readableMessage
+        return text.contains("initialize rule-set", ignoreCase = true)
+    }
+
+    private fun rulesProviderLabel(provider: Int): String = when (provider) {
+        RuleProvider.OFFICIAL -> "official"
+        RuleProvider.LOYALSOLDIER -> "loyalsoldier"
+        RuleProvider.CHOCOLATE4U -> "chocolate4u"
+        RuleProvider.CUSTOM -> "custom"
+        else -> "fallback_sagernet"
+    }
+
+    private fun hasLocalRuleSetFiles(): Boolean {
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        return geoDir.exists() &&
+            geoDir.isDirectory &&
+            geoDir.listFiles()?.any { it.extension.equals("srs", ignoreCase = true) } == true
     }
 
     private suspend fun stopLocked(

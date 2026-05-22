@@ -36,6 +36,7 @@ import fr.husi.ktx.showToast
 import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
+import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.simplemode.SimpleModeSessionHealth
 import fr.husi.simplemode.SimpleModeTunnelRestart
@@ -576,6 +577,20 @@ class BaseService {
                     val baseTimeoutMs = DataStore.connectionTestTimeout
                     val postConnectTimeoutMs = (baseTimeoutMs * 2).coerceIn(5000, 20_000)
                     val outboundTag = data.proxy?.config?.mainTag.orEmpty()
+                    val postConnectUrls = SimpleModeHealthRoute.healthCheckUrls(reachability.whitelistOnly)
+                    val healthRoute = if (DataStore.simpleMode && !reachability.whitelistOnly) {
+                        SimpleModeHealthRoute.Route.DIRECT_PROFILE
+                    } else {
+                        SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND
+                    }
+                    SimpleModeHealthRoute.logProbeConfig(
+                        phase = "post_connect",
+                        whitelistOnly = reachability.whitelistOnly,
+                        route = healthRoute,
+                        outboundTag = outboundTag,
+                        urls = postConnectUrls,
+                        timeoutMs = postConnectTimeoutMs,
+                    )
                     // #region agent log
                     simpleModeDebugEvent(
                         runId = "post-connect-probe",
@@ -588,7 +603,7 @@ class BaseService {
                             "postConnectTimeoutMs" to postConnectTimeoutMs.toString(),
                             "outboundTagLen" to outboundTag.length.toString(),
                             "warmupMs" to "400",
-                            "url" to DataStore.connectionTestURL,
+                            "url" to postConnectUrls.joinToString(","),
                         ),
                     )
                     // #endregion
@@ -598,15 +613,61 @@ class BaseService {
                             "outboundTagLen=${outboundTag.length} warmupMs=400",
                     )
                     delay(400)
-                    val useDirectProbe = DataStore.simpleMode && !reachability.whitelistOnly
+                    val useDirectProbe = healthRoute == SimpleModeHealthRoute.Route.DIRECT_PROFILE
                     runCatching {
-                        val latencyMs = if (useDirectProbe) {
-                            DirectProfileUrlProbe.urlTestDelay(profile)?.toLong()
-                                ?: error("direct url test failed")
+                            val latencyMs = if (useDirectProbe) {
+                            val delay = DirectProfileUrlProbe.urlTestDelay(profile)?.toLong()
+                            SimpleModeHealthRoute.logProbeAttempt(
+                                phase = "post_connect",
+                                whitelistOnly = reachability.whitelistOnly,
+                                route = healthRoute,
+                                outboundTag = outboundTag,
+                                url = postConnectUrls.first(),
+                                ok = delay != null && delay > 0L,
+                                delayMs = delay ?: 0L,
+                                error = if (delay == null || delay <= 0L) "direct url test failed" else null,
+                            )
+                            delay ?: error("direct url test failed")
                         } else {
                             val client = Libcore.newClient(null)
                             try {
-                                client.urlTest(outboundTag, DataStore.connectionTestURL, postConnectTimeoutMs)
+                                    var successLatency = -1L
+                                    var lastError: Throwable? = null
+                                    for (testUrl in postConnectUrls) {
+                                        val attempt = runCatching {
+                                            client.urlTest(outboundTag, testUrl, postConnectTimeoutMs)
+                                        }
+                                        val latency = attempt.getOrNull()
+                                        if (latency != null && latency > 0) {
+                                            SimpleModeHealthRoute.logProbeAttempt(
+                                                phase = "post_connect",
+                                                whitelistOnly = reachability.whitelistOnly,
+                                                route = healthRoute,
+                                                outboundTag = outboundTag,
+                                                url = testUrl,
+                                                ok = true,
+                                                delayMs = latency,
+                                            )
+                                            successLatency = latency
+                                            break
+                                        }
+                                        val err = attempt.exceptionOrNull()
+                                        lastError = err
+                                        SimpleModeHealthRoute.logProbeAttempt(
+                                            phase = "post_connect",
+                                            whitelistOnly = reachability.whitelistOnly,
+                                            route = healthRoute,
+                                            outboundTag = outboundTag,
+                                            url = testUrl,
+                                            ok = false,
+                                            error = err?.readableMessage,
+                                        )
+                                    }
+                                    if (successLatency > 0L) {
+                                        successLatency
+                                    } else {
+                                        throw (lastError ?: IllegalStateException("post-connect url test failed"))
+                                    }
                             } finally {
                                 runCatching { client.close() }
                             }
@@ -620,7 +681,7 @@ class BaseService {
                             data = mapOf(
                                 "profileId" to profile.id.toString(),
                                 "delayMs" to latencyMs.toString(),
-                                "url" to DataStore.connectionTestURL,
+                                "url" to postConnectUrls.joinToString(","),
                                 "direct" to useDirectProbe.toString(),
                             ),
                         )
@@ -642,7 +703,7 @@ class BaseService {
                                 "profileId" to profile.id.toString(),
                                 "errorClass" to err.javaClass.name,
                                 "error" to err.readableMessage,
-                                "url" to DataStore.connectionTestURL,
+                                "url" to postConnectUrls.joinToString(","),
                                 "direct" to useDirectProbe.toString(),
                             ),
                         )
