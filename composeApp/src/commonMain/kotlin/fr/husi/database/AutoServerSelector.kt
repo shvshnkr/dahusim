@@ -4,6 +4,7 @@ import fr.husi.bootstrap.WhitelistBuiltinBootstrap
 import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
 import fr.husi.ktx.Logs
+import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
@@ -44,9 +45,12 @@ object AutoServerSelector {
     /** Upper bound on connect-time TCP rounds (128 × 16 ≈ 2k profiles per prepare). */
     private const val TCP_PROBE_MAX_ROUNDS = 16
     private const val PROFILE_FAILURE_COOLDOWN_MS = 30L * 60 * 1000
+    /** Per VPN session: cap fallback reconnects so a huge queue cannot spin for hundreds of hops. */
+    private const val MAX_SESSION_FALLBACK_STEPS = 32
 
     @Volatile
     private var probeUiActive = false
+    private val sessionFallbackSteps = AtomicInteger(0)
 
     private val prepareMutex = Mutex()
     private val connectPrepareGeneration = AtomicInteger(0)
@@ -589,7 +593,7 @@ object AutoServerSelector {
                 "H35 builtin_fallback_cap before=${ranked.size} after=${rankedWithQuota.size}",
             )
         }
-        val rankedFinal = rankedWithQuota
+        val rankedFinal = ProbePoolEligibility.orderFallbackQueue(rankedWithQuota, probeStates)
         val quickProbeAlive = quickProbePings.size
         if (initialCount == connectPool.size) {
             // #region agent log
@@ -635,7 +639,12 @@ object AutoServerSelector {
 
         DataStore.autoSelectFallbackQueue = rankedFinal.joinToString(",")
         DataStore.autoSelectFallbackIndex = 0
-        val best = rankedFinal.first()
+        sessionFallbackSteps.set(0)
+        val best = ProbePoolEligibility.firstViableInQueue(
+            rankedIds = rankedFinal,
+            probeStates = probeStates,
+            inRecentFailureCooldown = ::isInFailureCooldown,
+        ) ?: rankedFinal.first()
         setSimpleModeActivity("Ranking ${rankedFinal.size} servers…")
         if (selectedBefore != best) {
             Logs.d("AutoSelect: switch selected profile $selectedBefore -> $best")
@@ -676,6 +685,7 @@ object AutoServerSelector {
             urlTestOk = urlTestDelays.size,
             effectiveHandoff = effectiveHandoff,
             forceFullProbeReason = forceFullProbeReason,
+            probeStates = probeStates,
         )
         return PrepareForConnectResult.Success(best)
     }
@@ -687,11 +697,21 @@ object AutoServerSelector {
         urlTestOk: Int,
         effectiveHandoff: Boolean,
         forceFullProbeReason: String?,
+        probeStates: Map<Long, ProxyProbeState>,
     ) {
+        val warmViable = if (DataStore.probe2kWarmRankingEnabled) {
+            probeStates.values.count {
+                it.state == ProbeState.ALIVE || it.state == ProbeState.CANDIDATE
+            }
+        } else {
+            0
+        }
         val reason = when {
             initialCount == proxyCount -> "all_initial"
             effectiveHandoff -> "handoff_probe"
             forceFullProbeReason != null -> "full_probe:$forceFullProbeReason"
+            quickProbeAlive == 0 && urlTestOk == 0 && DataStore.probe2kWarmRankingEnabled &&
+                warmViable < (proxyCount * 0.05).toInt().coerceAtLeast(3) -> "warm_sparse_heuristic"
             quickProbeAlive == 0 && urlTestOk == 0 && DataStore.probe2kWarmRankingEnabled -> "warm_persisted_only"
             quickProbeAlive == 0 && urlTestOk == 0 -> "heuristic_only"
             else -> "live_probe_rank"
@@ -713,9 +733,14 @@ object AutoServerSelector {
     }
 
     fun tryMoveToFallback(currentId: Long): Long? {
-        val queue = DataStore.autoSelectFallbackQueue
-            .split(",")
-            .mapNotNull { it.trim().toLongOrNull() }
+        if (sessionFallbackSteps.get() >= MAX_SESSION_FALLBACK_STEPS) {
+            simpleModeLog(
+                "SimpleMode",
+                "H1 fallback_session_cap currentId=$currentId steps=$MAX_SESSION_FALLBACK_STEPS",
+            )
+            return null
+        }
+        val queue = AutoServerSelectorSessionFallback.parseQueue(DataStore.autoSelectFallbackQueue)
         if (queue.isEmpty()) {
             // #region agent log
             simpleModeDebugEvent(
@@ -737,17 +762,13 @@ object AutoServerSelector {
 
         val currentIndex = queue.indexOf(currentId).takeIf { it >= 0 } ?: DataStore.autoSelectFallbackIndex
         val startIndex = currentIndex + 1
-        var nextIndex = startIndex
-        var next = -1L
-        while (nextIndex < queue.size) {
-            val candidate = queue[nextIndex]
-            if (ProbePoolEligibility.isSelectableForConnect(probeStates[candidate])) {
-                next = candidate
-                break
-            }
-            nextIndex++
-        }
-        if (next < 0L) {
+        val walk = AutoServerSelectorSessionFallback.findNextFallbackCandidate(
+            queue = queue,
+            startIndex = startIndex,
+            probeStates = probeStates,
+            inRecentFailureCooldown = ::isInFailureCooldown,
+        )
+        if (walk == null) {
             // #region agent log
             simpleModeDebugEvent(
                 runId = "run1",
@@ -763,15 +784,17 @@ object AutoServerSelector {
             // #endregion
             simpleModeLog(
                 "SimpleMode",
-                "H1 fallback_exhausted currentId=$currentId currentIndex=$currentIndex size=${queue.size}",
+                "H1 fallback_exhausted currentId=$currentId currentIndex=$currentIndex size=${queue.size} " +
+                    "dead=${ProbePoolEligibility.countDead(probeStates)} jail=${ProbePoolEligibility.countJailed(probeStates)}",
             )
             return null
         }
 
-        DataStore.autoSelectFallbackIndex = nextIndex
-        DataStore.selectedProxy = next
-        setSimpleModeActivity("Trying next server ${nextIndex + 1}/${queue.size}")
-        Logs.w("AutoSelect fallback: move to profile $next")
+        sessionFallbackSteps.incrementAndGet()
+        DataStore.autoSelectFallbackIndex = walk.nextIndex
+        DataStore.selectedProxy = walk.nextId
+        setSimpleModeActivity("Trying next server ${walk.nextIndex + 1}/${queue.size}")
+        Logs.w("AutoSelect fallback: move to profile ${walk.nextId}")
         // #region agent log
         simpleModeDebugEvent(
             runId = "run1",
@@ -780,20 +803,27 @@ object AutoServerSelector {
             message = "fallback moved",
             data = mapOf(
                 "currentId" to currentId.toString(),
-                "nextId" to next.toString(),
-                "nextIndex" to nextIndex.toString(),
+                "nextId" to walk.nextId.toString(),
+                "nextIndex" to walk.nextIndex.toString(),
                 "queueSize" to queue.size.toString(),
             ),
         )
         // #endregion
         simpleModeLog(
             "SimpleMode",
-            "H1 fallback_moved currentId=$currentId nextId=$next nextIndex=$nextIndex size=${queue.size}",
+            "H1 fallback_moved currentId=$currentId nextId=${walk.nextId} nextIndex=${walk.nextIndex} " +
+                "size=${queue.size} sessionStep=${sessionFallbackSteps.get()} " +
+                "skip=jail:${walk.skippedJail} dead:${walk.skippedDead} cooldown:${walk.skippedCooldown}",
         )
-        return next
+        return walk.nextId
+    }
+
+    fun recordHealthProbeFailure(profileId: Long, error: String?) {
+        recordProbeFailure(profileId, SimpleModeHealthRoute.probeFailureSkipReason(error))
     }
 
     fun markConnected(profileId: Long) {
+        sessionFallbackSteps.set(0)
         DataStore.autoSelectLastKnownGood = profileId
         recentProbeFailures.remove(profileId)
         AutoServerSelectorProbePolicy.recordPostConnectUrlVerified(profileId)
@@ -915,9 +945,20 @@ object AutoServerSelector {
                 }
                 .thenBy { it.userOrder },
         ).map { it.id }
-        DataStore.autoSelectFallbackQueue = ranked.joinToString(",")
+        val probeStates = if (DataStore.probe2kPersistenceEnabled) {
+            runBlocking { ProxyProbeStateStore.loadMap(proxies.map { it.id }) }
+        } else {
+            emptyMap()
+        }
+        val ordered = ProbePoolEligibility.orderFallbackQueue(ranked, probeStates)
+        DataStore.autoSelectFallbackQueue = ordered.joinToString(",")
         DataStore.autoSelectFallbackIndex = 0
-        val best = ranked.first()
+        sessionFallbackSteps.set(0)
+        val best = ProbePoolEligibility.firstViableInQueue(
+            rankedIds = ordered,
+            probeStates = probeStates,
+            inRecentFailureCooldown = ::isInFailureCooldown,
+        ) ?: ordered.first()
         if (selectedBefore != best) {
             DataStore.selectedProxy = best
         }

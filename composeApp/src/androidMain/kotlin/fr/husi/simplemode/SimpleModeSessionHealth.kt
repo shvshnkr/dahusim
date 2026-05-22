@@ -147,7 +147,7 @@ internal object SimpleModeSessionHealth {
 
     private suspend fun handleUnhealthySession(profileId: Long) {
         if (!DataStore.serviceState.connected) return
-        AutoServerSelector.recordProbeFailure(profileId)
+        AutoServerSelector.recordHealthProbeFailure(profileId, error = null)
         DataStore.simpleModeActivity = "Server degraded, switching…"
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
         if (SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(profileId)) {

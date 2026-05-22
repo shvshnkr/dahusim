@@ -43,6 +43,42 @@ class ProbePoolEligibilityTest {
         assertEquals(listOf(2L, 3L), filtered.map { it.id })
     }
 
+    @Test
+    fun deadNotViableForFallbackWalk() {
+        val dead = ProxyProbeState(profileId = 2L, state = ProbeState.DEAD)
+        assertFalse(ProbePoolEligibility.isViableFallbackTarget(dead, inRecentFailureCooldown = false))
+        assertFalse(ProbePoolEligibility.isViableFallbackTarget(dead, inRecentFailureCooldown = true))
+    }
+
+    @Test
+    fun suspectRemainsViableForFallback() {
+        val suspect = ProxyProbeState(profileId = 3L, state = ProbeState.SUSPECT)
+        assertTrue(ProbePoolEligibility.isViableFallbackTarget(suspect, inRecentFailureCooldown = false))
+    }
+
+    @Test
+    fun orderFallbackQueueMovesDeadToTail() {
+        val ranked = listOf(10L, 20L, 30L, 40L)
+        val states = mapOf(
+            20L to ProxyProbeState(profileId = 20L, state = ProbeState.DEAD),
+            40L to ProxyProbeState(profileId = 40L, state = ProbeState.DEAD),
+        )
+        assertEquals(listOf(10L, 30L, 20L, 40L), ProbePoolEligibility.orderFallbackQueue(ranked, states))
+    }
+
+    @Test
+    fun firstViableSkipsDeadAndCooldown() {
+        val ranked = listOf(1L, 2L, 3L)
+        val states = mapOf(
+            1L to ProxyProbeState(profileId = 1L, state = ProbeState.DEAD),
+            2L to ProxyProbeState(profileId = 2L, state = ProbeState.ALIVE),
+        )
+        assertEquals(
+            2L,
+            ProbePoolEligibility.firstViableInQueue(ranked, states) { it == 3L },
+        )
+    }
+
     private fun jailedState(
         profileId: Long = 1L,
         sourcePriority: Int = ProbeSourcePriority.SUBSCRIPTION,

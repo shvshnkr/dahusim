@@ -697,7 +697,7 @@ class BaseService {
                         )
                         DataStore.simpleModeActivity = "Server unstable, switching..."
                         postConnectHealthy = false
-                        AutoServerSelector.recordProbeFailure(profile.id)
+                        AutoServerSelector.recordHealthProbeFailure(profile.id, err.readableMessage)
                     }
                     if (!postConnectHealthy) {
                         val wlOnly = reachability.whitelistOnly ||
@@ -812,7 +812,7 @@ class BaseService {
                         "SimpleMode",
                         "H1 unknown_host profileId=${profile.id} error=${e.message ?: "unknown_host"}",
                     )
-                    AutoServerSelector.recordProbeFailure(profile.id)
+                    AutoServerSelector.recordHealthProbeFailure(profile.id, e.readableMessage)
                     runCatching {
                         val fallbackRefreshBudgetMs =
                             DataStore.subscriptionFallbackRefreshBudgetMs.coerceIn(200L, 5000L)

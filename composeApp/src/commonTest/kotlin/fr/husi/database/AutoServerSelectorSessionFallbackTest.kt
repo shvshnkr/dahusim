@@ -2,6 +2,7 @@ package fr.husi.database
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class AutoServerSelectorSessionFallbackTest {
 
@@ -20,5 +21,43 @@ class AutoServerSelectorSessionFallbackTest {
     @Test
     fun emptyQueueIndexZero() {
         assertEquals(0, AutoServerSelectorSessionFallback.fallbackIndexForConnected(emptyList(), 1L))
+    }
+
+    @Test
+    fun findNextSkipsDeadJailAndCooldown() {
+        val queue = listOf(1L, 2L, 3L, 4L, 5L)
+        val states = mapOf(
+            2L to ProxyProbeState(profileId = 2L, state = ProbeState.DEAD),
+            3L to ProxyProbeState(profileId = 3L, state = ProbeState.CEMETERY),
+        )
+        val walk = AutoServerSelectorSessionFallback.findNextFallbackCandidate(
+            queue = queue,
+            startIndex = 1,
+            probeStates = states,
+            inRecentFailureCooldown = { it == 4L },
+        )
+        requireNotNull(walk)
+        assertEquals(5L, walk.nextId)
+        assertEquals(4, walk.nextIndex)
+        assertEquals(1, walk.skippedDead)
+        assertEquals(1, walk.skippedJail)
+        assertEquals(1, walk.skippedCooldown)
+    }
+
+    @Test
+    fun findNextReturnsNullWhenOnlyDeadRemain() {
+        val queue = listOf(1L, 2L)
+        val states = mapOf(
+            1L to ProxyProbeState(profileId = 1L, state = ProbeState.DEAD),
+            2L to ProxyProbeState(profileId = 2L, state = ProbeState.DEAD),
+        )
+        assertNull(
+            AutoServerSelectorSessionFallback.findNextFallbackCandidate(
+                queue = queue,
+                startIndex = 0,
+                probeStates = states,
+                inRecentFailureCooldown = { false },
+            ),
+        )
     }
 }

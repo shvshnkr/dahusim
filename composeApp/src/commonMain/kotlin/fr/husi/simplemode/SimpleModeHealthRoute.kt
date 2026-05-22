@@ -43,6 +43,10 @@ internal object SimpleModeHealthRoute {
             error.contains("dial eth", ignoreCase = true)
     }
 
+    /** Passed to [fr.husi.database.AutoServerSelector.recordProbeFailure] when health failed inconclusively. */
+    fun probeFailureSkipReason(error: String?): String? =
+        if (isLikelyUnderlyingProxyDialFailure(error)) "underlying_proxy_dial" else null
+
     fun logInconclusivePass(phase: String, whitelistOnly: Boolean, reason: String) {
         simpleModeLog(
             "SimpleMode",
