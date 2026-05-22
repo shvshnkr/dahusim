@@ -40,7 +40,9 @@ sealed class PrepareForConnectResult {
  */
 object AutoServerSelector {
 
-    private const val OPEN_NET_TCP_PROBE_CAP = 128
+    private const val TCP_PROBE_BATCH_CAP = 128
+    /** Upper bound on connect-time TCP rounds (128 × 16 ≈ 2k profiles per prepare). */
+    private const val TCP_PROBE_MAX_ROUNDS = 16
     private const val PROFILE_FAILURE_COOLDOWN_MS = 30L * 60 * 1000
 
     @Volatile
@@ -335,33 +337,24 @@ object AutoServerSelector {
         val extraUrlTestByTcp = if (effectiveHandoff) 4 else 8
         val parallelUrlPoolSize = (urlTestCap + extraUrlTestByTcp).coerceAtMost(connectPool.size)
         val urlSupplementCap = if (effectiveHandoff) 6 else 10
-        val compactTcpProbe = whitelistBuiltinOnly || effectiveHandoff || connectPool.size > OPEN_NET_TCP_PROBE_CAP
-        val tcpCap = if (whitelistBuiltinOnly) 128 else OPEN_NET_TCP_PROBE_CAP
+        val compactTcpProbe = whitelistBuiltinOnly || effectiveHandoff ||
+            connectPool.size > TCP_PROBE_BATCH_CAP
+        val tcpBatchCap = TCP_PROBE_BATCH_CAP
         val probePoolOrdered = BuiltinPoolPolicy.reorderForCompactProbe(
             proxies = connectPool,
             builtinProfileIds = builtinFourIds,
             whitelistBuiltinOnly = whitelistBuiltinOnly,
-        )
-        val tcpProbeTargetsRaw = if (compactTcpProbe) {
-            buildCompactTcpProbePool(probePoolOrdered, priorityFirstIds, maxTotal = tcpCap)
-        } else {
-            probePoolOrdered
-        }
-        val tcpProbeTargets = ProbeScheduler.prioritizeTcpTargets(
-            targets = tcpProbeTargetsRaw,
-            probeStates = probeStates,
-            priorityFirstIds = priorityFirstIds,
         )
         ensurePrepareCurrent(session)
         val urlConcurrency = probeConcurrency(whitelistBuiltinOnly)
         val tcpConcurrency = tcpProbeConcurrency(whitelistBuiltinOnly)
 
         var quickProbePings: Map<Long, Int> = emptyMap()
+        var tcpTestedCount = 0
         var urlTestDelays: Map<Long, Int> = emptyMap()
         var urlTestCandidates: List<ProxyEntity> = emptyList()
 
         if (shouldQuickProbe) {
-            setSimpleModeActivity("Testing TCP 0/${tcpProbeTargets.size}")
             val parallelUrlPool = ProbeScheduler.filterUrlCandidatesForWarmState(
                 candidates = buildStratifiedUrlPool(
                     proxies = connectPool,
@@ -376,14 +369,29 @@ object AutoServerSelector {
             )
             simpleModeLog(
                 "SimpleMode",
-                "H14 quick_probe_started tcp=${tcpProbeTargets.size} pool=${proxies.size} " +
+                "H14 quick_probe_started tcp_batch=$tcpBatchCap pool=${connectPool.size} " +
                     "parallel_url_pool=${parallelUrlPool.size} compactTcp=$compactTcpProbe " +
                     "handoff=$effectiveHandoff tcpConc=$tcpConcurrency urlConc=$urlConcurrency",
             )
             coroutineScope {
                 val tcpJob = async(Dispatchers.IO) {
-                    quickTcpProbe(tcpProbeTargets, tcpConcurrency, session) { done, total ->
-                        setSimpleModeActivity("Testing TCP $done/$total")
+                    probeTcpInBatches(
+                        connectPool = connectPool,
+                        probePoolOrdered = probePoolOrdered,
+                        priorityFirstIds = priorityFirstIds,
+                        probeStates = probeStates,
+                        tcpBatchCap = tcpBatchCap,
+                        compactTcpProbe = compactTcpProbe,
+                        tcpConcurrency = tcpConcurrency,
+                        session = session,
+                    ) { round, doneInRound, totalInRound, cumulativeTested, poolSize ->
+                        setSimpleModeActivity(
+                            if (compactTcpProbe && poolSize > totalInRound) {
+                                "Testing TCP $cumulativeTested/$poolSize"
+                            } else {
+                                "Testing TCP $doneInRound/$totalInRound"
+                            },
+                        )
                     }
                 }
                 val urlJob = async(Dispatchers.IO) {
@@ -401,7 +409,9 @@ object AutoServerSelector {
                     }
                 }
                 ensurePrepareCurrent(session)
-                quickProbePings = tcpJob.await()
+                val tcpProbeResult = tcpJob.await()
+                quickProbePings = tcpProbeResult.pings
+                tcpTestedCount = tcpProbeResult.testedCount
                 val quickProbeAlive = quickProbePings.size
                 val quickProbeHead = quickProbePings.entries
                     .sortedBy { it.value }
@@ -409,7 +419,8 @@ object AutoServerSelector {
                     .joinToString(";") { "${it.key}:${it.value}" }
                 simpleModeLog(
                     "SimpleMode",
-                    "H14 quick_probe_done alive=$quickProbeAlive tested=${tcpProbeTargets.size} best=$quickProbeHead",
+                    "H14 quick_probe_done alive=$quickProbeAlive tested=$tcpTestedCount " +
+                        "pool=${connectPool.size} best=$quickProbeHead",
                 )
                 ensurePrepareCurrent(session)
                 var merged = urlJob.await().toMutableMap()
@@ -509,13 +520,17 @@ object AutoServerSelector {
             )
         }
 
+        val tcpPoolFullyTested = !compactTcpProbe ||
+            (shouldQuickProbe && tcpTestedCount >= connectPool.size)
         val allProbesDead = shouldQuickProbe &&
             quickProbePings.isEmpty() &&
-            urlTestDelays.isEmpty()
+            urlTestDelays.isEmpty() &&
+            tcpPoolFullyTested
         if (allProbesDead) {
             simpleModeLog(
                 "SimpleMode",
-                "H22 prepare_all_probes_dead count=${connectPool.size} jailed=$jailedCount whitelistDual=$whitelistBuiltinOnly",
+                "H22 prepare_all_probes_dead count=${connectPool.size} testedTcp=$tcpTestedCount " +
+                    "jailed=$jailedCount whitelistDual=$whitelistBuiltinOnly",
             )
             simpleModeDebugEvent(
                 runId = "run1",
@@ -788,8 +803,15 @@ object AutoServerSelector {
         }
     }
 
-    fun recordProbeFailure(profileId: Long) {
+    fun recordProbeFailure(profileId: Long, skipReason: String? = null) {
         if (profileId <= 0L) return
+        if (skipReason != null) {
+            simpleModeLog(
+                "SimpleMode",
+                "H32 probe_failure_skipped profileId=$profileId reason=$skipReason",
+            )
+            return
+        }
         recentProbeFailures[profileId] = System.currentTimeMillis()
         simpleModeLog("SimpleMode", "H32 probe_failure_recorded profileId=$profileId")
         if (DataStore.probe2kPersistenceEnabled) {
@@ -1058,6 +1080,63 @@ object AutoServerSelector {
             }
         }.awaitAll()
         result.toMap()
+    }
+
+    private data class TcpProbeBatchResult(
+        val pings: Map<Long, Int>,
+        val testedCount: Int,
+    )
+
+    /**
+     * When the first TCP batch finds no alive nodes, keep probing the rest of the pool in
+     * further batches (same batch size, warm-state order) until something responds or every
+     * selectable profile was tested once.
+     */
+    private suspend fun probeTcpInBatches(
+        connectPool: List<ProxyEntity>,
+        probePoolOrdered: List<ProxyEntity>,
+        priorityFirstIds: Set<Long>,
+        probeStates: Map<Long, ProxyProbeState>,
+        tcpBatchCap: Int,
+        compactTcpProbe: Boolean,
+        tcpConcurrency: Int,
+        session: PrepareSession,
+        onProgress: (round: Int, doneInRound: Int, totalInRound: Int, cumulativeTested: Int, poolSize: Int) -> Unit,
+    ): TcpProbeBatchResult {
+        if (!compactTcpProbe) {
+            val pings = quickTcpProbe(probePoolOrdered, tcpConcurrency, session) { done, total ->
+                onProgress(1, done, total, done, connectPool.size)
+            }
+            return TcpProbeBatchResult(pings, probePoolOrdered.size)
+        }
+        val merged = LinkedHashMap<Long, Int>()
+        val testedIds = LinkedHashSet<Long>()
+        val maxRounds = ((connectPool.size + tcpBatchCap - 1) / tcpBatchCap).coerceIn(1, TCP_PROBE_MAX_ROUNDS)
+        for (round in 1..maxRounds) {
+            ensurePrepareCurrent(session)
+            val remaining = connectPool.filter { it.id !in testedIds }
+            if (remaining.isEmpty()) break
+            val batch = if (round == 1) {
+                buildCompactTcpProbePool(probePoolOrdered, priorityFirstIds, maxTotal = tcpBatchCap)
+            } else {
+                ProbeScheduler.prioritizeTcpTargets(remaining, probeStates, priorityFirstIds)
+                    .take(tcpBatchCap)
+            }
+            if (batch.isEmpty()) break
+            batch.forEach { testedIds.add(it.id) }
+            simpleModeLog(
+                "SimpleMode",
+                "H14 tcp_probe_round round=$round batch=${batch.size} cumulative=${testedIds.size} " +
+                    "pool=${connectPool.size} aliveSoFar=${merged.size}",
+            )
+            val roundPings = quickTcpProbe(batch, tcpConcurrency, session) { done, total ->
+                onProgress(round, done, total, testedIds.size, connectPool.size)
+            }
+            merged.putAll(roundPings)
+            if (merged.isNotEmpty()) break
+            if (testedIds.size >= connectPool.size) break
+        }
+        return TcpProbeBatchResult(merged, testedIds.size)
     }
 
     private suspend fun quickTcpProbe(

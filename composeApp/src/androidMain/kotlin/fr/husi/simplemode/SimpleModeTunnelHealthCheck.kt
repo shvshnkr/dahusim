@@ -10,8 +10,23 @@ internal object SimpleModeTunnelHealthCheck {
         outboundTag: String,
         urls: List<String>,
         timeoutMs: Int,
-    ): Boolean {
-        if (outboundTag.isBlank()) return false
+    ): Boolean = firstSuccessLatencyMs(
+        phase = phase,
+        whitelistOnly = whitelistOnly,
+        outboundTag = outboundTag,
+        urls = urls,
+        timeoutMs = timeoutMs,
+    ) > 0
+
+    /** First successful URL latency; 1 on inconclusive WL pass; 0 if failed. */
+    suspend fun firstSuccessLatencyMs(
+        phase: String,
+        whitelistOnly: Boolean,
+        outboundTag: String,
+        urls: List<String>,
+        timeoutMs: Int,
+    ): Int {
+        if (outboundTag.isBlank()) return 0
         val client = Libcore.newClient(null)
         return try {
             var sawRealFailure = false
@@ -30,7 +45,7 @@ internal object SimpleModeTunnelHealthCheck {
                         ok = true,
                         delayMs = latency,
                     )
-                    return true
+                    return latency
                 }
                 val errText = attempt.exceptionOrNull()?.message
                 if (!SimpleModeHealthRoute.isLikelyUnderlyingProxyDialFailure(errText)) {
@@ -52,9 +67,9 @@ internal object SimpleModeTunnelHealthCheck {
                     whitelistOnly = true,
                     reason = "underlying_proxy_dial_only",
                 )
-                true
+                1
             } else {
-                false
+                0
             }
         } finally {
             runCatching { client.close() }

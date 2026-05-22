@@ -625,7 +625,7 @@ class BaseService {
                     delay(warmupMs)
                     val useDirectProbe = healthRoute == SimpleModeHealthRoute.Route.DIRECT_PROFILE
                     runCatching {
-                            val ok = if (useDirectProbe) {
+                        val latencyMs: Long = if (useDirectProbe) {
                             val delay = DirectProfileUrlProbe.urlTestDelay(profile)?.toLong()
                             SimpleModeHealthRoute.logProbeAttempt(
                                 phase = "post_connect",
@@ -637,20 +637,23 @@ class BaseService {
                                 delayMs = (delay ?: 0L).toInt(),
                                 error = if (delay == null || delay <= 0L) "direct url test failed" else null,
                             )
-                            delay != null && delay > 0L
+                            if (delay == null || delay <= 0L) {
+                                error("post-connect url test failed")
+                            }
+                            delay
                         } else {
-                            SimpleModeTunnelHealthCheck.check(
+                            val delay = SimpleModeTunnelHealthCheck.firstSuccessLatencyMs(
                                 phase = "post_connect",
                                 whitelistOnly = reachability.whitelistOnly,
                                 outboundTag = outboundTag,
                                 urls = postConnectUrls,
                                 timeoutMs = postConnectTimeoutMs,
-                            )
+                            ).toLong()
+                            if (delay <= 0L) {
+                                error("post-connect url test failed")
+                            }
+                            delay
                         }
-                        if (!ok) {
-                            error("post-connect url test failed")
-                        }
-                        0L
                         // #region agent log
                         simpleModeDebugEvent(
                             runId = "post-connect-probe",
