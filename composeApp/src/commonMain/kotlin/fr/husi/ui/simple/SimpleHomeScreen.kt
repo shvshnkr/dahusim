@@ -37,6 +37,7 @@ import fr.husi.resources.Res
 import fr.husi.resources.simple_mode_connect
 import fr.husi.resources.simple_mode_connected
 import fr.husi.resources.simple_mode_connecting
+import fr.husi.resources.simple_mode_preparing
 import fr.husi.resources.simple_mode_description
 import fr.husi.resources.simple_mode_disconnect
 import fr.husi.resources.simple_mode_full_ui
@@ -55,7 +56,9 @@ import fr.husi.ui.StringOrRes
 import fr.husi.utils.canShareSimpleModeLogs
 import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.simplemode.cancelSimpleModeNetworkAdaptation
+import fr.husi.simplemode.isSimpleModePrepareActivity
 import fr.husi.simplemode.isSimpleModeProgressActivity
+import fr.husi.simplemode.isSimpleModeVpnProgressActivity
 import fr.husi.utils.shareSimpleModeLogs
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.launch
@@ -170,6 +173,7 @@ fun SimpleHomeScreen(
             val statusLabel = when (statusTone) {
                 StatusTone.CONNECTED -> stringResource(Res.string.simple_mode_connected)
                 StatusTone.CONNECTING -> stringResource(Res.string.simple_mode_connecting)
+                StatusTone.PREPARING -> stringResource(Res.string.simple_mode_preparing)
                 StatusTone.STOPPED -> stringResource(Res.string.simple_mode_stopped)
             }
             val scanLine = if (scanTotal > 0) {
@@ -191,7 +195,7 @@ fun SimpleHomeScreen(
             val detailText = when {
                 permissionPending && !status.state.canStop -> stringResource(Res.string.simple_mode_permission_pending)
                 scanLine != null -> scanLine
-                activityText.isNotBlank() -> activityText
+                activityText.isNotBlank() -> displaySimpleModeActivity(activityText)
                 poolLine != null -> poolLine
                 else -> null
             }
@@ -326,6 +330,7 @@ fun SimpleHomeScreen(
 
 private enum class StatusTone {
     STOPPED,
+    PREPARING,
     CONNECTING,
     CONNECTED,
 }
@@ -339,8 +344,11 @@ private fun statusTone(
         state == ServiceState.Connected && !isSimpleModeProgressActivity(activityText) &&
             !permissionPending && !SimpleModeConnectCoordinator.isInFlight() -> StatusTone.CONNECTED
         permissionPending -> StatusTone.CONNECTING
-        activityText.isNotBlank() -> StatusTone.CONNECTING
-        state == ServiceState.Connecting -> StatusTone.CONNECTING
+        isSimpleModePrepareActivity(activityText) ||
+            (SimpleModeConnectCoordinator.isInFlight() && !state.canStop) -> StatusTone.PREPARING
+        isSimpleModeVpnProgressActivity(activityText) ||
+            state == ServiceState.Connecting ||
+            state.canStop -> StatusTone.CONNECTING
         else -> StatusTone.STOPPED
     }
 }
@@ -349,6 +357,7 @@ private fun statusTone(
 private fun StatusTone.color(): Color {
     return when (this) {
         StatusTone.STOPPED -> MaterialTheme.colorScheme.error
+        StatusTone.PREPARING -> Color(0xFF5C6BC0)
         StatusTone.CONNECTING -> Color(0xFFC58A00)
         StatusTone.CONNECTED -> Color(0xFF2E7D32)
     }

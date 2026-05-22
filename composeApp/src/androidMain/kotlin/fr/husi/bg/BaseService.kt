@@ -578,11 +578,19 @@ class BaseService {
                     val postConnectTimeoutMs = (baseTimeoutMs * 2).coerceIn(5000, 20_000)
                     val outboundTag = data.proxy?.config?.mainTag.orEmpty()
                     val postConnectUrls = SimpleModeHealthRoute.healthCheckUrls(reachability.whitelistOnly)
-                    val healthRoute = if (DataStore.simpleMode && !reachability.whitelistOnly) {
+                    val useDirectPostConnect = !reachability.whitelistOnly &&
+                        (reachability.googleReachable || DataStore.simpleMode)
+                    val healthRoute = if (useDirectPostConnect) {
                         SimpleModeHealthRoute.Route.DIRECT_PROFILE
                     } else {
                         SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND
                     }
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H37 post_connect_route_decision wlOnly=${reachability.whitelistOnly} " +
+                            "google=${reachability.googleReachable} simpleMode=${DataStore.simpleMode} " +
+                            "route=${healthRoute.name.lowercase()}",
+                    )
                     SimpleModeHealthRoute.logProbeConfig(
                         phase = "post_connect",
                         whitelistOnly = reachability.whitelistOnly,

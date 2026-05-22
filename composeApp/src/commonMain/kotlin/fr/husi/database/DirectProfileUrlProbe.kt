@@ -9,6 +9,7 @@ import fr.husi.ktx.readableMessage
 import fr.husi.libcore.Client
 import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
+import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.utils.closeQuietly
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -22,6 +23,13 @@ import java.io.File
 internal object DirectProfileUrlProbe {
 
     suspend fun urlTestDelay(profile: ProxyEntity): Int? = coroutineScope {
+        for (url in SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = false)) {
+            urlTestDelay(profile, url)?.let { return@coroutineScope it }
+        }
+        null
+    }
+
+    suspend fun urlTestDelay(profile: ProxyEntity, testUrl: String): Int? = coroutineScope {
         var client: Client? = null
         var processes: GuardedProcessPool? = null
         val cacheFiles = ArrayList<File>()
@@ -38,7 +46,7 @@ internal object DirectProfileUrlProbe {
             val ms = client.newInstanceURLTest(
                 config.config,
                 "",
-                DataStore.connectionTestURL,
+                testUrl,
                 DataStore.connectionTestTimeout,
             )
             if (ms > 0) {
@@ -47,7 +55,7 @@ internal object DirectProfileUrlProbe {
         } catch (e: PluginNotFoundException) {
             Logs.w("DirectProfileUrlProbe plugin: ${e.plugin}")
         } catch (e: Exception) {
-            Logs.d("DirectProfileUrlProbe ${profile.displayName()}: ${e.readableMessage}")
+            Logs.d("DirectProfileUrlProbe ${profile.displayName()} $testUrl: ${e.readableMessage}")
         } finally {
             client?.closeQuietly()
             processes?.close(this@coroutineScope)

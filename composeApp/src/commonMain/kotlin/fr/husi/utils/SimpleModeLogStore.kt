@@ -1,8 +1,13 @@
 package fr.husi.utils
 
 import fr.husi.BuildConfig
+import fr.husi.bg.BackendState
+import fr.husi.bg.ServiceState
+import fr.husi.database.DataStore
 import fr.husi.ktx.Logs
 import fr.husi.repository.resolveRepository
+import fr.husi.simplemode.SimpleModeConnectCoordinator
+import fr.husi.simplemode.isSimpleModePrepareActivity
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -112,6 +117,17 @@ internal object SimpleModeLogStore {
         file.appendText(marker, Charsets.UTF_8)
         writePersistedBuildCode(currentBuildCode)
         lastSessionBuildCode = currentBuildCode
+        clearStaleSimpleModeActivity()
+    }
+
+    private fun clearStaleSimpleModeActivity() {
+        if (SimpleModeConnectCoordinator.isInFlight()) return
+        val state = BackendState.status.value.state
+        if (state == ServiceState.Stopped || state == ServiceState.Idle) {
+            if (isSimpleModePrepareActivity(DataStore.simpleModeActivity)) {
+                DataStore.simpleModeActivity = ""
+            }
+        }
     }
 
     private fun buildCodeMetaFile(): File = File(logDir(), BUILD_CODE_META_FILE)

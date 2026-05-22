@@ -213,6 +213,11 @@ object SimpleModeConnectCoordinator {
             watchdog.cancel()
             if (connectJob === currentCoroutineContext()[Job]) {
                 connectJob = null
+                if (!BackendState.status.value.state.canStop &&
+                    isSimpleModePrepareActivity(DataStore.simpleModeActivity)
+                ) {
+                    DataStore.simpleModeActivity = ""
+                }
             }
         }
     }

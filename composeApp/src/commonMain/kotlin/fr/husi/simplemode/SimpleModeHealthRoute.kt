@@ -9,10 +9,13 @@ internal object SimpleModeHealthRoute {
     const val WL_WHITELIST_TXT_URL =
         "https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/Whitelist.txt"
 
+    /** Works on open networks; avoids broken HTTP probes to cp.cloudflare.com. */
+    const val OPEN_NET_HEALTH_URL = "https://www.gstatic.com/generate_204"
+
     fun healthCheckUrls(whitelistOnly: Boolean): List<String> = if (whitelistOnly) {
         listOf(WL_WHITELIST_TXT_URL, DataStore.connectionTestURL)
     } else {
-        listOf(DataStore.connectionTestURL)
+        listOf(OPEN_NET_HEALTH_URL, DataStore.connectionTestURL).distinct()
     }
 
     enum class Route {
