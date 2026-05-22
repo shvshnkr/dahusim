@@ -67,15 +67,12 @@ internal object SimpleModeHealthRoute {
         phase: String = "",
     ): Boolean {
         if (error.isNullOrBlank()) return false
-        if (isLikelyUnderlyingProxyDialFailure(error)) return true
+        if (phase == "post_connect") return false
         if (!whitelistOnly) return false
-        val bootstrapPhase = phase.isBlank() || phase == "post_connect" || phase == "session_periodic"
-        if (!bootstrapPhase) return false
+        if (isLikelyUnderlyingProxyDialFailure(error)) return true
+        if (phase != "session_periodic" && phase.isNotBlank()) return false
         val e = error.lowercase()
-        return e.contains("i/o timeout") ||
-            e.contains("no recent network activity") ||
-            e.contains("context deadline exceeded") ||
-            e.contains("connection timed out")
+        return e.contains("no recent network activity")
     }
 
     fun logInconclusivePass(phase: String, whitelistOnly: Boolean, reason: String) {

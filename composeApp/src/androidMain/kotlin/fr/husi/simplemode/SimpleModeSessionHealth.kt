@@ -1,5 +1,6 @@
 package fr.husi.simplemode
 
+import fr.husi.bg.NetworkReachabilityProbe
 import fr.husi.bg.ServiceRegistry
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
@@ -89,7 +90,8 @@ internal object SimpleModeSessionHealth {
             "SimpleMode",
             "H34 session_health_fail profileId=$profileId streak=$consecutiveFails",
         )
-        if (consecutiveFails >= CONSECUTIVE_FAIL_LIMIT) {
+        val failLimit = if (DataStore.activeWhitelistRestrictedNetwork) 1 else CONSECUTIVE_FAIL_LIMIT
+        if (consecutiveFails >= failLimit) {
             handleUnhealthySession(profileId)
             return@withLock false
         }
@@ -97,7 +99,9 @@ internal object SimpleModeSessionHealth {
     }
 
     private suspend fun runUrlHealthCheck(profileId: Long, outboundTag: String): Boolean {
-        val wlOnly = DataStore.activeWhitelistRestrictedNetwork
+        val reachability = NetworkReachabilityProbe.probe(fast = true)
+        DataStore.activeWhitelistRestrictedNetwork = reachability.whitelistOnly
+        val wlOnly = reachability.whitelistOnly
         delay(SimpleModeHealthRoute.postConnectWarmupMs(wlOnly))
         val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
         val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = wlOnly)

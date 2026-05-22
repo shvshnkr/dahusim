@@ -7,8 +7,8 @@ import kotlin.test.assertTrue
 class SimpleModeHealthRouteTest {
 
     @Test
-    fun rmnetDialIsInconclusiveOnWhitelist() {
-        assertTrue(
+    fun rmnetDialTimeoutIsConclusiveOnPostConnect() {
+        assertFalse(
             SimpleModeHealthRoute.isProbeFailureInconclusive(
                 "dial rmnet_data1 (17): dial tcp 1.2.3.4:443: i/o timeout",
                 whitelistOnly = true,
@@ -18,12 +18,34 @@ class SimpleModeHealthRouteTest {
     }
 
     @Test
-    fun transportTimeoutAloneInconclusiveOnWhitelistPostConnect() {
-        assertTrue(
+    fun contextDeadlineIsConclusiveOnPostConnect() {
+        assertFalse(
             SimpleModeHealthRoute.isProbeFailureInconclusive(
-                "timeout: no recent network activity",
+                "context deadline exceeded",
                 whitelistOnly = true,
                 phase = "post_connect",
+            ),
+        )
+    }
+
+    @Test
+    fun contextDeadlineIsConclusiveOnSessionPeriodic() {
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "context deadline exceeded",
+                whitelistOnly = true,
+                phase = "session_periodic",
+            ),
+        )
+    }
+
+    @Test
+    fun bareRmnetDialWithoutTimeoutInconclusiveOnSessionPeriodic() {
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "dial rmnet_data1 (17): operation was canceled",
+                whitelistOnly = true,
+                phase = "session_periodic",
             ),
         )
     }
