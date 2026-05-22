@@ -579,13 +579,9 @@ class BaseService {
                     val postConnectTimeoutMs = (baseTimeoutMs * 2).coerceIn(5000, 20_000)
                     val outboundTag = data.proxy?.config?.mainTag.orEmpty()
                     val postConnectUrls = SimpleModeHealthRoute.healthCheckUrls(reachability.whitelistOnly)
-                    val useDirectPostConnect = !reachability.whitelistOnly &&
-                        (reachability.googleReachable || DataStore.simpleMode)
-                    val healthRoute = if (useDirectPostConnect) {
-                        SimpleModeHealthRoute.Route.DIRECT_PROFILE
-                    } else {
-                        SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND
-                    }
+                    // Post-connect always probes through the live tunnel outbound; direct profile
+                    // spawns a parallel sing-box and fails while the VPN session is up.
+                    val healthRoute = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND
                     simpleModeLog(
                         "SimpleMode",
                         "H37 post_connect_route_decision wlOnly=${reachability.whitelistOnly} " +
@@ -636,7 +632,7 @@ class BaseService {
                         simpleModeLog(
                             "SimpleMode",
                             "H3 post_connect_url_test_success profileId=${profile.id} delayMs=${postConnectProbe.latencyMs} " +
-                                "direct=${healthRoute == SimpleModeHealthRoute.Route.DIRECT_PROFILE}",
+                                "direct=false",
                         )
                         DataStore.simpleModeActivity = ""
                     } else {

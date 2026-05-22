@@ -434,7 +434,8 @@ object AutoServerSelector {
                         .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
                         .thenBy { statusRank(it.status) }
                         .thenBy { pingRank(it.ping) }
-                        .thenByDescending { throughputRank(it) },
+                        .thenByDescending { throughputRank(it) }
+                        .thenBy { it.id },
                 )
                 val baseUrlTest = buildStratifiedUrlPool(
                     proxies = preUrlSorted,
@@ -480,7 +481,8 @@ object AutoServerSelector {
                     .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
                     .thenBy { statusRank(it.status) }
                     .thenBy { pingRank(it.ping) }
-                    .thenByDescending { throughputRank(it) },
+                    .thenByDescending { throughputRank(it) }
+                    .thenBy { it.id },
             )
             val baseUrlTest = buildStratifiedUrlPool(
                 proxies = preUrlSorted,
@@ -549,7 +551,6 @@ object AutoServerSelector {
         val ranked = connectPool
             .sortedWith(
                 if (quickProbePings.isNotEmpty()) {
-                    // Prefer low composite: real URL latency wins over TCP+synthetic when URL ran.
                     compareBy<ProxyEntity> { if (isInFailureCooldown(it.id)) 1 else 0 }
                         .thenBy { if (it.id in quickProbePings) 0 else 1 }
                         .thenBy { warmProbeStateRank(probeStates, it.id) }
@@ -565,6 +566,7 @@ object AutoServerSelector {
                             BuiltinPoolPolicy.openNetSelectionRank(it.id, builtinFourIds, whitelistBuiltinOnly)
                         }
                         .thenBy { it.userOrder }
+                        .thenBy { it.id }
                 } else {
                     compareBy<ProxyEntity> { if (isInFailureCooldown(it.id)) 1 else 0 }
                         .thenBy { warmProbeStateRank(probeStates, it.id) }
@@ -581,6 +583,7 @@ object AutoServerSelector {
                             BuiltinPoolPolicy.openNetSelectionRank(it.id, builtinFourIds, whitelistBuiltinOnly)
                         }
                         .thenBy { it.userOrder }
+                        .thenBy { it.id }
                 },
             )
             .map { it.id }
@@ -944,7 +947,8 @@ object AutoServerSelector {
                 .thenBy {
                     BuiltinPoolPolicy.openNetSelectionRank(it.id, builtinProfileIds, whitelistBuiltinOnly)
                 }
-                .thenBy { it.userOrder },
+                .thenBy { it.userOrder }
+                .thenBy { it.id },
         ).map { it.id }
         val probeStates = if (DataStore.probe2kPersistenceEnabled) {
             runBlocking { ProxyProbeStateStore.loadMap(proxies.map { it.id }) }
@@ -1052,9 +1056,6 @@ object AutoServerSelector {
             else -> null
         }
         if (live != null) return live
-        if (quickProbePings.isNotEmpty()) {
-            return Int.MAX_VALUE / 2
-        }
         if (!DataStore.probe2kWarmRankingEnabled) return Int.MAX_VALUE / 4
         return ProxyProbeStateStore.persistedDelayScore(probeStates[proxy.id])
     }
@@ -1084,6 +1085,7 @@ object AutoServerSelector {
                 BuiltinPoolPolicy.openNetSelectionRank(it.id, builtinProfileIds, whitelistBuiltinOnly)
             }
             .thenBy { it.userOrder }
+            .thenBy { it.id }
 
     private suspend fun urlTestTopCandidates(
         candidates: List<ProxyEntity>,

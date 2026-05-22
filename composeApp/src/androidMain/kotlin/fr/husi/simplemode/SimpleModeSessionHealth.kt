@@ -3,8 +3,6 @@ package fr.husi.simplemode
 import fr.husi.bg.ServiceRegistry
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
-import fr.husi.database.DirectProfileUrlProbe
-import fr.husi.database.SagerDatabase
 import fr.husi.ktx.readableMessage
 import fr.husi.repository.resolveRepository
 import fr.husi.utils.simpleModeLog
@@ -101,36 +99,11 @@ internal object SimpleModeSessionHealth {
     private suspend fun runUrlHealthCheck(profileId: Long, outboundTag: String): Boolean {
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
         delay(SimpleModeHealthRoute.postConnectWarmupMs(wlOnly))
-        if (!wlOnly) {
-            val profile = SagerDatabase.proxyDao.getById(profileId) ?: return false
-            val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
-            SimpleModeHealthRoute.logProbeConfig(
-                phase = "session_periodic",
-                whitelistOnly = false,
-                route = SimpleModeHealthRoute.Route.DIRECT_PROFILE,
-                outboundTag = outboundTag,
-                urls = listOf(DataStore.connectionTestURL),
-                timeoutMs = timeoutMs,
-            )
-            val delay = DirectProfileUrlProbe.urlTestDelay(profile)?.toLong() ?: 0L
-            val ok = delay > 0L
-            SimpleModeHealthRoute.logProbeAttempt(
-                phase = "session_periodic",
-                whitelistOnly = false,
-                route = SimpleModeHealthRoute.Route.DIRECT_PROFILE,
-                outboundTag = outboundTag,
-                url = DataStore.connectionTestURL,
-                ok = ok,
-                delayMs = delay.toInt(),
-                error = if (ok) null else "direct url test failed",
-            )
-            return ok
-        }
         val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
-        val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = true)
+        val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = wlOnly)
         SimpleModeHealthRoute.logProbeConfig(
             phase = "session_periodic",
-            whitelistOnly = true,
+            whitelistOnly = wlOnly,
             route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
             outboundTag = outboundTag,
             urls = healthUrls,
@@ -138,7 +111,7 @@ internal object SimpleModeSessionHealth {
         )
         return SimpleModeTunnelHealthCheck.check(
             phase = "session_periodic",
-            whitelistOnly = true,
+            whitelistOnly = wlOnly,
             outboundTag = outboundTag,
             urls = healthUrls,
             timeoutMs = timeoutMs,
