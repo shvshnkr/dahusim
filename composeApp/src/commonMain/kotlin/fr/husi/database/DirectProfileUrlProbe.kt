@@ -22,8 +22,8 @@ import java.io.File
  */
 internal object DirectProfileUrlProbe {
 
-    suspend fun urlTestDelay(profile: ProxyEntity): Int? = coroutineScope {
-        for (url in SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = false)) {
+    suspend fun urlTestDelay(profile: ProxyEntity, whitelistOnly: Boolean = false): Int? = coroutineScope {
+        for (url in SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = whitelistOnly)) {
             urlTestDelay(profile, url)?.let { return@coroutineScope it }
         }
         null

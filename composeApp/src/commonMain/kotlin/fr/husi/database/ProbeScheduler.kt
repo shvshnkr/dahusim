@@ -91,13 +91,21 @@ object ProbeScheduler {
         candidates: List<ProxyEntity>,
         probeStates: Map<Long, ProxyProbeState>,
         networkHandoff: Boolean,
+        whitelistBuiltinOnly: Boolean = false,
     ): List<ProxyEntity> {
         if (!DataStore.probe2kWarmRankingEnabled || networkHandoff) return candidates
         val now = System.currentTimeMillis()
         val eligible = ProbePoolEligibility.filterSelectable(candidates, probeStates)
         val filtered = eligible.filter { proxy ->
             val state = probeStates[proxy.id]
-            !ProxyProbeStateStore.isFreshAlive(state, now)
+            if (whitelistBuiltinOnly) {
+                val urlFresh = state != null &&
+                    state.lastUrlMs > 0 &&
+                    now - state.lastOkAt <= Probe2kDefaults.ALIVE_URL_FRESH_MS
+                !urlFresh
+            } else {
+                !ProxyProbeStateStore.isFreshAlive(state, now)
+            }
         }
         if (filtered.size != candidates.size) {
             simpleModeLog(
