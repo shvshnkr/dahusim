@@ -3,6 +3,7 @@ package fr.husi.database
 import fr.husi.bootstrap.WhitelistBuiltinBootstrap
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
@@ -50,12 +51,28 @@ object ProbeScheduler {
             return
         }
         val builtinIds = WhitelistBuiltinBootstrap.whitelistPoolProxies().map { it.id }.toSet()
-        val whitelistOnly = DataStore.simpleModeUseWhitelistBuiltinPoolOnly
-        val ordered = BuiltinPoolPolicy.reorderForCompactProbe(
-            proxies = proxies,
-            builtinProfileIds = builtinIds,
-            whitelistBuiltinOnly = whitelistOnly,
-        )
+        val whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
+        val groups = SagerDatabase.groupDao.allGroups().first()
+        val tag = WlSubscriptionTag.resolve(SagerDatabase.proxyDao.getAll(), groups)
+        val probeStates = if (DataStore.probe2kPersistenceEnabled) {
+            ProxyProbeStateStore.loadMap(proxies.map { it.id })
+        } else {
+            emptyMap()
+        }
+        val ordered = if (whitelistOnly) {
+            ConnectPoolPolicy.orderForBackgroundProbe(
+                proxies = proxies,
+                builtinIds = builtinIds,
+                subscriptionWlIds = tag.subscriptionWlProxyIds,
+                probeStates = probeStates,
+            )
+        } else {
+            ConnectPoolPolicy.reorderForCompactProbe(
+                proxies = proxies,
+                builtinProfileIds = builtinIds,
+                whitelistBuiltinOnly = false,
+            )
+        }
         simpleModeLog(
             "SimpleMode",
             "H35 probe_scheduler_start batch=${ordered.size} workers=$workers preset=${DataStore.probe2kPowerPreset} " +

@@ -1,6 +1,7 @@
 package fr.husi.simplemode
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -48,6 +49,20 @@ class SimpleModeHealthRouteTest {
                 phase = "session_periodic",
             ),
         )
+    }
+
+    @Test
+    fun wlCoreHealthUrlsPreferYaAndDzen() {
+        val urls = SimpleModeHealthRoute.wlCoreHealthUrls()
+        assertEquals(SimpleModeHealthRoute.WL_YA_HTTPS, urls.first())
+        assertEquals(SimpleModeHealthRoute.WL_DZEN_HTTP, urls[1])
+    }
+
+    @Test
+    fun postConnectWhitelistUsesShortUrlList() {
+        val urls = SimpleModeHealthRoute.postConnectProbeUrls(whitelistOnly = true)
+        assertEquals(3, urls.size)
+        assertEquals(SimpleModeHealthRoute.WL_YA_HTTPS, urls.first())
     }
 
     @Test

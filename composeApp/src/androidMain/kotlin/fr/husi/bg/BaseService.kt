@@ -576,9 +576,12 @@ class BaseService {
                     var postConnectHealthy = true
                     var postConnectLatencyMs = 0
                     val baseTimeoutMs = DataStore.connectionTestTimeout
-                    val postConnectTimeoutMs = (baseTimeoutMs * 2).coerceIn(5000, 20_000)
+                    val postConnectTimeoutMs = SimpleModeHealthRoute.postConnectTimeoutMs(
+                        reachability.whitelistOnly,
+                        baseTimeoutMs,
+                    )
                     val outboundTag = data.proxy?.config?.mainTag.orEmpty()
-                    val postConnectUrls = SimpleModeHealthRoute.healthCheckUrls(reachability.whitelistOnly)
+                    val postConnectUrls = SimpleModeHealthRoute.postConnectProbeUrls(reachability.whitelistOnly)
                     // Post-connect always probes through the live tunnel outbound; direct profile
                     // spawns a parallel sing-box and fails while the VPN session is up.
                     val healthRoute = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND

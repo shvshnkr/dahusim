@@ -16,12 +16,23 @@ internal object SimpleModeHealthRoute {
 
     const val TUNNEL_HEALTH_TELEGRAM = "https://web.telegram.org"
 
+    /** Reachable on many RU whitelist subnets at L3/L7 (same probes as [NetworkReachabilityProbe]). */
+    const val WL_YA_HTTPS = "https://ya.ru/"
+
+    const val WL_DZEN_HTTP = "http://dzen.ru/"
+
+    fun wlCoreHealthUrls(): List<String> = listOf(
+        WL_YA_HTTPS,
+        WL_DZEN_HTTP,
+        TUNNEL_HEALTH_GSTATIC,
+        TUNNEL_HEALTH_CLOUDFLARE_HTTPS,
+        TUNNEL_HEALTH_TELEGRAM,
+        WL_WHITELIST_TXT_URL,
+    )
+
     fun healthCheckUrls(whitelistOnly: Boolean): List<String> = if (whitelistOnly) {
         buildList {
-            add(WL_WHITELIST_TXT_URL)
-            add(TUNNEL_HEALTH_CLOUDFLARE_HTTPS)
-            add(TUNNEL_HEALTH_GSTATIC)
-            add(TUNNEL_HEALTH_TELEGRAM)
+            addAll(wlCoreHealthUrls())
             add(normalizeTunnelHealthUrl(DataStore.connectionTestURL))
         }.distinct().filter { it.isNotBlank() }
     } else {
@@ -29,6 +40,21 @@ internal object SimpleModeHealthRoute {
             .distinct()
             .filter { it.isNotBlank() }
     }
+
+    /** Post-connect on WL: ya/dzen/gstatic — fewer round-trips than the full prepare list. */
+    fun postConnectProbeUrls(whitelistOnly: Boolean): List<String> =
+        if (whitelistOnly) {
+            wlCoreHealthUrls().take(3)
+        } else {
+            healthCheckUrls(false)
+        }
+
+    fun postConnectTimeoutMs(whitelistOnly: Boolean, baseTimeoutMs: Int): Int =
+        if (whitelistOnly) {
+            (baseTimeoutMs * 2).coerceIn(4_000, 10_000)
+        } else {
+            (baseTimeoutMs * 2).coerceIn(5_000, 20_000)
+        }
 
     fun postConnectWarmupMs(whitelistOnly: Boolean): Long = if (whitelistOnly) 1_500L else 400L
 

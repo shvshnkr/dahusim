@@ -55,6 +55,12 @@ go offline.
 (Google / Dzen / ya.ru / whitelist-зонды). Когда VPN уже в состоянии Connected, обновления
 как раньше выполняются через туннель.
 
+## Simple-mode diagnostics
+
+Rolling log: app cache `simple-mode/simple_mode_app.log` (share via **Send logs** in simple mode).
+Grep anchors: `H24` (pool), `H38` (WL cap), `H14`/`H17` (probes), `H4`/`H1` (fallback), `H37` (health).
+See [`CURSOR-HOWTO-RU.md`](CURSOR-HOWTO-RU.md).
+
 ## Compatibility
 
 * First-launch RU seed only when the rule list is empty and `rulesFirstCreate` allows it.

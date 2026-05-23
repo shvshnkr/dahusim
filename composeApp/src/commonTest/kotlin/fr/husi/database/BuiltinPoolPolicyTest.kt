@@ -22,6 +22,22 @@ class BuiltinPoolPolicyTest {
     }
 
     @Test
+    fun `whitelist ranks builtin before subscription wl nodes`() {
+        assertEquals(
+            0,
+            BuiltinPoolPolicy.openNetSelectionRank(1L, setOf(1L), true, setOf(2L)),
+        )
+        assertEquals(
+            1,
+            BuiltinPoolPolicy.openNetSelectionRank(2L, setOf(1L), true, setOf(2L)),
+        )
+        assertEquals(
+            2,
+            BuiltinPoolPolicy.openNetSelectionRank(3L, setOf(1L), true, setOf(2L)),
+        )
+    }
+
+    @Test
     fun `whitelist only keeps original order`() {
         val proxies = listOf(proxy(1L, 1), proxy(2L, 2))
         val ordered = BuiltinPoolPolicy.reorderForCompactProbe(

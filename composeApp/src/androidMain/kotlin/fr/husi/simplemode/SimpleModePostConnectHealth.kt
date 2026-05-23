@@ -7,7 +7,7 @@ import kotlinx.coroutines.delay
 
 internal object SimpleModePostConnectHealth {
 
-    private const val WL_MAX_ATTEMPTS = 3
+    private const val WL_MAX_ATTEMPTS = 2
     private const val WL_RETRY_DELAY_MS = 2_000L
 
     data class Result(
