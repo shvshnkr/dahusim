@@ -9,7 +9,15 @@ Before changing simple-mode **reachability**, **autoselect probes**, or **tunnel
 **tunnel on whitelist (BS) uplink** — uplink probes stay direct; tunnel checks use **BS targets**
 (`web.telegram.org` by default, not ya/dzen/gstatic).
 
-# Build
+## Git remotes (push / PR)
+
+- **Primary:** `github` → `https://github.com/shvshnkr/dahusim.git` — default for **push**, **PR**, **releases**, CI.
+  Use `git push github main` (or set upstream to `github/main`). `gh` is authenticated via CLI.
+- **Secondary:** `origin` → Codeberg fork — **not a priority**. Push only when the user explicitly asks.
+  Do not push to Codeberg by default. If Codeberg auth is needed, tell the user to complete **web
+  authorization** in the browser (credentials expire often); do not treat Codeberg failure as blocking.
+- **`upstream`** — read-only merge source (husi on Codeberg); never push there.
+
 
 See [README](./README.md)
 
