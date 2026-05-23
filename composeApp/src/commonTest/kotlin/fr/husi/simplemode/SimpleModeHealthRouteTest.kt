@@ -39,17 +39,18 @@ class SimpleModeHealthRouteTest {
     }
 
     @Test
-    fun rmnetDialTimeoutInconclusiveOnSessionPeriodicOnly() {
-        assertFalse(
+    fun rmnetDialTimeoutInconclusiveOnWlTunnelHealth() {
+        val err = "dial rmnet_data1 (17): dial tcp 1.2.3.4:443: i/o timeout"
+        assertTrue(
             SimpleModeHealthRoute.isProbeFailureInconclusive(
-                "dial rmnet_data1 (17): dial tcp 1.2.3.4:443: i/o timeout",
+                err,
                 whitelistOnly = true,
                 phase = "post_connect",
             ),
         )
         assertTrue(
             SimpleModeHealthRoute.isProbeFailureInconclusive(
-                "dial rmnet_data1 (17): dial tcp 1.2.3.4:443: i/o timeout",
+                err,
                 whitelistOnly = true,
                 phase = "session_periodic",
             ),

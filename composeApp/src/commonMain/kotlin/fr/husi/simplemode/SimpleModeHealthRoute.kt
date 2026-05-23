@@ -103,7 +103,9 @@ internal object SimpleModeHealthRoute {
         if (error.isNullOrBlank()) return false
         if (!whitelistOnly) return false
         if (isWlTunnelBootstrapFailure(error)) {
-            return phase == "session_periodic" || phase.isBlank()
+            return phase == "session_periodic" ||
+                phase == "post_connect" ||
+                phase.isBlank()
         }
         if (isLikelyUnderlyingProxyDialFailure(error)) return true
         if (phase != "session_periodic" && phase.isNotBlank()) return false

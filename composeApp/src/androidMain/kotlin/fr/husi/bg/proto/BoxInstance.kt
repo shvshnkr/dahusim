@@ -8,6 +8,7 @@ import fr.husi.database.ProxyEntity
 import fr.husi.fmt.ConfigBuildResult
 import fr.husi.fmt.buildConfig
 import fr.husi.ktx.Logs
+import fr.husi.ktx.ensureMixedPortAvailable
 import fr.husi.ktx.readableMessage
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.repository.resolveRepository
@@ -43,6 +44,7 @@ abstract class BoxInstance(
     }
 
     open suspend fun init(isVPN: Boolean) {
+        ensureMixedPortAvailable()
         buildConfig()
         pluginConfigs.putAll(initPlugins(config, isVPN, cacheFiles))
         loadConfig()

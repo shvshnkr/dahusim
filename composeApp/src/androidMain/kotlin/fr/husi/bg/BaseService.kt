@@ -27,6 +27,8 @@ import fr.husi.database.ProxyEntity
 import fr.husi.database.SagerDatabase
 import fr.husi.ktx.Logs
 import fr.husi.ktx.broadcastReceiver
+import fr.husi.ktx.ensureMixedPortAvailable
+import fr.husi.ktx.isMixedPortBindFailure
 import fr.husi.ktx.hasPermission
 import fr.husi.ktx.onMainDispatcher
 import fr.husi.ktx.readableMessage
@@ -566,6 +568,7 @@ class BaseService {
                         fr.husi.routing.VpnExitProbe.clearCache()
                     }
                     Executable.killAll()    // clean up old processes
+                    ensureMixedPortAvailable()
                     data.backend.init(profile)
                     DataStore.currentProfile = profile.id
 
@@ -672,6 +675,21 @@ class BaseService {
                                 lastHealthError = postConnectLastError,
                             )
                             if (recovered) {
+                                AutoServerSelector.markConnected(profile.id)
+                                simpleModeLog(
+                                    "SimpleMode",
+                                    "H10 post_connect_inconclusive_connected profileId=${profile.id}",
+                                )
+                                if (outboundTag.isNotBlank()) {
+                                    SimpleModeSessionHealth.schedule(profile.id, outboundTag)
+                                }
+                                SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
+                                    profileId = profile.id,
+                                    postConnectLatencyMs = 1,
+                                    connectWhitelistOnly = wlOnly,
+                                    googleReachable = reachability.googleReachable,
+                                    whitelistSourceReachable = reachability.whitelistSourceReachable,
+                                )
                                 return@runOnDefaultDispatcher
                             }
                         }
@@ -820,6 +838,9 @@ class BaseService {
                     if (exc.javaClass.name.endsWith("proxyerror")) {
                         // error from golang
                         Logs.e(exc.readableMessage)
+                        if (isMixedPortBindFailure(exc)) {
+                            ensureMixedPortAvailable()
+                        }
                     } else {
                         Logs.e(exc)
                     }
@@ -853,6 +874,13 @@ class BaseService {
                         if (DataStore.simpleMode) {
                             SimpleModeTunnelRestart.markModeReconnect(DataStore.activeWhitelistRestrictedNetwork)
                         }
+                        stopRunner(restart = true)
+                    } else if (isMixedPortBindFailure(exc)) {
+                        ensureMixedPortAvailable()
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H32 mixed_port_bind_retry profileId=${profile.id} port=${DataStore.mixedPort}",
+                        )
                         stopRunner(restart = true)
                     } else {
                         setPausedUntilGoogle(
