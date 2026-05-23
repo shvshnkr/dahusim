@@ -27,6 +27,8 @@ go.work*
 
 # Локальная копия промпта (не в репозитории)
 docs/AUTO_SERVER_SELECTION_PROMPT.md
+# Личный how-to по Cursor (только локально)
+docs/CURSOR-HOWTO-RU.md
 # Локальный справочник по источникам подписок (личные URL, заметки)
 docs/SUBSCRIPTION_SOURCES_LOCAL.md
 # Локальные отчёты аудита / промежуточные review (не в репозитории)
