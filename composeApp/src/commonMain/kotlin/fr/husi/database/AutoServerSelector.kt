@@ -112,7 +112,7 @@ object AutoServerSelector {
     private fun probeConcurrency(whitelistBuiltinOnly: Boolean): Int {
         val base = DataStore.connectionTestConcurrent
         return if (whitelistBuiltinOnly) {
-            (base * 2).coerceIn(8, 16)
+            (base * 2).coerceIn(10, 18)
         } else {
             base.coerceIn(2, 12)
         }
@@ -121,11 +121,13 @@ object AutoServerSelector {
     private fun tcpProbeConcurrency(whitelistBuiltinOnly: Boolean): Int {
         val base = DataStore.connectionTestConcurrent
         return if (whitelistBuiltinOnly) {
-            (base * 3).coerceIn(12, 32)
+            (base * 3).coerceIn(16, 36)
         } else {
             base.coerceIn(4, 24)
         }
     }
+
+    private const val WL_URL_PROBE_EARLY_EXIT = 8
 
     suspend fun prepareForConnect(
         networkHandoff: Boolean = false,
@@ -717,11 +719,13 @@ object AutoServerSelector {
         DataStore.autoSelectFallbackQueue = rankedFinal.joinToString(",")
         DataStore.autoSelectFallbackIndex = 0
         sessionFallbackSteps.set(0)
-        val best = ProbePoolEligibility.firstViableInQueue(
-            rankedIds = rankedFinal,
+        val best = selectBestProfile(
+            rankedFinal = rankedFinal,
             probeStates = probeStates,
-            inRecentFailureCooldown = ::isInFailureCooldown,
-        ) ?: rankedFinal.first()
+            whitelistBuiltinOnly = whitelistBuiltinOnly,
+            urlTestDelays = urlTestDelays,
+            quickProbePings = quickProbePings,
+        )
         setSimpleModeActivity("Ranking ${rankedFinal.size} servers…")
         if (selectedBefore != best) {
             Logs.d("AutoSelect: switch selected profile $selectedBefore -> $best")
@@ -1198,6 +1202,26 @@ object AutoServerSelector {
             .thenBy { it.userOrder }
             .thenBy { it.id }
 
+    private fun selectBestProfile(
+        rankedFinal: List<Long>,
+        probeStates: Map<Long, ProxyProbeState>,
+        whitelistBuiltinOnly: Boolean,
+        urlTestDelays: Map<Long, Int>,
+        quickProbePings: Map<Long, Int>,
+    ): Long {
+        val viable = rankedFinal.filter {
+            ProbePoolEligibility.isViableFallbackTarget(
+                probeStates[it],
+                isInFailureCooldown(it),
+            )
+        }
+        if (whitelistBuiltinOnly && urlTestDelays.isEmpty() && quickProbePings.isNotEmpty()) {
+            viable.firstOrNull { (probeStates[it]?.lastUrlMs ?: 0) > 0 }?.let { return it }
+            viable.firstOrNull { quickProbePings.containsKey(it) }?.let { return it }
+        }
+        return viable.firstOrNull() ?: rankedFinal.first()
+    }
+
     private suspend fun urlTestTopCandidates(
         candidates: List<ProxyEntity>,
         concurrency: Int,
@@ -1211,6 +1235,7 @@ object AutoServerSelector {
         val result = HashMap<Long, Int>()
         val done = AtomicInteger(0)
         var lastReported = 0
+        val earlyExitTarget = if (whitelistBuiltinOnly) WL_URL_PROBE_EARLY_EXIT else Int.MAX_VALUE
         fun reportProgress() {
             val count = done.incrementAndGet()
             if (count == total || count - lastReported >= 1) {
@@ -1223,6 +1248,10 @@ object AutoServerSelector {
             async(Dispatchers.IO) {
                 semaphore.withPermit {
                     if (!isPrepareCurrent(session) || !currentCoroutineContext().isActive) {
+                        return@withPermit
+                    }
+                    if (whitelistBuiltinOnly && synchronized(result) { result.size >= earlyExitTarget }) {
+                        reportProgress()
                         return@withPermit
                     }
                     try {

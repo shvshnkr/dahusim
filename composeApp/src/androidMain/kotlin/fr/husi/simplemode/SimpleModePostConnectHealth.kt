@@ -7,7 +7,6 @@ import kotlinx.coroutines.delay
 
 internal object SimpleModePostConnectHealth {
 
-    private const val WL_MAX_ATTEMPTS = 2
     private const val WL_RETRY_DELAY_MS = 2_000L
 
     data class Result(
@@ -27,7 +26,7 @@ internal object SimpleModePostConnectHealth {
     ): Result {
         delay(warmupMs)
         val useDirect = healthRoute == SimpleModeHealthRoute.Route.DIRECT_PROFILE
-        val maxAttempts = if (whitelistOnly) WL_MAX_ATTEMPTS else 1
+        val maxAttempts = SimpleModeHealthRoute.postConnectMaxAttempts(whitelistOnly)
         var lastError: String? = null
         for (attempt in 1..maxAttempts) {
             if (attempt > 1) {

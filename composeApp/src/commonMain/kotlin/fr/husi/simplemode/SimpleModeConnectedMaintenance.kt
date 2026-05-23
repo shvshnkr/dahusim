@@ -134,6 +134,9 @@ object SimpleModeConnectedMaintenance {
         googleReachable: Boolean,
         whitelistSourceReachable: Boolean,
     ): Boolean {
+        if (DataStore.simpleModeWlSkipTunnelHealthCheck) {
+            return whitelistSourceReachable || googleReachable
+        }
         if (postConnectLatencyMs <= 0) return false
         if (postConnectLatencyMs > WL_POST_CONNECT_LATENCY_MAX_MS) return false
         return googleReachable || whitelistSourceReachable

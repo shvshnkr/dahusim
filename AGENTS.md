@@ -2,6 +2,13 @@
 
 See [CONTRIBUTION](./CONTRIBUTING.md)
 
+## WL / BS / CS (restricted RU networks)
+
+Before changing simple-mode **reachability**, **autoselect probes**, or **tunnel health checks**, read
+[docs/BS_CS_NETWORK.md](./docs/BS_CS_NETWORK.md). Do not use ya/dzen/gstatic/cloudflare to verify a
+**tunnel on whitelist (BS) uplink** — uplink probes stay direct; tunnel checks use **BS targets**
+(`web.telegram.org` by default, not ya/dzen/gstatic).
+
 # Build
 
 See [README](./README.md)

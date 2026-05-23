@@ -160,6 +160,7 @@ object Key {
     const val PROBE_2K_POOL_CEMETERY = "probe2kPoolCemetery"
     const val PROBE_2K_POOL_UNKNOWN = "probe2kPoolUnknown"
     const val SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT = "simpleModeLastBackgroundSubRefreshAt"
+    const val SIMPLE_MODE_WL_SKIP_TUNNEL_HEALTH_CHECK = "simpleModeWlSkipTunnelHealthCheck"
     const val AUTO_CONNECT_PAUSED_UNTIL_GOOGLE = "autoConnectPausedUntilGoogle"
     const val SIMPLE_MODE_ACTIVITY = "simpleModeActivity"
     const val SUBSCRIPTION_UPDATE_PARALLELISM_FOREGROUND = "subscriptionUpdateParallelismForeground"

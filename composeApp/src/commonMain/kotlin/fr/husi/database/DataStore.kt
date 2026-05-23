@@ -315,6 +315,8 @@ object DataStore {
     var probe2kPoolCemetery by configurationStore.int(Key.PROBE_2K_POOL_CEMETERY) { 0 }
     var probe2kPoolUnknown by configurationStore.int(Key.PROBE_2K_POOL_UNKNOWN) { 0 }
     var simpleModeLastBackgroundSubRefreshAt by configurationStore.long(Key.SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT) { 0L }
+    /** On WL uplink: skip live-tunnel urlTest (debug only; default keeps BS tunnel health). */
+    var simpleModeWlSkipTunnelHealthCheck by configurationStore.boolean(Key.SIMPLE_MODE_WL_SKIP_TUNNEL_HEALTH_CHECK) { false }
     var autoConnectPausedUntilGoogle by configurationStore.boolean(Key.AUTO_CONNECT_PAUSED_UNTIL_GOOGLE) { false }
     var simpleModeActivity by configurationStore.string(Key.SIMPLE_MODE_ACTIVITY) { "" }
     var subscriptionUpdateParallelismForeground by configurationStore.int(Key.SUBSCRIPTION_UPDATE_PARALLELISM_FOREGROUND) {

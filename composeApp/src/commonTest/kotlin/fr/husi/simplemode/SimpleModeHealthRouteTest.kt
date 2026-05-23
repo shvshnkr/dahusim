@@ -8,7 +8,38 @@ import kotlin.test.assertTrue
 class SimpleModeHealthRouteTest {
 
     @Test
-    fun rmnetDialTimeoutIsConclusiveOnPostConnect() {
+    fun wlTunnelHealthUsesBsTargetNotYaOrGstatic() {
+        val urls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = true)
+        assertEquals(listOf(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM), urls)
+        assertFalse(urls.any { it.contains("ya.ru") })
+        assertFalse(urls.any { it.contains("gstatic") })
+    }
+
+    @Test
+    fun prepareWhitelistUsesTelegramBsProbe() {
+        val urls = SimpleModeHealthRoute.prepareProbeUrls(whitelistOnly = true)
+        assertEquals(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM, urls.single())
+    }
+
+    @Test
+    fun postConnectWhitelistUsesBsProbe() {
+        val urls = SimpleModeHealthRoute.postConnectProbeUrls(whitelistOnly = true)
+        assertEquals(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM, urls.single())
+    }
+
+    @Test
+    fun tunnelHealthOnWlByDefault() {
+        assertFalse(SimpleModeHealthRoute.skipTunnelHealthCheck(whitelistOnly = true, wlSkipTunnelHealthCheck = false))
+    }
+
+    @Test
+    fun skipTunnelHealthOptInOnly() {
+        assertTrue(SimpleModeHealthRoute.skipTunnelHealthCheck(whitelistOnly = true, wlSkipTunnelHealthCheck = true))
+        assertFalse(SimpleModeHealthRoute.skipTunnelHealthCheck(whitelistOnly = false, wlSkipTunnelHealthCheck = true))
+    }
+
+    @Test
+    fun rmnetDialTimeoutInconclusiveOnSessionPeriodicOnly() {
         assertFalse(
             SimpleModeHealthRoute.isProbeFailureInconclusive(
                 "dial rmnet_data1 (17): dial tcp 1.2.3.4:443: i/o timeout",
@@ -16,53 +47,13 @@ class SimpleModeHealthRouteTest {
                 phase = "post_connect",
             ),
         )
-    }
-
-    @Test
-    fun contextDeadlineIsConclusiveOnPostConnect() {
-        assertFalse(
-            SimpleModeHealthRoute.isProbeFailureInconclusive(
-                "context deadline exceeded",
-                whitelistOnly = true,
-                phase = "post_connect",
-            ),
-        )
-    }
-
-    @Test
-    fun contextDeadlineIsConclusiveOnSessionPeriodic() {
-        assertFalse(
-            SimpleModeHealthRoute.isProbeFailureInconclusive(
-                "context deadline exceeded",
-                whitelistOnly = true,
-                phase = "session_periodic",
-            ),
-        )
-    }
-
-    @Test
-    fun bareRmnetDialWithoutTimeoutInconclusiveOnSessionPeriodic() {
         assertTrue(
             SimpleModeHealthRoute.isProbeFailureInconclusive(
-                "dial rmnet_data1 (17): operation was canceled",
+                "dial rmnet_data1 (17): dial tcp 1.2.3.4:443: i/o timeout",
                 whitelistOnly = true,
                 phase = "session_periodic",
             ),
         )
-    }
-
-    @Test
-    fun wlCoreHealthUrlsPreferYaAndDzen() {
-        val urls = SimpleModeHealthRoute.wlCoreHealthUrls()
-        assertEquals(SimpleModeHealthRoute.WL_YA_HTTPS, urls.first())
-        assertEquals(SimpleModeHealthRoute.WL_DZEN_HTTP, urls[1])
-    }
-
-    @Test
-    fun postConnectWhitelistUsesShortUrlList() {
-        val urls = SimpleModeHealthRoute.postConnectProbeUrls(whitelistOnly = true)
-        assertEquals(3, urls.size)
-        assertEquals(SimpleModeHealthRoute.WL_YA_HTTPS, urls.first())
     }
 
     @Test

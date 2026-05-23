@@ -17,13 +17,13 @@ import java.io.File
 
 /**
  * URL probe through a standalone sing-box instance for one profile (not the system VPN tunnel).
- * Used before connect and on open-network post-connect checks so BL-only reachability is not
- * mistaken for a working server on Google-OK uplink.
+ * Used before connect (per-profile sing-box). On WL uplink probes BS targets through the profile;
+ * ya/dzen are uplink-only and must not be used here (see docs/BS_CS_NETWORK.md).
  */
 internal object DirectProfileUrlProbe {
 
     suspend fun urlTestDelay(profile: ProxyEntity, whitelistOnly: Boolean = false): Int? = coroutineScope {
-        for (url in SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = whitelistOnly)) {
+        for (url in SimpleModeHealthRoute.prepareProbeUrls(whitelistOnly = whitelistOnly)) {
             urlTestDelay(profile, url)?.let { return@coroutineScope it }
         }
         null

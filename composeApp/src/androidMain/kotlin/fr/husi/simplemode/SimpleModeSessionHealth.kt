@@ -102,6 +102,9 @@ internal object SimpleModeSessionHealth {
         val reachability = NetworkReachabilityProbe.probe(fast = true)
         DataStore.activeWhitelistRestrictedNetwork = reachability.whitelistOnly
         val wlOnly = reachability.whitelistOnly
+        if (SimpleModeHealthRoute.skipTunnelHealthCheck(wlOnly)) {
+            return true
+        }
         delay(SimpleModeHealthRoute.postConnectWarmupMs(wlOnly))
         val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
         val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = wlOnly)

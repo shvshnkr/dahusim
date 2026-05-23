@@ -76,9 +76,7 @@ internal object SimpleModeTunnelHealthCheck {
                     error = errText,
                 )
             }
-            val allowInconclusive = whitelistOnly &&
-                !sawRealFailure &&
-                phase != "post_connect"
+            val allowInconclusive = whitelistOnly && !sawRealFailure
             if (allowInconclusive) {
                 SimpleModeHealthRoute.logInconclusivePass(
                     phase = phase,

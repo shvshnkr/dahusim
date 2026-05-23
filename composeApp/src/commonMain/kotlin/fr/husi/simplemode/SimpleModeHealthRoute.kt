@@ -9,45 +9,48 @@ internal object SimpleModeHealthRoute {
     const val WL_WHITELIST_TXT_URL =
         "https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/Whitelist.txt"
 
-    /** Foreign target; must go through tunnel on whitelist networks. */
+    /** Open-network tunnel sanity (CS/open), not for WL BS verification. */
     const val TUNNEL_HEALTH_CLOUDFLARE_HTTPS = "https://cp.cloudflare.com/"
 
     const val TUNNEL_HEALTH_GSTATIC = "https://www.gstatic.com/generate_204"
 
+    /** BS target: blocked on WL uplink L3; must work via VPN exit. */
     const val TUNNEL_HEALTH_TELEGRAM = "https://web.telegram.org"
 
-    /** Reachable on many RU whitelist subnets at L3/L7 (same probes as [NetworkReachabilityProbe]). */
+    /** Uplink-only on WL (reachable without VPN). Never use for tunnel urlTest. */
     const val WL_YA_HTTPS = "https://ya.ru/"
 
     const val WL_DZEN_HTTP = "http://dzen.ru/"
 
-    fun wlCoreHealthUrls(): List<String> = listOf(
-        WL_YA_HTTPS,
-        WL_DZEN_HTTP,
-        TUNNEL_HEALTH_GSTATIC,
-        TUNNEL_HEALTH_CLOUDFLARE_HTTPS,
-        TUNNEL_HEALTH_TELEGRAM,
-        WL_WHITELIST_TXT_URL,
-    )
+    fun tunnelBsProbeUrls(): List<String> = listOf(TUNNEL_HEALTH_TELEGRAM)
 
     fun healthCheckUrls(whitelistOnly: Boolean): List<String> = if (whitelistOnly) {
-        buildList {
-            addAll(wlCoreHealthUrls())
-            add(normalizeTunnelHealthUrl(DataStore.connectionTestURL))
-        }.distinct().filter { it.isNotBlank() }
+        tunnelBsProbeUrls()
     } else {
         listOf(TUNNEL_HEALTH_GSTATIC, normalizeTunnelHealthUrl(DataStore.connectionTestURL))
             .distinct()
             .filter { it.isNotBlank() }
     }
 
-    /** Post-connect on WL: ya/dzen/gstatic — fewer round-trips than the full prepare list. */
     fun postConnectProbeUrls(whitelistOnly: Boolean): List<String> =
         if (whitelistOnly) {
-            wlCoreHealthUrls().take(3)
+            tunnelBsProbeUrls()
         } else {
             healthCheckUrls(false)
         }
+
+    fun prepareProbeUrls(whitelistOnly: Boolean): List<String> =
+        if (whitelistOnly) {
+            tunnelBsProbeUrls()
+        } else {
+            healthCheckUrls(false)
+        }
+
+    /** WL: skip sing-box tunnel urlTest after connect (prepare TCP/BS direct probe already ran). */
+    fun skipTunnelHealthCheck(
+        whitelistOnly: Boolean,
+        wlSkipTunnelHealthCheck: Boolean = DataStore.simpleModeWlSkipTunnelHealthCheck,
+    ): Boolean = whitelistOnly && wlSkipTunnelHealthCheck
 
     fun postConnectTimeoutMs(whitelistOnly: Boolean, baseTimeoutMs: Int): Int =
         if (whitelistOnly) {
@@ -56,45 +59,52 @@ internal object SimpleModeHealthRoute {
             (baseTimeoutMs * 2).coerceIn(5_000, 20_000)
         }
 
-    fun postConnectWarmupMs(whitelistOnly: Boolean): Long = if (whitelistOnly) 1_500L else 400L
+    fun postConnectWarmupMs(whitelistOnly: Boolean): Long = if (whitelistOnly) 2_500L else 400L
 
-    /**
-     * sing-box urlTest on Android often logs `dial rmnet_* → proxy:port` while the tunnel is still
-     * coming up. That is not proof the outbound is dead on whitelist networks.
-     */
+    fun postConnectMaxAttempts(whitelistOnly: Boolean): Int = if (whitelistOnly) 3 else 1
+
+    fun isWlTunnelBootstrapFailure(error: String?): Boolean {
+        if (error.isNullOrBlank()) return false
+        val hasUplinkIface = error.contains("dial rmnet", ignoreCase = true) ||
+            error.contains("dial wlan", ignoreCase = true) ||
+            error.contains("dial eth", ignoreCase = true)
+        if (!hasUplinkIface) return false
+        val e = error.lowercase()
+        return e.contains("i/o timeout") ||
+            e.contains("connection timed out") ||
+            e.contains("context deadline exceeded") ||
+            e.contains("no recent network activity") ||
+            e.contains("operation was canceled")
+    }
+
     fun isLikelyUnderlyingProxyDialFailure(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
         val hasUplinkIface = error.contains("dial rmnet", ignoreCase = true) ||
             error.contains("dial wlan", ignoreCase = true) ||
             error.contains("dial eth", ignoreCase = true)
         if (!hasUplinkIface) return false
-        // dial rmnet → proxy:port i/o timeout means the selected server is unreachable, not bootstrap noise.
-        val e = error.lowercase()
-        if (e.contains("i/o timeout") ||
-            e.contains("connection timed out") ||
-            e.contains("context deadline exceeded")
-        ) {
-            return false
-        }
-        return true
+        return !isWlTunnelBootstrapFailure(error)
     }
 
-    /** Passed to [fr.husi.database.AutoServerSelector.recordProbeFailure] when health failed inconclusively. */
     fun probeFailureSkipReason(error: String?): String? =
-        if (isProbeFailureInconclusive(error, whitelistOnly = true)) "underlying_proxy_dial" else null
+        when {
+            isProbeFailureInconclusive(error, whitelistOnly = true, phase = "post_connect") ->
+                "wl_tunnel_bootstrap"
+            isProbeFailureInconclusive(error, whitelistOnly = true) ->
+                "underlying_proxy_dial"
+            else -> null
+        }
 
-    /**
-     * WL tunnel health during bootstrap / handoff: uplink dial and short transport timeouts
-     * are not proof the selected outbound is dead.
-     */
     fun isProbeFailureInconclusive(
         error: String?,
         whitelistOnly: Boolean,
         phase: String = "",
     ): Boolean {
         if (error.isNullOrBlank()) return false
-        if (phase == "post_connect") return false
         if (!whitelistOnly) return false
+        if (isWlTunnelBootstrapFailure(error)) {
+            return phase == "session_periodic" || phase.isBlank()
+        }
         if (isLikelyUnderlyingProxyDialFailure(error)) return true
         if (phase != "session_periodic" && phase.isNotBlank()) return false
         val e = error.lowercase()
@@ -108,9 +118,18 @@ internal object SimpleModeHealthRoute {
         )
     }
 
+    fun logTunnelHealthSkipped(phase: String, whitelistOnly: Boolean) {
+        simpleModeLog(
+            "SimpleMode",
+            "H37 health_route phase=$phase wlOnly=$whitelistOnly route=skipped " +
+                "reason=wl_skip_tunnel_health",
+        )
+    }
+
     enum class Route {
         DIRECT_PROFILE,
         TUNNEL_OUTBOUND,
+        SKIPPED,
     }
 
     fun logProbeConfig(
