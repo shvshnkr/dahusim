@@ -89,6 +89,7 @@ import fr.husi.resources.location_permission_description
 import fr.husi.resources.location_permission_title
 import fr.husi.resources.menu_about
 import fr.husi.resources.menu_app_update
+import fr.husi.resources.menu_quick_settings
 import fr.husi.resources.menu_configuration
 import fr.husi.resources.menu_dashboard
 import fr.husi.resources.menu_group
@@ -104,6 +105,7 @@ import fr.husi.resources.plugin
 import fr.husi.resources.plugin_unknown
 import fr.husi.resources.query_package_denied
 import fr.husi.resources.question_mark
+import fr.husi.resources.developer_mode
 import fr.husi.resources.settings
 import fr.husi.resources.simple_mode_switch
 import fr.husi.resources.simple_mode_all_servers_dead_message
@@ -341,6 +343,11 @@ private fun MainScreenContent(
                         Res.string.settings,
                         Res.drawable.settings,
                         NavRoutes.Settings,
+                    ),
+                    DrawerItemInfo(
+                        Res.string.menu_quick_settings,
+                        Res.drawable.developer_mode,
+                        NavRoutes.QuickSettings,
                     ),
                     DrawerItemInfo(
                         Res.string.plugin,

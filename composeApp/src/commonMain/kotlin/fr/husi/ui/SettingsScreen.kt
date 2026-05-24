@@ -222,7 +222,6 @@ import fr.husi.resources.shutter_speed
 import fr.husi.resources.speed
 import fr.husi.resources.speed_interval
 import fr.husi.resources.system_and_user
-import fr.husi.resources.test_concurrency
 import fr.husi.resources.test_timeout
 import fr.husi.resources.text_select_end
 import fr.husi.resources.theme
@@ -1547,35 +1546,6 @@ fun SettingsScreen(
                         )
                     }
 
-                    if (isExpertState) {
-                        subscriptionCatalogSettings { message ->
-                            scope.launch {
-                                snackbarState.showSnackbar(
-                                    message = message,
-                                    actionLabel = resolveRepository().getString(Res.string.ok),
-                                    duration = SnackbarDuration.Short,
-                                )
-                            }
-                        }
-                        probe2kSettings { message ->
-                            scope.launch {
-                                snackbarState.showSnackbar(
-                                    message = message,
-                                    actionLabel = resolveRepository().getString(Res.string.ok),
-                                    duration = SnackbarDuration.Short,
-                                )
-                            }
-                        }
-                        appUpdateSettings { message ->
-                            scope.launch {
-                                snackbarState.showSnackbar(
-                                    message = message,
-                                    actionLabel = resolveRepository().getString(Res.string.ok),
-                                    duration = SnackbarDuration.Short,
-                                )
-                            }
-                        }
-                    }
                     item(Key.MISC_SETTINGS, PreferenceType.CATEGORY) {
                         PreferenceCategory(text = { Text(stringResource(Res.string.cag_misc)) })
                     }
@@ -1600,28 +1570,7 @@ fun SettingsScreen(
                             LinkOrContentTextField(value, onValueChange, onOk)
                         }
                     }
-                    item(Key.CONNECTION_TEST_CONCURRENT, PreferenceType.TEXT_FIELD) {
-                        val value by DataStore.configurationStore
-                            .intFlow(Key.CONNECTION_TEST_CONCURRENT, 20)
-                            .collectAsStateWithLifecycle(20)
-                        var previewValue by remember { mutableFloatStateOf(value.toFloat()) }
-                        SliderPreference(
-                            value = value.toFloat(),
-                            onValueChange = { DataStore.connectionTestConcurrent = it.toInt() },
-                            sliderValue = previewValue,
-                            onSliderValueChange = { previewValue = it },
-                            title = { Text(stringResource(Res.string.test_concurrency)) },
-                            valueRange = 1f..32f,
-                            valueSteps = 32,
-                            icon = {
-                                Icon(
-                                    vectorResource(Res.drawable.fast_forward),
-                                    null,
-                                )
-                            },
-                            valueText = { Text(previewValue.toInt().toString()) },
-                        )
-                    }
+                    connectionTestConcurrentPreference()
                     item(Key.CONNECTION_TEST_TIMEOUT, PreferenceType.TEXT_FIELD) {
                         val value by DataStore.configurationStore
                             .intFlow(Key.CONNECTION_TEST_TIMEOUT, 3000)

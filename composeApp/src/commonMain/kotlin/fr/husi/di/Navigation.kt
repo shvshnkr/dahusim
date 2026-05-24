@@ -21,6 +21,7 @@ import fr.husi.ui.PluginScreen
 import fr.husi.ui.ProfilePickerController
 import fr.husi.ui.RouteScreen
 import fr.husi.ui.RouteSettingsScreen
+import fr.husi.ui.QuickSettingsScreen
 import fr.husi.ui.SettingsScreen
 import fr.husi.database.DataStore
 import fr.husi.ui.configuration.ConfigurationScreen
@@ -119,6 +120,22 @@ internal val commonNavigationModule = module {
                 onDrawerClick = drawerController::toggle,
                 openAppManager = {
                     navigator.navigateTo(NavRoutes.AppManager)
+                },
+            )
+        }
+
+        navigation<NavRoutes.QuickSettings> { _ ->
+            val drawerController = get<DrawerController>()
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            QuickSettingsScreen(
+                mainViewModel = viewModel,
+                onDrawerClick = drawerController::toggle,
+                openAppManager = { navigator.navigateTo(NavRoutes.AppManager) },
+                onOpenAppUpdate = { navigator.navigateTo(NavRoutes.AppUpdate) },
+                onOpenSimpleMode = {
+                    DataStore.simpleMode = true
+                    navigator.navigateTo(NavRoutes.Simple)
                 },
             )
         }
@@ -293,9 +310,6 @@ internal val commonNavigationModule = module {
                 onDrawerClick = drawerController::toggle,
                 onNavigateToLibraries = {
                     navigator.navigateTo(NavRoutes.Libraries)
-                },
-                onNavigateToAppUpdate = {
-                    navigator.navigateTo(NavRoutes.AppUpdate)
                 },
             )
         }
