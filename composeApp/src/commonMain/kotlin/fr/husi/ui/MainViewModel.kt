@@ -14,8 +14,11 @@ import fr.husi.bg.SubscriptionAutoUpdateRunner
 import fr.husi.bg.SubscriptionUpdateMode
 import fr.husi.bg.SubscriptionUpdater
 import fr.husi.database.DataStore
+import fr.husi.database.GroupManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
+import fr.husi.group.SubscriptionFetchProfile
+import fr.husi.group.SubscriptionUserAgentPresets
 import fr.husi.fmt.AbstractBean
 import fr.husi.group.GroupUpdateResult
 import fr.husi.group.GroupUpdateWarning
@@ -105,6 +108,9 @@ class MainViewModel(
     private val _firstLaunchSubscriptionOverlay =
         MutableStateFlow<FirstLaunchSubscriptionOverlayState>(FirstLaunchSubscriptionOverlayState.Hidden)
     val firstLaunchSubscriptionOverlay = _firstLaunchSubscriptionOverlay.asStateFlow()
+
+    private val _importSubscriptionDialog = MutableStateFlow<ProxyGroup?>(null)
+    val importSubscriptionDialog = _importSubscriptionDialog.asStateFlow()
 
     private fun alertDialog(
         message: StringOrRes,
@@ -217,22 +223,36 @@ class MainViewModel(
     }
 
     private suspend fun showImportSubscriptionDialog(group: ProxyGroup) {
-        val detail = group.name + "\n" + group.subscription?.link + "\n" + group.subscription?.token
-        _uiEvent.emit(
-            MainViewModelUiEvent.AlertDialog(
-                title = StringOrRes.Res(Res.string.subscription_import),
-                message = StringOrRes.ResWithParams(Res.string.subscription_import_message, detail),
-                confirmButton = AlertButton(StringOrRes.Res(Res.string.ok)) {
-                    viewModelScope.launch(Dispatchers.Default) {
-                        val createdGroup = onIoDispatcher {
-                            importLinkInteractor.createSubscriptionGroup(group)
-                        }
-                        performGroupUpdate(createdGroup, true)
-                    }
-                },
-                dismissButton = AlertButton(StringOrRes.Res(Res.string.cancel)) {},
-            ),
-        )
+        group.subscription?.let { sub ->
+            if (sub.link.isNotBlank() && sub.fetchProfile == SubscriptionFetchProfile.DEFAULT) {
+                sub.fetchProfile = SubscriptionUserAgentPresets.inferFetchProfileForNewLink(sub.link)
+            }
+        }
+        _importSubscriptionDialog.value = group
+    }
+
+    fun dismissImportSubscriptionDialog() {
+        _importSubscriptionDialog.value = null
+    }
+
+    fun confirmImportSubscription(group: ProxyGroup) = viewModelScope.launch(Dispatchers.Default) {
+        _importSubscriptionDialog.value = null
+        val createdGroup = onIoDispatcher {
+            importLinkInteractor.createSubscriptionGroup(group)
+        }
+        performGroupUpdate(createdGroup, true)
+    }
+
+    fun retryGroupUpdateWithFetchProfile(groupId: Long, profileId: Int) = viewModelScope.launch {
+        val entity = onIoDispatcher {
+            SagerDatabase.groupDao.getById(groupId).first()
+        } ?: return@launch
+        entity.subscription?.let { sub ->
+            sub.fetchProfile = profileId
+            sub.userAgentVersionOverride = ""
+        }
+        onIoDispatcher { GroupManager.updateGroup(entity) }
+        performGroupUpdate(entity, byUser = true)
     }
 
     private suspend fun showImportProfileDialog(profiles: List<AbstractBean>) {
@@ -471,7 +491,31 @@ class MainViewModel(
         when (result) {
             is GroupUpdateResult.Success -> presentGroupUpdateSuccess(result)
             is GroupUpdateResult.Failure -> {
-                _uiEvent.emit(alertDialog(StringOrRes.Direct("${result.group.name}: ${result.message}")))
+                val subscription = result.group.subscription
+                if (
+                    result.byUser &&
+                    subscription != null &&
+                    SubscriptionUserAgentPresets.shouldOfferRetry(subscription, result.message)
+                ) {
+                    val preset = SubscriptionUserAgentPresets.suggestRetryPreset(subscription)
+                    val presetLabel = fetchProfileLabel(preset)
+                    _uiEvent.emit(
+                        MainViewModelUiEvent.SnackbarWithAction(
+                            message = StringOrRes.Direct("${result.group.name}: ${result.message}"),
+                            actionLabel = StringOrRes.ResWithParams(
+                                Res.string.subscription_retry_as,
+                                presetLabel,
+                            ),
+                            callback = { snackbarResult ->
+                                if (snackbarResult == SnackbarResult.ActionPerformed) {
+                                    retryGroupUpdateWithFetchProfile(result.group.id, preset)
+                                }
+                            },
+                        ),
+                    )
+                } else {
+                    _uiEvent.emit(alertDialog(StringOrRes.Direct("${result.group.name}: ${result.message}")))
+                }
             }
 
             else -> Unit
@@ -562,6 +606,15 @@ class MainViewModel(
             )
         }
     }
+}
+
+private fun fetchProfileLabel(profile: Int): String = when (profile) {
+    SubscriptionFetchProfile.HAPP -> "Happ"
+    SubscriptionFetchProfile.V2RAYNG -> "v2rayNG"
+    SubscriptionFetchProfile.V2RAYTUN -> "v2RayTun"
+    SubscriptionFetchProfile.INCY -> "Incy"
+    SubscriptionFetchProfile.CUSTOM -> "Custom"
+    else -> "Dahusim"
 }
 
 private fun GroupUpdateResult.warningsOrEmpty(): List<GroupUpdateWarning> = when (this) {

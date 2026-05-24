@@ -133,10 +133,6 @@ internal val commonNavigationModule = module {
                 onDrawerClick = drawerController::toggle,
                 openAppManager = { navigator.navigateTo(NavRoutes.AppManager) },
                 onOpenAppUpdate = { navigator.navigateTo(NavRoutes.AppUpdate) },
-                onOpenSimpleMode = {
-                    DataStore.simpleMode = true
-                    navigator.navigateTo(NavRoutes.Simple)
-                },
             )
         }
 

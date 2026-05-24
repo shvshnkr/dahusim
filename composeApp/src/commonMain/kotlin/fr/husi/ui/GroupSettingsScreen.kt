@@ -1,6 +1,8 @@
 package fr.husi.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -47,7 +49,6 @@ import fr.husi.compose.withNavigation
 import fr.husi.database.SagerDatabase
 import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionSourceKind
-import fr.husi.ktx.USER_AGENT
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.contentOrUnset
 import fr.husi.ktx.intListN
@@ -474,26 +475,23 @@ private fun LazyListScope.groupSettings(
                 },
             )
         }
-        fun fetchProfile(profile: Int) = when (profile) {
-            SubscriptionFetchProfile.HAPP -> Res.string.subscription_fetch_profile_happ
-            SubscriptionFetchProfile.CUSTOM -> Res.string.subscription_fetch_profile_custom
-            else -> Res.string.subscription_fetch_profile_default
-        }
-        item("subscription_fetch_profile", PreferenceType.LIST) {
-            ListPreference(
-                value = uiState.subscriptionFetchProfile,
-                onValueChange = { viewModel.setSubscriptionFetchProfile(it) },
-                values = listOf(
-                    SubscriptionFetchProfile.DEFAULT,
-                    SubscriptionFetchProfile.HAPP,
-                    SubscriptionFetchProfile.CUSTOM,
-                ),
-                title = { Text(stringResource(Res.string.subscription_fetch_profile)) },
-                icon = { Icon(vectorResource(Res.drawable.grid_3x3), null) },
-                summary = { Text(stringResource(fetchProfile(uiState.subscriptionFetchProfile))) },
-                type = ListPreferenceType.DROPDOWN_MENU,
-                valueToText = { AnnotatedString(stringResource(fetchProfile(it))) },
-            )
+        item("subscription_fetch_profile", PreferenceType.TEXT_FIELD) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text(
+                    text = stringResource(Res.string.subscription_fetch_profile),
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                )
+                SubscriptionFetchProfileBlock(
+                    fetchProfile = uiState.subscriptionFetchProfile,
+                    onFetchProfileChange = { viewModel.setSubscriptionFetchProfile(it) },
+                    customUserAgent = uiState.subscriptionUserAgent,
+                    onCustomUserAgentChange = { viewModel.setSubscriptionUserAgent(it) },
+                    uaVersionPinned = uiState.subscriptionUaVersionPinned,
+                    onUaVersionPinnedChange = { viewModel.setSubscriptionUaVersionPinned(it) },
+                    uaVersionOverride = uiState.subscriptionUaVersionOverride,
+                    onUaVersionOverrideChange = { viewModel.setSubscriptionUaVersionOverride(it) },
+                )
+            }
         }
         val isOOCv1 = uiState.subscriptionType == SubscriptionType.OOCv1
         if (isOOCv1) {
@@ -550,27 +548,6 @@ private fun LazyListScope.groupSettings(
                 title = { Text(stringResource(Res.string.update_when_connected_only)) },
                 icon = { Icon(vectorResource(Res.drawable.security), null) },
                 summary = { Text(stringResource(Res.string.update_when_connected_only_sum)) },
-            )
-        }
-        item("subscription_user_agent", PreferenceType.TEXT_FIELD) {
-            TextFieldPreference(
-                value = uiState.subscriptionUserAgent,
-                onValueChange = { viewModel.setSubscriptionUserAgent(it) },
-                title = { Text(stringResource(Res.string.subscription_user_agent)) },
-                textToValue = { it },
-                enabled = uiState.subscriptionFetchProfile == SubscriptionFetchProfile.CUSTOM,
-                icon = { Icon(vectorResource(Res.drawable.grid_3x3), null) },
-                summary = {
-                    val text = when (uiState.subscriptionFetchProfile) {
-                        SubscriptionFetchProfile.HAPP -> "happ/2.9.0"
-                        SubscriptionFetchProfile.CUSTOM -> {
-                            uiState.subscriptionUserAgent.blankAsNull() ?: USER_AGENT
-                        }
-                        else -> USER_AGENT
-                    }
-                    Text(text)
-                },
-                valueToText = { it },
             )
         }
         item("subscription_auto_update", PreferenceType.SWITCH) {

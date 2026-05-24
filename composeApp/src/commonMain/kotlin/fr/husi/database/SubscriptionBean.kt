@@ -30,6 +30,7 @@ class SubscriptionBean : Serializable() {
     var pendingRemoveAt: Long = 0L
     var remoteGenerationSeen: Long = 0L
     var fetchProfile: Int = 0
+    var userAgentVersionOverride: String = ""
     var updateWhenConnectedOnly: Boolean = false
     var customUserAgent: String = ""
     var autoUpdate: Boolean = false
@@ -45,7 +46,7 @@ class SubscriptionBean : Serializable() {
     var expiryDate: Long = 0L
 
     override fun serializeToBuffer(output: ByteBufferOutput) {
-        output.writeInt(5)
+        output.writeInt(6)
 
         output.writeInt(type)
         output.writeString(link)
@@ -67,6 +68,7 @@ class SubscriptionBean : Serializable() {
         output.writeLong(pendingRemoveAt)
         output.writeLong(remoteGenerationSeen)
         output.writeInt(fetchProfile)
+        output.writeString(userAgentVersionOverride)
     }
 
     fun serializeForShare(output: ByteBufferOutput) {
@@ -114,6 +116,9 @@ class SubscriptionBean : Serializable() {
             pendingRemoveAt = input.readLong()
             remoteGenerationSeen = input.readLong()
             fetchProfile = input.readInt()
+        }
+        if (version >= 6) {
+            userAgentVersionOverride = input.readString()
         }
     }
 

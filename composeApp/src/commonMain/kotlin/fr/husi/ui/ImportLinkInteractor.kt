@@ -10,6 +10,7 @@ import fr.husi.database.SubscriptionBean
 import fr.husi.fmt.AbstractBean
 import fr.husi.fmt.KryoConverters
 import fr.husi.group.GroupUpdater
+import fr.husi.group.SubscriptionUserAgentPresets
 import fr.husi.ktx.b64Decode
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.defaultOr
@@ -50,13 +51,13 @@ class ImportLinkInteractor {
         if (url.isNotBlank()) {
             group = ProxyGroup(type = GroupType.SUBSCRIPTION)
             group.subscription = SubscriptionBean().apply {
-                // cleartext format
                 link = url
                 type = when (urlForQuery.queryParameter("type")?.lowercase()) {
                     "oocv1" -> SubscriptionType.OOCv1
                     "sip008" -> SubscriptionType.SIP008
                     else -> SubscriptionType.RAW
                 }
+                fetchProfile = SubscriptionUserAgentPresets.inferFetchProfileForNewLink(url)
             }
 
             group.name = defaultOr(

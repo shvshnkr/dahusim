@@ -1,5 +1,6 @@
 package fr.husi.compose
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,12 +10,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import fr.husi.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import fr.husi.compose.material3.Icon
 import fr.husi.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,7 +41,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import me.zhanghai.compose.preference.Preference
-import me.zhanghai.compose.preference.PreferenceCategory
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import me.zhanghai.compose.preference.TextFieldPreference
 import fr.husi.resources.*
@@ -49,25 +54,38 @@ object PreferenceType {
     const val COLOR_PICKER = 5
 }
 
-/**
- * Not only support icon, but also use spacer as icon if not set.
- * */
 @Composable
 fun PreferenceCategory(
     modifier: Modifier = Modifier,
-    icon: @Composable () -> Unit = { Spacer(Modifier.size(24.dp)) },
+    icon: @Composable (() -> Unit)? = null,
+    compactTop: Boolean = false,
     text: @Composable () -> Unit,
 ) {
-    PreferenceCategory(
-        title = {
-            Row {
-                icon()
-                Spacer(Modifier.padding(8.dp))
-                text()
-            }
-        },
-        modifier = modifier,
-    )
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = if (compactTop) 12.dp else 24.dp,
+                bottom = 8.dp,
+            ),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon?.invoke()
+        if (icon != null) {
+            Spacer(Modifier.width(8.dp))
+        }
+        ProvideTextStyle(
+            MaterialTheme.typography.titleSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+        ) {
+            text()
+        }
+    }
 }
 
 @Composable

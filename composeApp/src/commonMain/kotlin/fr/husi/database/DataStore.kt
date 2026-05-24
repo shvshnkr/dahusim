@@ -16,6 +16,7 @@ import fr.husi.bg.ServiceState
 import fr.husi.compose.theme.DEFAULT
 import fr.husi.database.preference.DataStorePreferenceDataStore
 import fr.husi.database.preference.createConfigurationDataStore
+import fr.husi.group.SubscriptionUserAgentPresets
 import fr.husi.ktx.boolean
 import fr.husi.ktx.int
 import fr.husi.ktx.long
@@ -354,5 +355,18 @@ object DataStore {
         Key.SUBSCRIPTION_CATALOG_LAST_APPLIED_GENERATION,
     ) { 0L }
     var subscriptionCatalogLastAppliedHash by configurationStore.string(Key.SUBSCRIPTION_CATALOG_LAST_APPLIED_HASH) { "" }
+
+    var subscriptionUaVersionHapp by configurationStore.string(Key.SUBSCRIPTION_UA_VERSION_HAPP) {
+        SubscriptionUserAgentPresets.FactoryVersions.HAPP
+    }
+    var subscriptionUaVersionV2rayNg by configurationStore.string(Key.SUBSCRIPTION_UA_VERSION_V2RAYNG) {
+        SubscriptionUserAgentPresets.FactoryVersions.V2RAYNG
+    }
+    var subscriptionUaVersionV2rayTun by configurationStore.string(Key.SUBSCRIPTION_UA_VERSION_V2RAYTUN) {
+        SubscriptionUserAgentPresets.FactoryVersions.V2RAYTUN
+    }
+    var subscriptionUaVersionIncy by configurationStore.string(Key.SUBSCRIPTION_UA_VERSION_INCY) {
+        SubscriptionUserAgentPresets.FactoryVersions.INCY
+    }
 
 }

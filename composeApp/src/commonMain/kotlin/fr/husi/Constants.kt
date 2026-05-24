@@ -184,6 +184,11 @@ object Key {
     const val SUBSCRIPTION_CATALOG_LAST_APPLIED_HASH = "subscriptionCatalogLastAppliedHash"
     const val SUBSCRIPTION_CATALOG_CHECK_NOW = "subscriptionCatalogCheckNow"
 
+    const val SUBSCRIPTION_UA_VERSION_HAPP = "subscriptionUaVersionHapp"
+    const val SUBSCRIPTION_UA_VERSION_V2RAYNG = "subscriptionUaVersionV2rayNg"
+    const val SUBSCRIPTION_UA_VERSION_V2RAYTUN = "subscriptionUaVersionV2rayTun"
+    const val SUBSCRIPTION_UA_VERSION_INCY = "subscriptionUaVersionIncy"
+
 }
 
 object AlertType {

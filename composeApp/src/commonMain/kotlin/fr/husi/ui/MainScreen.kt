@@ -608,6 +608,15 @@ private fun MainScreenContent(
         }
     }
 
+    val importSubscriptionGroup by viewModel.importSubscriptionDialog.collectAsStateWithLifecycle()
+    importSubscriptionGroup?.let { group ->
+        ImportSubscriptionDialog(
+            group = group,
+            onConfirm = { viewModel.confirmImportSubscription(it) },
+            onDismiss = { viewModel.dismissImportSubscriptionDialog() },
+        )
+    }
+
     val firstLaunchOverlay by viewModel.firstLaunchSubscriptionOverlay.collectAsStateWithLifecycle()
     when (val sync = firstLaunchOverlay) {
         is FirstLaunchSubscriptionOverlayState.Running -> {

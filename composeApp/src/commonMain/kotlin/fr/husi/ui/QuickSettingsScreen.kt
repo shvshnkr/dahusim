@@ -66,7 +66,6 @@ fun QuickSettingsScreen(
     onDrawerClick: () -> Unit,
     openAppManager: () -> Unit,
     onOpenAppUpdate: () -> Unit,
-    onOpenSimpleMode: () -> Unit,
 ) {
     val windowInsets = WindowInsets.safeDrawing
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -144,17 +143,17 @@ fun QuickSettingsScreen(
                         .fillMaxHeight(),
                     contentPadding = contentPadding,
                 ) {
-                    quickSettingsMode(onOpenSimpleMode = onOpenSimpleMode)
-
                     item("quick_settings_section_network", PreferenceType.CATEGORY) {
-                        PreferenceCategory(text = { Text(stringResource(Res.string.quick_settings_section_network)) })
+                        PreferenceCategory(
+                            compactTop = true,
+                            text = { Text(stringResource(Res.string.quick_settings_section_network)) },
+                        )
                     }
                     proxyAppsPreferences(openAppManager)
 
                     item("quick_settings_section_updates", PreferenceType.CATEGORY) {
                         PreferenceCategory(text = { Text(stringResource(Res.string.quick_settings_section_updates)) })
                     }
-                    appUpdateSettings(::showMessage)
                     item("quick_settings_open_app_update", PreferenceType.TEXT_FIELD) {
                         Preference(
                             title = { Text(stringResource(Res.string.quick_settings_open_app_update)) },
@@ -167,6 +166,7 @@ fun QuickSettingsScreen(
                         PreferenceCategory(text = { Text(stringResource(Res.string.quick_settings_section_subscriptions)) })
                     }
                     subscriptionCatalogSettings(::showMessage)
+                    subscriptionUserAgentTemplatesSettings()
                     subscriptionUpdateParallelismPreferences()
 
                     item("quick_settings_section_probes", PreferenceType.CATEGORY) {

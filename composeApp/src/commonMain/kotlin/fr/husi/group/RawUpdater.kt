@@ -90,7 +90,9 @@ object RawUpdater : GroupUpdater() {
                 }
             }.newRequest().apply {
                 setURL(fetchLink)
-                setUserAgent(SubscriptionFetchProfile.resolveUserAgent(subscription))
+                val resolvedUa = SubscriptionFetchProfile.resolveUserAgent(subscription)
+                Logs.d("subscription fetch UA: $resolvedUa")
+                setUserAgent(resolvedUa)
             }.execute()
             val body = WhitelistSubscriptionFetch.extractSubscriptionBody(response.contentString)
             proxies = parseRaw(body) ?: errNotFound()

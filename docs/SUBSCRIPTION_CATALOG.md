@@ -28,7 +28,7 @@ REMOVE|source_id
 Supported values:
 
 - `subscription_type`: `RAW`, `OOCv1`, `SIP008`
-- `fetch_profile`: `default`, `happ`, `custom`
+- `fetch_profile`: `default`, `happ`, `v2rayng`, `v2raytun`, `incy`, `custom`
 
 Examples:
 
@@ -62,9 +62,9 @@ REMOVE|legacy-id
 
 ## Fetch profile notes
 
-- `default`: uses app default User-Agent.
-- `happ`: uses `happ/2.9.0`.
-- `custom`: uses the custom User-Agent string from the record/user settings.
+- `default`: Dahusim User-Agent (`husi/…` from BuildConfig).
+- `happ`, `v2rayng`, `v2raytun`, `incy`: client preset; version comes from Quick settings templates (editable, not tied to app release).
+- `custom`: full User-Agent string from the record (supports `$version`, `$version_code`, `$box_version`).
 
 ## Operations
 

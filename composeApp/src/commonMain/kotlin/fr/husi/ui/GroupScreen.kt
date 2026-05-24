@@ -117,6 +117,9 @@ import fr.husi.resources.subscription_expire
 import fr.husi.resources.subscription_fetch_profile_custom
 import fr.husi.resources.subscription_fetch_profile_default
 import fr.husi.resources.subscription_fetch_profile_happ
+import fr.husi.resources.subscription_fetch_profile_incy
+import fr.husi.resources.subscription_fetch_profile_v2rayng
+import fr.husi.resources.subscription_fetch_profile_v2raytun
 import fr.husi.resources.subscription_traffic
 import fr.husi.resources.subscription_last_updated
 import fr.husi.resources.subscription_source_kind_github
@@ -559,6 +562,15 @@ private fun DraggableSwipeableItemScope<GroupItemUiState>.GroupCard(
                                     val profileText = when (sub.fetchProfile) {
                                         SubscriptionFetchProfile.HAPP -> stringResource(
                                             Res.string.subscription_fetch_profile_happ,
+                                        )
+                                        SubscriptionFetchProfile.V2RAYNG -> stringResource(
+                                            Res.string.subscription_fetch_profile_v2rayng,
+                                        )
+                                        SubscriptionFetchProfile.V2RAYTUN -> stringResource(
+                                            Res.string.subscription_fetch_profile_v2raytun,
+                                        )
+                                        SubscriptionFetchProfile.INCY -> stringResource(
+                                            Res.string.subscription_fetch_profile_incy,
                                         )
                                         SubscriptionFetchProfile.CUSTOM -> stringResource(
                                             Res.string.subscription_fetch_profile_custom,

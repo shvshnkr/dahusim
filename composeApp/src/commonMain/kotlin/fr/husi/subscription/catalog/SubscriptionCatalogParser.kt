@@ -97,6 +97,9 @@ object SubscriptionCatalogParser {
         "default" -> SubscriptionFetchProfile.DEFAULT
         "happ" -> SubscriptionFetchProfile.HAPP
         "custom" -> SubscriptionFetchProfile.CUSTOM
+        "v2rayng" -> SubscriptionFetchProfile.V2RAYNG
+        "v2raytun" -> SubscriptionFetchProfile.V2RAYTUN
+        "incy" -> SubscriptionFetchProfile.INCY
         else -> error("unsupported fetch profile: $value")
     }
 
