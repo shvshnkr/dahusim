@@ -1,14 +1,12 @@
 package fr.husi.database
 
-import fr.husi.bootstrap.WhitelistBuiltinBootstrap
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
- * 2K background TCP maintenance while VPN is down. Uses the same [ProxyProbeState] jail
- * and backoff rules as connect-time probes (built-in helpers included).
+ * 2K background TCP maintenance while VPN is down.
  */
 object ProbeScheduler {
 
@@ -31,7 +29,6 @@ object ProbeScheduler {
             simpleModeLog("SimpleMode", "H35 probe_scheduler_skip reason=vpn_connected")
             return
         }
-        WhitelistBuiltinBootstrap.ensureGroupAndProfiles()
         val batchSize = DataStore.probe2kBackgroundBatchSize.coerceIn(8, 96)
         val workers = DataStore.probe2kBackgroundTcpWorkers.coerceIn(4, 48)
         val dueStates = SagerDatabase.probeStateDao.dueForProbe(now, batchSize)
@@ -50,8 +47,8 @@ object ProbeScheduler {
             DataStore.probe2kLastBackgroundRunAt = now
             return
         }
-        val builtinIds = WhitelistBuiltinBootstrap.whitelistPoolProxies().map { it.id }.toSet()
         val whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
+        val merged = DataStore.simpleModeAutoselectPoolMerged
         val groups = SagerDatabase.groupDao.allGroups().first()
         val tag = WlSubscriptionTag.resolve(SagerDatabase.proxyDao.getAll(), groups)
         val probeStates = if (DataStore.probe2kPersistenceEnabled) {
@@ -62,21 +59,17 @@ object ProbeScheduler {
         val ordered = if (whitelistOnly) {
             ConnectPoolPolicy.orderForBackgroundProbe(
                 proxies = proxies,
-                builtinIds = builtinIds,
                 subscriptionWlIds = tag.subscriptionWlProxyIds,
                 probeStates = probeStates,
+                merged = merged,
             )
         } else {
-            ConnectPoolPolicy.reorderForCompactProbe(
-                proxies = proxies,
-                builtinProfileIds = builtinIds,
-                whitelistBuiltinOnly = false,
-            )
+            proxies.sortedBy { it.userOrder }
         }
         simpleModeLog(
             "SimpleMode",
             "H35 probe_scheduler_start batch=${ordered.size} workers=$workers preset=${DataStore.probe2kPowerPreset} " +
-                "due=${dueStates.size} wlOnly=$whitelistOnly",
+                "due=${dueStates.size} wlOnly=$whitelistOnly merged=$merged",
         )
         Probe2kProgress.publishScan(0, ordered.size)
         val tcpMs = withContext(Dispatchers.IO) {
@@ -89,13 +82,11 @@ object ProbeScheduler {
         }
         ProxyProbeStateStore.persistPrepareResults(
             proxies = ordered,
-            builtinProfileIds = builtinIds,
             tcpMs = tcpMs,
             urlMs = emptyMap(),
         )
         ProxyProbeStateStore.persistTcpFailures(
             proxies = ordered,
-            builtinProfileIds = builtinIds,
             probedIds = tcpMs.keys,
         )
         Probe2kProgress.clearScan()

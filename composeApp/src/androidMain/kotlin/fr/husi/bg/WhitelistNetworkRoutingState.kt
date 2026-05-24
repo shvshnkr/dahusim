@@ -22,6 +22,9 @@ internal object WhitelistNetworkRoutingState {
         val prevWl = DataStore.activeWhitelistRestrictedNetwork
         if (nowWl == prevWl) return
         DataStore.activeWhitelistRestrictedNetwork = nowWl
+        if (!nowWl) {
+            DataStore.simpleModeAutoselectPoolMerged = false
+        }
         fr.husi.routing.VpnExitProbe.clearCache()
         simpleModeLog(
             "SimpleMode",
@@ -40,6 +43,7 @@ internal object WhitelistNetworkRoutingState {
 
     fun reset() {
         DataStore.activeWhitelistRestrictedNetwork = false
+        DataStore.simpleModeAutoselectPoolMerged = false
         fr.husi.routing.VpnExitProbe.clearCache()
     }
 

@@ -1,8 +1,7 @@
 package fr.husi.database
 
 /**
- * Single place for simple-mode connect pool: WL stratified cap, open-net builtin deprioritization,
- * compact TCP batch order, and ranking tie-breaks (replaces split [WlAutoselectPolicy] / [BuiltinPoolPolicy] logic).
+ * Simple-mode connect pool: WL subscription cap, open-net pool, merged WL+open session pool.
  */
 internal object ConnectPoolPolicy {
 
@@ -13,42 +12,60 @@ internal object ConnectPoolPolicy {
     const val MAX_SESSION_FALLBACK_STEPS_WL = 4
     const val MAX_SESSION_FALLBACK_STEPS_OPEN = 32
 
+    enum class PoolBuildMode {
+        /** All profiles except WL-marked subscriptions. */
+        OPEN,
+        /** WL-marked subscription nodes only. */
+        WL_SUBSCRIPTION,
+        /** WL-marked + open nodes (after WL pool failed once on this session). */
+        MERGED,
+    }
+
     data class BuildResult(
         val priorityFirstIds: Set<Long>,
         val orderedProxies: List<ProxyEntity>,
         val subscriptionWlIds: Set<Long>,
         val subsWlMarkedCount: Int,
         val wlGroupCount: Int,
+        val poolMode: PoolBuildMode,
     )
 
     fun maxSessionFallbackSteps(whitelistRestricted: Boolean): Int =
-        if (whitelistRestricted) MAX_SESSION_FALLBACK_STEPS_WL else MAX_SESSION_FALLBACK_STEPS_OPEN
+        if (whitelistRestricted && !DataStore.simpleModeAutoselectPoolMerged) {
+            MAX_SESSION_FALLBACK_STEPS_WL
+        } else if (whitelistRestricted) {
+            MAX_SESSION_FALLBACK_STEPS_OPEN
+        } else {
+            MAX_SESSION_FALLBACK_STEPS_OPEN
+        }
 
     fun build(
+        mode: PoolBuildMode,
         allProxies: List<ProxyEntity>,
         groups: List<ProxyGroup>,
-        builtinProxies: List<ProxyEntity>,
-        builtinIds: Set<Long>,
         handoffIds: Set<Long>,
-        whitelistBuiltinOnly: Boolean,
         probeStates: Map<Long, ProxyProbeState>,
     ): BuildResult {
         val tag = WlSubscriptionTag.resolve(allProxies, groups)
-        return if (whitelistBuiltinOnly) {
-            buildWhitelist(
+        return when (mode) {
+            PoolBuildMode.WL_SUBSCRIPTION -> buildWhitelist(
                 allProxies = allProxies,
-                builtinProxies = builtinProxies,
-                builtinIds = builtinIds,
                 handoffIds = handoffIds,
                 subscriptionWlIds = tag.subscriptionWlProxyIds,
                 subsWlMarkedCount = tag.subsWlMarkedCount,
                 wlGroupCount = tag.wlGroupIds.size,
                 probeStates = probeStates,
             )
-        } else {
-            buildOpen(
+            PoolBuildMode.MERGED -> buildMerged(
                 allProxies = allProxies,
-                builtinIds = builtinIds,
+                handoffIds = handoffIds,
+                subscriptionWlIds = tag.subscriptionWlProxyIds,
+                subsWlMarkedCount = tag.subsWlMarkedCount,
+                wlGroupCount = tag.wlGroupIds.size,
+                probeStates = probeStates,
+            )
+            PoolBuildMode.OPEN -> buildOpen(
+                allProxies = allProxies,
                 handoffIds = handoffIds,
                 subscriptionWlIds = tag.subscriptionWlProxyIds,
                 subsWlMarkedCount = tag.subsWlMarkedCount,
@@ -60,22 +77,23 @@ internal object ConnectPoolPolicy {
 
     private fun buildWhitelist(
         allProxies: List<ProxyEntity>,
-        builtinProxies: List<ProxyEntity>,
-        builtinIds: Set<Long>,
         handoffIds: Set<Long>,
         subscriptionWlIds: Set<Long>,
         subsWlMarkedCount: Int,
         wlGroupCount: Int,
         probeStates: Map<Long, ProxyProbeState>,
     ): BuildResult {
-        val priorityFirstIds = (builtinIds + subscriptionWlIds + handoffIds).toSet()
-        val subWlProxies = allProxies
-            .filter { it.id in subscriptionWlIds }
-            .sortedBy { it.userOrder }
-        val handoffProxies = allProxies.filter { it.id in handoffIds && it.id !in builtinIds && it.id !in subscriptionWlIds }
-        val priorityHead = (builtinProxies + subWlProxies + handoffProxies).distinctBy { it.id }
+        val priorityFirstIds = (subscriptionWlIds + handoffIds).toSet()
+        val subWlPool = allProxies.filter { it.id in subscriptionWlIds }
+        val subWlProxies = stratifiedSample(
+            proxies = subWlPool,
+            perGroupCap = WL_STRATIFIED_PER_GROUP,
+            totalCap = minOf(subWlPool.size, WL_PREPARE_CAP / 2),
+        )
+        val handoffProxies = allProxies.filter { it.id in handoffIds && it.id !in subscriptionWlIds }
+        val priorityHead = (handoffProxies + subWlProxies).distinctBy { it.id }
         val priorityIds = priorityHead.map { it.id }.toSet()
-        val rest = allProxies.filter { it.id !in priorityIds }
+        val rest = allProxies.filter { it.id !in priorityIds && it.id in subscriptionWlIds }
         val urlHinted = rest.filter { (probeStates[it.id]?.lastUrlMs ?: 0) > 0 }
         val urlIds = urlHinted.map { it.id }.toSet()
         val stratifiedBudget = (WL_PREPARE_CAP - priorityHead.size - urlHinted.size).coerceAtLeast(0)
@@ -95,12 +113,12 @@ internal object ConnectPoolPolicy {
             subscriptionWlIds = subscriptionWlIds,
             subsWlMarkedCount = subsWlMarkedCount,
             wlGroupCount = wlGroupCount,
+            poolMode = PoolBuildMode.WL_SUBSCRIPTION,
         )
     }
 
     private fun buildOpen(
         allProxies: List<ProxyEntity>,
-        builtinIds: Set<Long>,
         handoffIds: Set<Long>,
         subscriptionWlIds: Set<Long>,
         subsWlMarkedCount: Int,
@@ -109,7 +127,7 @@ internal object ConnectPoolPolicy {
     ): BuildResult {
         val base = allProxies.filter { it.id !in subscriptionWlIds }
         val ordered = if (base.size <= OPEN_PREPARE_CAP) {
-            reorderForCompactProbe(base, builtinIds, whitelistBuiltinOnly = false)
+            base.sortedBy { it.userOrder }
         } else {
             val handoffProxies = base.filter { it.id in handoffIds }
             val handoffIdsSet = handoffProxies.map { it.id }.toSet()
@@ -122,11 +140,7 @@ internal object ConnectPoolPolicy {
                 perGroupCap = OPEN_STRATIFIED_PER_GROUP,
                 totalCap = budget,
             )
-            reorderForCompactProbe(
-                handoffProxies + urlHinted + stratified,
-                builtinIds,
-                whitelistBuiltinOnly = false,
-            ).take(OPEN_PREPARE_CAP)
+            (handoffProxies + urlHinted + stratified).distinctBy { it.id }.take(OPEN_PREPARE_CAP)
         }
         return BuildResult(
             priorityFirstIds = handoffIds,
@@ -134,39 +148,51 @@ internal object ConnectPoolPolicy {
             subscriptionWlIds = subscriptionWlIds,
             subsWlMarkedCount = subsWlMarkedCount,
             wlGroupCount = wlGroupCount,
+            poolMode = PoolBuildMode.OPEN,
         )
     }
 
-    fun reorderForCompactProbe(
-        proxies: List<ProxyEntity>,
-        builtinProfileIds: Set<Long>,
-        whitelistBuiltinOnly: Boolean,
-    ): List<ProxyEntity> {
-        if (whitelistBuiltinOnly || builtinProfileIds.isEmpty()) return proxies
-        val (subscription, builtin) = proxies.partition { it.id !in builtinProfileIds }
-        return subscription + builtin
-    }
-
-    fun openNetSelectionRank(
-        profileId: Long,
-        builtinProfileIds: Set<Long>,
-        whitelistBuiltinOnly: Boolean,
-        subscriptionWlIds: Set<Long> = emptySet(),
-    ): Int = when {
-        whitelistBuiltinOnly -> wlNodeRank(profileId, builtinProfileIds, subscriptionWlIds)
-        profileId in builtinProfileIds -> 1
-        else -> 0
-    }
-
-    fun wlNodeRank(
-        profileId: Long,
-        builtinProfileIds: Set<Long>,
+    private fun buildMerged(
+        allProxies: List<ProxyEntity>,
+        handoffIds: Set<Long>,
         subscriptionWlIds: Set<Long>,
-    ): Int = when {
-        profileId in builtinProfileIds -> 0
-        profileId in subscriptionWlIds -> 1
-        else -> 2
+        subsWlMarkedCount: Int,
+        wlGroupCount: Int,
+        probeStates: Map<Long, ProxyProbeState>,
+    ): BuildResult {
+        val handoffProxies = allProxies.filter { it.id in handoffIds }
+        val handoffIdsSet = handoffProxies.map { it.id }.toSet()
+        val rest = allProxies.filter { it.id !in handoffIdsSet }
+        val urlHinted = rest.filter { (probeStates[it.id]?.lastUrlMs ?: 0) > 0 }
+        val urlIds = urlHinted.map { it.id }.toSet()
+        val budget = (OPEN_PREPARE_CAP - handoffProxies.size - urlHinted.size).coerceAtLeast(0)
+        val stratified = stratifiedSample(
+            proxies = rest.filter { it.id !in urlIds },
+            perGroupCap = OPEN_STRATIFIED_PER_GROUP,
+            totalCap = budget,
+        )
+        val ordered = (handoffProxies + urlHinted + stratified).distinctBy { it.id }.take(OPEN_PREPARE_CAP)
+        return BuildResult(
+            priorityFirstIds = handoffIds,
+            orderedProxies = ordered,
+            subscriptionWlIds = subscriptionWlIds,
+            subsWlMarkedCount = subsWlMarkedCount,
+            wlGroupCount = wlGroupCount,
+            poolMode = PoolBuildMode.MERGED,
+        )
     }
+
+    fun selectionRank(
+        profileId: Long,
+        subscriptionWlIds: Set<Long>,
+        mode: PoolBuildMode,
+    ): Int = when (mode) {
+        PoolBuildMode.WL_SUBSCRIPTION -> wlNodeRank(profileId, subscriptionWlIds)
+        PoolBuildMode.OPEN, PoolBuildMode.MERGED -> 0
+    }
+
+    fun wlNodeRank(profileId: Long, subscriptionWlIds: Set<Long>): Int =
+        if (profileId in subscriptionWlIds) 0 else 1
 
     fun compactTcpBatch(
         proxies: List<ProxyEntity>,
@@ -182,13 +208,16 @@ internal object ConnectPoolPolicy {
 
     fun orderForBackgroundProbe(
         proxies: List<ProxyEntity>,
-        builtinIds: Set<Long>,
         subscriptionWlIds: Set<Long>,
         probeStates: Map<Long, ProxyProbeState>,
+        merged: Boolean,
     ): List<ProxyEntity> {
         if (proxies.isEmpty()) return proxies
-        val priorityIds = (builtinIds + subscriptionWlIds).toSet()
-        val priority = proxies.filter { it.id in priorityIds }.sortedBy { wlNodeRank(it.id, builtinIds, subscriptionWlIds) }
+        if (!merged) {
+            return proxies.sortedBy { it.userOrder }
+        }
+        val priorityIds = subscriptionWlIds
+        val priority = proxies.filter { it.id in priorityIds }.sortedBy { wlNodeRank(it.id, subscriptionWlIds) }
         val rest = proxies.filter { it.id !in priorityIds }
         val urlHinted = rest.filter { (probeStates[it.id]?.lastUrlMs ?: 0) > 0 }
         val urlIds = urlHinted.map { it.id }.toSet()

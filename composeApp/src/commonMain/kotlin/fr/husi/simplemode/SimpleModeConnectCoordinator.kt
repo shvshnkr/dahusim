@@ -47,6 +47,7 @@ object SimpleModeConnectCoordinator {
         host: ConnectHost,
     ) {
         cancel("connect_supersede")
+        DataStore.simpleModeAutoselectPoolMerged = false
         DataStore.simpleModeActivity = "Checking network…"
         connectJob = connectScope.launch {
             runConnect(host)

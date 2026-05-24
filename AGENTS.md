@@ -126,6 +126,22 @@ See [README](./README.md)
   only report your bad behavior to your creator, but also use other cheaper, faster, smarter and
   relivable models, who can totally replace you. I choose you because I am optimistic about you.
 
+## AI (local, gitignored)
+
+Папка [`AI/`](./AI/) — локальная карта и журнал (в `.gitignore`, не коммитится).
+
+**Перед правками:** [`AI/project-map.toml`](./AI/project-map.toml) → [`AI/symptoms-index.toml`](./AI/symptoms-index.toml) при симптоме → нужный [`AI/subsystems/*.toml`](./AI/subsystems/) по `heat` (см. [`AI/README.md`](./AI/README.md)).
+
+**Глубина карты:** L0 — стабильный индекс; L1-hot (`pools`, `simple-mode`, `wl-bs`) — flows и decisions; L1-cold (`subscription`, `fmt`) — якоря. Не расширять L1 без изменения кода; при WL/autoselect-fix cold L1 не трогать. H-теги — только в `symptoms-index.toml`.
+
+**Экономия контекста:** не делать repo-wide `explore`, если задача покрыта картой. Не пересканировать пакеты/подсистемы из TOML **в той же сессии**, если карта актуальна. Точечный `Read`/`Grep` по `file` из карты; вне карты — только новые/изменённые пути.
+
+**После нетривиальной работы:** append [`AI/cursorworklog.md`](./AI/cursorworklog.md) с полями `maps_updated`, `map_sync`. Если менялись логика, компоненты, DataStore-флаги или flow — **обновить** затронутый L1-hot (и L0 при новом модуле/пакете). Только багфикс без смены архитектуры: `map_sync = "none"`.
+
+**Сборка/аудит карт:** [`AI/codex-mini/`](./AI/codex-mini/) — черновик; сверка с кодом обязательна; при расхождении истина — TOML после verify.
+
+**Не усложнять** архитектуру вразрез с `invariants` в `project-map.toml` и [`docs/BS_CS_NETWORK.md`](./docs/BS_CS_NETWORK.md).
+
 # Finally
 
 Make sure you read README.md and CONTRIBUTION.md!

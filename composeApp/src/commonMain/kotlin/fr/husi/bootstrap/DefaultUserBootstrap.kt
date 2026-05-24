@@ -23,6 +23,9 @@ object DefaultUserBootstrap {
     private const val AUTO_UPDATE_MINUTES = 60
     private const val STANDALONE_SE_GROUP = "Quick standalone SE"
     private const val STANDALONE_SE_PROFILE = "SE relay builtin"
+    private const val LEGACY_BUILTIN_HELPERS_GROUP = "Built-in (simple mode helpers)"
+    private const val STANDALONE_SE_VLESS_URI: String =
+        "vless://2001daf3-5c56-4bef-8ea6-8dd0493c5a4c@2.27.23.73:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.deepl.com&fp=chrome&pbk=ZHEMPjSWslk6_qD2JNQzd5enUPz8nY9mYRRuM6NkZmU&sid=1a&packetEncoding=xudp#%F0%9F%87%B8%F0%9F%87%AA%20SE%20%7C%20VLESS%20%7C%20%E2%9A%A1%201362ms"
     /** Legacy Swordware.txt now serves `happ://crypt4/...` which RawUpdater does not parse. */
     private const val brokenSwordwareTxtLink =
         "https://raw.githubusercontent.com/mbelspb-gif/dddddad/refs/heads/main/Swordware.txt"
@@ -84,7 +87,14 @@ object DefaultUserBootstrap {
         if (DataStore.routeQuickProfile != RouteQuickProfile.MANUAL) {
             ProfileManager.applyRouteQuickProfile(DataStore.routeQuickProfile)
         }
-        WhitelistBuiltinBootstrap.ensureGroupAndProfiles()
+        removeLegacyBuiltinHelpersGroup()
+    }
+
+    private suspend fun removeLegacyBuiltinHelpersGroup() {
+        val groups = SagerDatabase.groupDao.allGroups().first()
+        val legacy = groups.find { it.name == LEGACY_BUILTIN_HELPERS_GROUP } ?: return
+        GroupManager.deleteGroup(legacy.id)
+        Logs.d("DefaultUserBootstrap: removed legacy builtin helpers group id=${legacy.id}")
     }
 
     private suspend fun bootstrapDefaultSubscriptions() {
@@ -152,7 +162,7 @@ object DefaultUserBootstrap {
     }
 
     private suspend fun ensureStandaloneSeVlessProfile() {
-        val bean = parseProxies(WhitelistBuiltinVlessShareLines.standaloneSeVlessUri)
+        val bean = parseProxies(STANDALONE_SE_VLESS_URI)
             .mapNotNull { it as? VLESSBean }
             .firstOrNull()
             ?: return

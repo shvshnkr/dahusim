@@ -19,7 +19,7 @@
 
 ## 2. Автоподбор серверов и перезапуск
 
-- `AutoServerSelector.prepareForConnect` отталкивается от `DataStore.simpleModeUseWhitelistBuiltinPoolOnly`: если `true`, построение пула идут по `ConnectPoolPolicy.buildWhitelist` (в первую очередь встроенные WL-профили + подписки + лимит `WL_PREPARE_CAP`), иначе — по `buildOpen` (включая `priority = handoffIds`, большой cap, больше шагов отката).
+- `AutoServerSelector.prepareForConnect` отталкивается от `DataStore.simpleModeUseWhitelistBuiltinPoolOnly`: если `true`, сначала `ConnectPoolPolicy.build` в режиме `WL_SUBSCRIPTION` (только WL-marked подписки, cap `WL_PREPARE_CAP`). При `NoProfiles` / `AllProbesDead` — разовый probe open-пула; при успехе выставляется `DataStore.simpleModeAutoselectPoolMerged`, далее `MERGED` (WL + open, cap open, fallback до 32 шагов). Иначе — `OPEN` (без WL-marked узлов).
 - При смене сети/проваленом health check `SimpleModeVpnCoordinator` вызывает `SimpleModeNetworkAdaptation.reselectForNetwork`, который:
   1. Устанавливает `DataStore.simpleModeUseWhitelistBuiltinPoolOnly = reachability.whitelistOnly`.
   2. Запускает `AutoServerSelector.prepareForConnect` с `owner = ADAPT` (есть дедуплекс, дебаунс, таймауты 30–45 с).
@@ -42,7 +42,7 @@
 - `SimpleModeConnectedMaintenance` после успешного соединения собирается обновить подписки в фоне, но:
   - Пропускает, если сейчас WL и `postConnectLatencyMs` слишком велик, либо Google/whitelistSource не подтверждены (см. `whitelistChannelConfident`).
   - Пропускает, если подключились на WL, а сейчас всё ещё WL (чтобы не перегружать заряд).
-- `ProbeScheduler` фонит TCP-пробами, но не стартует при `DataStore.serviceState.connected` и отсеивает WL-пулы, если `DataStore.activeWhitelistRestrictedNetwork == true` (отдает приоритет встроенным WL-профилям).
+- `ProbeScheduler` фонит TCP-пробами, но не стартует при `DataStore.serviceState.connected`. На WL при `simpleModeAutoselectPoolMerged` порядок probe — merged (WL + open).
 
 ## 5. Примеры сценариев
 
@@ -50,7 +50,7 @@
 
 - Детект: `googleReachable = false`, `dzenReachable || whitelistSourceReachable = true` ⇒ `NetworkReachability.whitelistOnly == true`.
 - `DataStore.simpleModeUseWhitelistBuiltinPoolOnly = true`, `activeWhitelistRestrictedNetwork = true`, `autoConnectPausedUntilGoogle = false`.
-- `AutoServerSelector` строит пул из встроенных WL-хелперов и подписок, `ConnectPoolPolicy.WL_PREPARE_CAP = 128`, ранжирует `wlNodeRank` (builtin > подписки > остальное).
+- `AutoServerSelector` строит пул из WL-подписок (`WlSubscriptionTag`); при провале — open, затем merged-сессия. `WL_PREPARE_CAP = 128`.
 - Health checks идут по `SimpleModeHealthRoute.tunnelBsProbeUrls` (`web.telegram.org`), таймауты больше, попыток до 3, `SimpleModeSessionHealth` держит `consecutiveFails` до 1.
 - `SimpleModeVpnCoordinator` в адаптации игнорирует debounce (быстрый reselect при `reachability_flip`, `network_handoff`, `session_health_exhausted`).
 - `SimpleModeConnectedMaintenance` обновляет подписки только при уверенности (низкая латентность, доступ к Google или whitelist-URL) и ставит `simpleModeLastBackgroundSubRefreshAt`.

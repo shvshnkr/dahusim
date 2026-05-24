@@ -1602,8 +1602,8 @@ fun SettingsScreen(
                     }
                     item(Key.CONNECTION_TEST_CONCURRENT, PreferenceType.TEXT_FIELD) {
                         val value by DataStore.configurationStore
-                            .intFlow(Key.CONNECTION_TEST_CONCURRENT, 5)
-                            .collectAsStateWithLifecycle(5)
+                            .intFlow(Key.CONNECTION_TEST_CONCURRENT, 20)
+                            .collectAsStateWithLifecycle(20)
                         var previewValue by remember { mutableFloatStateOf(value.toFloat()) }
                         SliderPreference(
                             value = value.toFloat(),

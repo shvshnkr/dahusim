@@ -14,7 +14,6 @@ object ProxyProbeStateStore {
 
     suspend fun persistPrepareResults(
         proxies: List<ProxyEntity>,
-        builtinProfileIds: Set<Long>,
         tcpMs: Map<Long, Int>,
         urlMs: Map<Long, Int>,
     ) {
@@ -28,7 +27,7 @@ object ProxyProbeStateStore {
             val url = urlMs[id]?.takeIf { it > 0 }
             if (tcp == null && url == null) continue
             val prev = existing[id]
-            val priority = resolveSourcePriority(proxy, builtinProfileIds)
+            val priority = resolveSourcePriority(proxy)
             updates += applyProbeResult(
                 prev = prev,
                 profileId = id,
@@ -47,7 +46,6 @@ object ProxyProbeStateStore {
 
     suspend fun persistTcpFailures(
         proxies: List<ProxyEntity>,
-        builtinProfileIds: Set<Long>,
         probedIds: Set<Long>,
     ) {
         if (!DataStore.probe2kPersistenceEnabled) return
@@ -61,7 +59,7 @@ object ProxyProbeStateStore {
                 profileId = proxy.id,
                 tcpMs = null,
                 urlMs = null,
-                sourcePriority = resolveSourcePriority(proxy, builtinProfileIds),
+                sourcePriority = resolveSourcePriority(proxy),
                 errorClass = "tcp_timeout",
                 nowMs = now,
             )
@@ -173,8 +171,7 @@ object ProxyProbeStateStore {
         DataStore.probe2kLastSelectionReason = reason
     }
 
-    private fun resolveSourcePriority(proxy: ProxyEntity, builtinProfileIds: Set<Long>): Int {
-        if (proxy.id in builtinProfileIds) return ProbeSourcePriority.BUILTIN
+    private fun resolveSourcePriority(proxy: ProxyEntity): Int {
         if (proxy.id == DataStore.selectedProxy || proxy.id == DataStore.autoSelectLastKnownGood) {
             return ProbeSourcePriority.PINNED
         }

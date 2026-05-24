@@ -37,6 +37,9 @@ docs/local/
 # Local architecture kit (not committed)
 docs/2K_*.md
 
+# Local AI maps, worklog, codex-mini drafts (not committed)
+/AI/
+
 # Vibe coding
 .claude
 .gemini

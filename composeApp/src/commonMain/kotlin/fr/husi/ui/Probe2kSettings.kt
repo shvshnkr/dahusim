@@ -70,17 +70,6 @@ internal fun LazyListScope.probe2kSettings(
             icon = { Icon(vectorResource(Res.drawable.security), null) },
         )
     }
-    item(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED, PreferenceType.SWITCH) {
-        val enabled by DataStore.configurationStore
-            .booleanFlow(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED, true)
-            .collectAsStateWithLifecycle(false)
-        SwitchPreference(
-            value = enabled,
-            onValueChange = { DataStore.probe2kBuiltinFallbackCapEnabled = it },
-            title = { Text(stringResource(Res.string.probe_2k_builtin_cap_enabled)) },
-            icon = { Icon(vectorResource(Res.drawable.security), null) },
-        )
-    }
     item(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED, PreferenceType.SWITCH) {
         val enabled by DataStore.configurationStore
             .booleanFlow(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED, true)

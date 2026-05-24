@@ -11,9 +11,9 @@ class ConnectPoolPolicyTest {
     @Test
     fun wlStratifiedCapIncludesEachSubscriptionGroup() {
         val groups = listOf(
-            group(1L, "Sub A"),
-            group(2L, "Sub B"),
-            group(3L, "Sub C"),
+            group(1L, "White lists A", sourceId = "white-lattice"),
+            group(2L, "White lists B", sourceId = "wlrus-blackl"),
+            group(3L, "White lists C", sourceId = "black-vless-rus-mobile"),
         )
         val proxies = buildList {
             for (g in 1L..3L) {
@@ -22,14 +22,11 @@ class ConnectPoolPolicyTest {
                 }
             }
         }
-        val builtin = listOf(proxy(9L, 99L, 1L))
         val result = ConnectPoolPolicy.build(
-            allProxies = proxies + builtin,
+            mode = ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION,
+            allProxies = proxies,
             groups = groups,
-            builtinProxies = builtin,
-            builtinIds = setOf(9L),
             handoffIds = emptySet(),
-            whitelistBuiltinOnly = true,
             probeStates = emptyMap(),
         )
         assertTrue(result.orderedProxies.size <= ConnectPoolPolicy.WL_PREPARE_CAP)
@@ -46,12 +43,10 @@ class ConnectPoolPolicyTest {
         val wlProxy = proxy(1L, 10L, 1L)
         val openProxy = proxy(2L, 11L, 1L)
         val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.OPEN,
             allProxies = listOf(wlProxy, openProxy),
             groups = listOf(wlGroup, normalGroup),
-            builtinProxies = emptyList(),
-            builtinIds = emptySet(),
             handoffIds = emptySet(),
-            whitelistBuiltinOnly = false,
             probeStates = emptyMap(),
         )
         assertEquals(1, result.orderedProxies.size)
@@ -60,8 +55,26 @@ class ConnectPoolPolicyTest {
     }
 
     @Test
+    fun mergedPoolIncludesWlAndOpen() {
+        val wlGroup = group(10L, "White lists VPN", sourceId = "white-lattice")
+        val normalGroup = group(11L, "Foreign pool")
+        val wlProxy = proxy(1L, 10L, 1L)
+        val openProxy = proxy(2L, 11L, 1L)
+        val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.MERGED,
+            allProxies = listOf(wlProxy, openProxy),
+            groups = listOf(wlGroup, normalGroup),
+            handoffIds = emptySet(),
+            probeStates = emptyMap(),
+        )
+        assertEquals(2, result.orderedProxies.size)
+        assertTrue(result.orderedProxies.any { it.id == 1L })
+        assertTrue(result.orderedProxies.any { it.id == 2L })
+    }
+
+    @Test
     fun urlHintedRisesBeforeStratifiedTailOnWl() {
-        val groups = listOf(group(1L, "Other"))
+        val groups = listOf(group(1L, "White lists", sourceId = "white-lattice"))
         val pool = listOf(
             proxy(1L, 1L, 1L),
             proxy(2L, 1L, 2L),
@@ -70,12 +83,10 @@ class ConnectPoolPolicyTest {
         )
         val states = mapOf(3L to ProxyProbeState(profileId = 3L, lastUrlMs = 200))
         val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION,
             allProxies = pool,
             groups = groups,
-            builtinProxies = emptyList(),
-            builtinIds = emptySet(),
             handoffIds = setOf(1L),
-            whitelistBuiltinOnly = true,
             probeStates = states,
         )
         val ids = result.orderedProxies.map { it.id }

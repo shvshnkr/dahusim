@@ -34,12 +34,17 @@ object DataStore {
     var serviceState = ServiceState.Idle
 
     /**
-     * When true, the next [AutoServerSelector.prepareForConnect] prioritizes built-in whitelist
-     * helpers and subscription nodes marked «White lists» (simple mode, whitelist-only network).
-     * Cleared when read.
+     * When true, the next [AutoServerSelector.prepareForConnect] uses the WL subscription pool
+     * ([WlSubscriptionTag]) on a whitelist-only network. Cleared when read.
      */
     @Volatile
     var simpleModeUseWhitelistBuiltinPoolOnly: Boolean = false
+
+    /**
+     * After WL subscription pool fails once, autoselect uses merged WL + open pools for this session.
+     */
+    @Volatile
+    var simpleModeAutoselectPoolMerged: Boolean = false
 
     /**
      * Live network is whitelist-restricted (Google/Cloudflare dead, dzen/whitelist lists OK).
@@ -244,7 +249,7 @@ object DataStore {
     var appendHttpProxy by configurationStore.boolean(Key.APPEND_HTTP_PROXY)
     var httpProxyBypass by configurationStore.string(Key.HTTP_PROXY_BYPASS) { DEFAULT_HTTP_BYPASS }
     var connectionTestURL by configurationStore.string(Key.CONNECTION_TEST_URL) { CONNECTION_TEST_URL }
-    var connectionTestConcurrent by configurationStore.int(Key.CONNECTION_TEST_CONCURRENT) { 5 }
+    var connectionTestConcurrent by configurationStore.int(Key.CONNECTION_TEST_CONCURRENT) { 20 }
     var connectionTestTimeout by configurationStore.int(Key.CONNECTION_TEST_TIMEOUT) { 3000 }
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
     var blurredAddress by configurationStore.boolean(Key.BLURRED_ADDRESS)
@@ -295,7 +300,6 @@ object DataStore {
     var autoSelectLastKnownGoodUrlProfileId by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_PROFILE_ID) { 0L }
     var probe2kPersistenceEnabled by configurationStore.boolean(Key.PROBE_2K_PERSISTENCE_ENABLED) { true }
     var probe2kWarmRankingEnabled by configurationStore.boolean(Key.PROBE_2K_WARM_RANKING_ENABLED) { true }
-    var probe2kBuiltinFallbackCapEnabled by configurationStore.boolean(Key.PROBE_2K_BUILTIN_FALLBACK_CAP_ENABLED) { true }
     var probe2kBackgroundSchedulerEnabled by configurationStore.boolean(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED) { true }
     var probe2kLastBackgroundRunAt by configurationStore.long(Key.PROBE_2K_LAST_BACKGROUND_RUN_AT) { 0L }
     var probe2kPowerPreset by configurationStore.string(Key.PROBE_2K_POWER_PRESET) { Probe2kDefaults.POWER_NORMAL }
