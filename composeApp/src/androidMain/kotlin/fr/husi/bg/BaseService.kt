@@ -574,6 +574,7 @@ class BaseService {
 
                     startProcesses()
                     data.changeState(ServiceState.Connected)
+                    VpnTunnelHandoffSuppress.markVpnSessionAnchor()
                     simpleModeLog("SimpleMode", "H9 connected_profile id=${profile.id}")
                     DataStore.simpleModeActivity = "Verifying internet access..."
                     var postConnectHealthy = true
@@ -744,6 +745,7 @@ class BaseService {
                     }
                     AutoServerSelector.markConnected(profile.id)
                     simpleModeLog("SimpleMode", "H10 post_connect_healthy_mark_connected profileId=${profile.id}")
+                    WhitelistNetworkRoutingState.markPostConnectHealthy()
                     if (DataStore.simpleMode && outboundTag.isNotBlank()) {
                         SimpleModeSessionHealth.schedule(profile.id, outboundTag)
                     }

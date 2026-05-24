@@ -24,12 +24,13 @@ internal object DirectProfileUrlProbe {
 
     suspend fun urlTestDelay(profile: ProxyEntity, whitelistOnly: Boolean = false): Int? = coroutineScope {
         for (url in SimpleModeHealthRoute.prepareProbeUrls(whitelistOnly = whitelistOnly)) {
-            urlTestDelay(profile, url)?.let { return@coroutineScope it }
+            urlTestDelay(profile, url, whitelistOnly)?.let { return@coroutineScope it }
         }
         null
     }
 
-    suspend fun urlTestDelay(profile: ProxyEntity, testUrl: String): Int? = coroutineScope {
+    suspend fun urlTestDelay(profile: ProxyEntity, testUrl: String, whitelistOnly: Boolean = false): Int? =
+        coroutineScope {
         var client: Client? = null
         var processes: GuardedProcessPool? = null
         val cacheFiles = ArrayList<File>()
@@ -43,11 +44,16 @@ internal object DirectProfileUrlProbe {
                 launchPlugins(config, pluginConfigs, processes, cacheFiles)
                 delay(500L)
             }
+            val timeoutMs = if (whitelistOnly) {
+                (DataStore.connectionTestTimeout * 2).coerceIn(5_000, 8_000)
+            } else {
+                DataStore.connectionTestTimeout
+            }
             val ms = client.newInstanceURLTest(
                 config.config,
                 "",
                 testUrl,
-                DataStore.connectionTestTimeout,
+                timeoutMs,
             )
             if (ms > 0) {
                 out = ms

@@ -108,9 +108,20 @@ internal object SimpleModeHealthRoute {
                 phase.isBlank()
         }
         if (isLikelyUnderlyingProxyDialFailure(error)) return true
+        if (isWlHttpProbeInconclusive(error)) {
+            return phase == "post_connect" || phase == "session_periodic" || phase.isBlank()
+        }
         if (phase != "session_periodic" && phase.isNotBlank()) return false
         val e = error.lowercase()
         return e.contains("no recent network activity")
+    }
+
+    private fun isWlHttpProbeInconclusive(error: String?): Boolean {
+        if (error.isNullOrBlank()) return false
+        val e = error.lowercase()
+        return e.contains("method not allowed") ||
+            e.contains("405") ||
+            e.contains("operation not permitted")
     }
 
     fun logInconclusivePass(phase: String, whitelistOnly: Boolean, reason: String) {

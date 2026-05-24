@@ -13,9 +13,17 @@ import fr.husi.utils.simpleModeLog
 internal object WhitelistNetworkRoutingState {
 
     private const val RELOAD_DEBOUNCE_MS = 3_000L
+    private const val EXIT_RU_RELOAD_SUPPRESS_MS = 30_000L
 
     @Volatile
     private var lastReloadRequestAt = 0L
+
+    @Volatile
+    private var suppressExitRuRoutingReloadUntil = 0L
+
+    fun markPostConnectHealthy() {
+        suppressExitRuRoutingReloadUntil = System.currentTimeMillis() + EXIT_RU_RELOAD_SUPPRESS_MS
+    }
 
     fun applyReachability(reachability: NetworkReachability, requestReloadOnChange: Boolean) {
         val nowWl = reachability.whitelistOnly
@@ -44,6 +52,8 @@ internal object WhitelistNetworkRoutingState {
     fun reset() {
         DataStore.activeWhitelistRestrictedNetwork = false
         DataStore.simpleModeAutoselectPoolMerged = false
+        suppressExitRuRoutingReloadUntil = 0L
+        VpnTunnelHandoffSuppress.clear()
         fr.husi.routing.VpnExitProbe.clearCache()
     }
 
@@ -71,6 +81,13 @@ internal object WhitelistNetworkRoutingState {
     fun requestReloadIfConnected(reason: String) {
         if (!DataStore.serviceState.connected) return
         val now = System.currentTimeMillis()
+        if (reason == "exit_country_ru_routing" && now < suppressExitRuRoutingReloadUntil) {
+            simpleModeLog(
+                "SimpleMode",
+                "H26 wl_network_reload_skipped reason=$reason healthySuppressMs=${suppressExitRuRoutingReloadUntil - now}",
+            )
+            return
+        }
         if (now - lastReloadRequestAt < RELOAD_DEBOUNCE_MS) return
         lastReloadRequestAt = now
         runOnDefaultDispatcher {

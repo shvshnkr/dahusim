@@ -884,6 +884,7 @@ object AutoServerSelector {
         sessionFallbackSteps.incrementAndGet()
         DataStore.autoSelectFallbackIndex = walk.nextIndex
         DataStore.selectedProxy = walk.nextId
+        AutoServerSelectorSessionFallback.syncIndexForConnected(walk.nextId)
         setSimpleModeActivity("Trying next server ${walk.nextIndex + 1}/${queue.size}")
         Logs.w("AutoSelect fallback: move to profile ${walk.nextId}")
         // #region agent log
@@ -911,6 +912,10 @@ object AutoServerSelector {
 
     fun recordHealthProbeFailure(profileId: Long, error: String?) {
         recordProbeFailure(profileId, SimpleModeHealthRoute.probeFailureSkipReason(error))
+    }
+
+    fun syncFallbackIndexForConnected(profileId: Long) {
+        AutoServerSelectorSessionFallback.syncIndexForConnected(profileId)
     }
 
     fun markConnected(profileId: Long) {
@@ -1211,6 +1216,9 @@ object AutoServerSelector {
         }
         if (wlUrlProbes && urlTestDelays.isEmpty() && quickProbePings.isNotEmpty()) {
             viable.firstOrNull { (probeStates[it]?.lastUrlMs ?: 0) > 0 }?.let { return it }
+            if (quickProbePings.size <= 2) {
+                return viable.firstOrNull() ?: rankedFinal.first()
+            }
             viable.firstOrNull { quickProbePings.containsKey(it) }?.let { return it }
         }
         return viable.firstOrNull() ?: rankedFinal.first()
@@ -1244,7 +1252,14 @@ object AutoServerSelector {
                     if (!isPrepareCurrent(session) || !currentCoroutineContext().isActive) {
                         return@withPermit
                     }
-                    if (whitelistBuiltinOnly && synchronized(result) { result.size >= earlyExitTarget }) {
+                    if (whitelistBuiltinOnly) {
+                        synchronized(result) {
+                            if (result.isNotEmpty() && result.size >= earlyExitTarget) {
+                                reportProgress()
+                                return@withPermit
+                            }
+                        }
+                    } else if (synchronized(result) { result.size >= earlyExitTarget }) {
                         reportProgress()
                         return@withPermit
                     }

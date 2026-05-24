@@ -58,6 +58,17 @@ class SimpleModeHealthRouteTest {
     }
 
     @Test
+    fun methodNotAllowedInconclusiveOnWlPostConnect() {
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "method not allowed",
+                whitelistOnly = true,
+                phase = "post_connect",
+            ),
+        )
+    }
+
+    @Test
     fun openNetDoesNotTreatTimeoutAsInconclusive() {
         assertFalse(
             SimpleModeHealthRoute.isProbeFailureInconclusive(

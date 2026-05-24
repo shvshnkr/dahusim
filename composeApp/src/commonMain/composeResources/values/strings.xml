@@ -925,6 +925,9 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_switch">Switch to simple mode</string>
     <string name="simple_mode_no_profile">No available profile yet. Wait for subscription refresh.</string>
     <string name="simple_mode_permission_pending">Waiting for Android VPN permission...</string>
+    <string name="simple_mode_permission_unlock">Unlock the screen to allow VPN.</string>
+    <string name="simple_mode_wl_banner_title">Whitelist network mode.</string>
+    <string name="simple_mode_wl_banner_subtitle">Free servers may be unavailable.</string>
     <string name="simple_mode_whitelist_warning">This network appears to use a whitelist mode (Google is unreachable while Dzen or known list URLs respond). In simple mode, server selection prefers whitelist-oriented subscriptions; if those fail, open subscriptions are tried. Stability is not guaranteed. Husi will still try to connect.</string>
     <string name="simple_mode_wait_for_google">Auto-connect checks are paused to save battery. They will resume once you have normal internet outside whitelist-only networks.</string>
     <string name="simple_mode_no_internet_pause">No internet access detected. Auto-connect checks are paused until connectivity returns.</string>

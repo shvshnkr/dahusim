@@ -1,5 +1,6 @@
 package fr.husi.ui.simple
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,7 +47,10 @@ import fr.husi.resources.simple_mode_logs
 import fr.husi.resources.simple_mode_no_internet_pause
 import fr.husi.resources.simple_mode_no_profile
 import fr.husi.resources.simple_mode_permission_pending
+import fr.husi.resources.simple_mode_permission_unlock
 import fr.husi.resources.simple_mode_status
+import fr.husi.resources.simple_mode_wl_banner_subtitle
+import fr.husi.resources.simple_mode_wl_banner_title
 import fr.husi.resources.simple_mode_stopped
 import fr.husi.resources.probe_2k_activity_scan
 import fr.husi.resources.probe_2k_pool_line
@@ -84,6 +89,10 @@ fun SimpleHomeScreen(
     val scanChecked by DataStore.configurationStore
         .intFlow(Key.PROBE_2K_SCAN_CHECKED, 0)
         .collectAsStateWithLifecycle(0)
+    var whitelistOnly by remember { mutableStateOf(DataStore.activeWhitelistRestrictedNetwork) }
+    LaunchedEffect(activityText, status.state) {
+        whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
+    }
     val connector = rememberVpnServiceLauncher {
         permissionPending = false
         simpleModeLog("SimpleMode", "permission_denied")
@@ -109,6 +118,10 @@ fun SimpleHomeScreen(
 
             override fun onNeedForegroundForPermission() {
                 mainViewModel.showSnackbar(StringOrRes.Res(Res.string.simple_mode_permission_pending))
+            }
+
+            override fun onNeedUnlockForPermission() {
+                mainViewModel.showSnackbar(StringOrRes.Res(Res.string.simple_mode_permission_unlock))
             }
 
             override suspend fun promptAllServersDead(): SimpleModeAllServersDeadChoice =
@@ -160,6 +173,35 @@ fun SimpleHomeScreen(
                 Text(
                     text = stringResource(Res.string.simple_mode_description),
                     style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
+
+        if (whitelistOnly) {
+            val wlShape = RoundedCornerShape(8.dp)
+            val wlBorder = MaterialTheme.colorScheme.error
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .border(1.dp, wlBorder, wlShape)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(Res.string.simple_mode_wl_banner_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = wlBorder,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(Res.string.simple_mode_wl_banner_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = wlBorder,
+                    textAlign = TextAlign.Center,
                 )
             }
         }

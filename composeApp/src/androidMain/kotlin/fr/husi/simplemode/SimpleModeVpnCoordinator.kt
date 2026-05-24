@@ -281,6 +281,7 @@ internal object SimpleModeVpnCoordinator {
                     return true
                 }
                 DataStore.selectedProxy = newId
+                AutoServerSelector.syncFallbackIndexForConnected(newId)
                 simpleModeLog(
                     "SimpleMode",
                     if (sameProfile) {

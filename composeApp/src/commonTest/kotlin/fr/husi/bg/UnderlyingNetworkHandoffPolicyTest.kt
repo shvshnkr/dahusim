@@ -18,6 +18,22 @@ class UnderlyingNetworkHandoffPolicyTest {
     }
 
     @Test
+    fun suppressHandoffToVpnTunnelDuringGrace() {
+        VpnTunnelHandoffSuppress.markVpnSessionAnchor()
+        try {
+            val reason = UnderlyingNetworkHandoffPolicy.evaluate(
+                snapshot(
+                    previousInterfaceForHandoff = "rmnet_data2",
+                    interfaceName = "tun0",
+                ),
+            )
+            assertNull(reason)
+        } finally {
+            VpnTunnelHandoffSuppress.clear()
+        }
+    }
+
+    @Test
     fun crossInterfaceHandoffWhileVpnConnecting() {
         val reason = UnderlyingNetworkHandoffPolicy.evaluate(
             snapshot(

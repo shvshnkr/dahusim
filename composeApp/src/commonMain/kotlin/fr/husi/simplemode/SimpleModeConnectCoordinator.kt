@@ -8,6 +8,7 @@ import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
 import fr.husi.database.PrepareForConnectResult
 import fr.husi.database.PrepareOwner
+import fr.husi.database.SagerDatabase
 import fr.husi.ktx.exitApplication
 import fr.husi.ktx.onDefaultDispatcher
 import fr.husi.repository.resolveRepository
@@ -86,7 +87,10 @@ object SimpleModeConnectCoordinator {
             if (!net.hasAnyInternet) {
                 DataStore.simpleModeActivity = ""
                 simpleModeLog("SimpleMode", "connect_blocked_no_internet_probe")
-                withContext(Dispatchers.Main) { host.onNoInternet() }
+                withContext(Dispatchers.Main) {
+                    host.setPermissionPending(false)
+                    host.onNoInternet()
+                }
                 return
             }
             DataStore.simpleModeUseWhitelistBuiltinPoolOnly = net.whitelistOnly
@@ -159,11 +163,15 @@ object SimpleModeConnectCoordinator {
             when (prep) {
                 PrepareForConnectResult.NoProfiles -> {
                     simpleModeLog("SimpleMode", "connect_blocked_no_profile")
-                    withContext(Dispatchers.Main) { host.onNoProfile() }
+                    withContext(Dispatchers.Main) {
+                        host.setPermissionPending(false)
+                        host.onNoProfile()
+                    }
                 }
                 PrepareForConnectResult.AllProbesDead -> {
                     DataStore.simpleModeActivity = ""
                     simpleModeLog("SimpleMode", "connect_blocked_all_probes_dead")
+                    withContext(Dispatchers.Main) { host.setPermissionPending(false) }
                     val choice = withContext(Dispatchers.Main) { host.promptAllServersDead() }
                     when (choice) {
                         SimpleModeAllServersDeadChoice.WaitForGoogle -> {
@@ -177,10 +185,22 @@ object SimpleModeConnectCoordinator {
                     val selected = prep.profileId
                     if (selected <= 0L && DataStore.selectedProxy <= 0L) {
                         simpleModeLog("SimpleMode", "connect_blocked_no_profile")
-                        withContext(Dispatchers.Main) { host.onNoProfile() }
+                        withContext(Dispatchers.Main) {
+                            host.setPermissionPending(false)
+                            host.onNoProfile()
+                        }
                         return
                     }
                     preconnectStage = "permission_request"
+                    if (isKeyguardBlockingVpnDialog()) {
+                        DataStore.simpleModeActivity = "Unlock screen to allow VPN…"
+                        simpleModeLog("SimpleMode", "H21 permission_aborted reason=keyguard")
+                        withContext(Dispatchers.Main) {
+                            host.setPermissionPending(false)
+                            host.onNeedUnlockForPermission()
+                        }
+                        return
+                    }
                     DataStore.simpleModeActivity = "Allow VPN when prompted…"
                     simpleModeLog("SimpleMode", "connect_start_selected=$selected")
                     withContext(Dispatchers.Main) { host.setPermissionPending(true) }
@@ -191,8 +211,27 @@ object SimpleModeConnectCoordinator {
                     if (!awaitSimpleModeVpnPermissionUi()) {
                         DataStore.simpleModeActivity = "Return to app to allow VPN…"
                         simpleModeLog("SimpleMode", "H21 permission_wait_foreground timeout")
-                        withContext(Dispatchers.Main) { host.onNeedForegroundForPermission() }
+                        withContext(Dispatchers.Main) {
+                            host.setPermissionPending(false)
+                            host.onNeedForegroundForPermission()
+                        }
                         return
+                    }
+                    val vpnProfileId = resolveVpnProfileId(selected)
+                    if (vpnProfileId == null) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H21 permission_aborted reason=profile_missing selected=$selected stored=${DataStore.selectedProxy}",
+                        )
+                        DataStore.simpleModeActivity = ""
+                        withContext(Dispatchers.Main) {
+                            host.setPermissionPending(false)
+                            host.onNoProfile()
+                        }
+                        return
+                    }
+                    if (vpnProfileId != DataStore.selectedProxy) {
+                        DataStore.selectedProxy = vpnProfileId
                     }
                     DataStore.simpleModeActivity = "Starting VPN…"
                     withContext(Dispatchers.Main) { host.requestVpnConnect() }
@@ -212,6 +251,7 @@ object SimpleModeConnectCoordinator {
             throw t
         } finally {
             watchdog.cancel()
+            withContext(Dispatchers.Main) { host.setPermissionPending(false) }
             if (connectJob === currentCoroutineContext()[Job]) {
                 connectJob = null
                 if (!BackendState.status.value.state.canStop &&
@@ -223,12 +263,19 @@ object SimpleModeConnectCoordinator {
         }
     }
 
+    private suspend fun resolveVpnProfileId(preferred: Long): Long? = onDefaultDispatcher {
+        val id = preferred.takeIf { it > 0L } ?: DataStore.selectedProxy
+        if (id <= 0L) return@onDefaultDispatcher null
+        if (SagerDatabase.proxyDao.getById(id) != null) id else null
+    }
+
     interface ConnectHost {
         fun setPermissionPending(pending: Boolean)
         fun requestVpnConnect()
         fun onNoInternet()
         fun onNoProfile()
         fun onNeedForegroundForPermission()
+        fun onNeedUnlockForPermission()
         suspend fun promptAllServersDead(): SimpleModeAllServersDeadChoice
     }
 }

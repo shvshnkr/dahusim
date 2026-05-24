@@ -22,6 +22,7 @@ import fr.husi.repository.resolveRepository
 import fr.husi.resources.Res
 import fr.husi.resources.force_resolve_error
 import fr.husi.resources.update_subscription_warning
+import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
@@ -266,7 +267,23 @@ abstract class GroupUpdater {
             userOrder++
         }
 
-        val toDelete = existingByName.values.toList()
+        val toDeleteAll = existingByName.values.toList()
+        val protectId = if (SimpleModeConnectCoordinator.isInFlight()) {
+            DataStore.selectedProxy.takeIf { it > 0L }
+        } else {
+            null
+        }
+        val (toDelete, deferred) = if (protectId != null) {
+            toDeleteAll.partition { it.id != protectId }
+        } else {
+            toDeleteAll to emptyList()
+        }
+        if (deferred.isNotEmpty()) {
+            simpleModeLog(
+                "SimpleMode",
+                "H16 group_update_defer_delete count=${deferred.size} profileId=$protectId connectInFlight=true",
+            )
+        }
         changed += toDelete.size
         val deleted = toDelete.map { it.displayName() }
         val added = toInsert.map { it.displayName() }
