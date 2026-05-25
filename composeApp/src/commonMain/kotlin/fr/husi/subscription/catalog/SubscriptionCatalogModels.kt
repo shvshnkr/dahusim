@@ -15,6 +15,7 @@ sealed interface SubscriptionCatalogEntry {
         val link: String,
         val subscriptionType: Int,
         val fetchProfile: Int,
+        val poolRole: Int,
         val customUserAgent: String,
     ) : SubscriptionCatalogEntry
 
@@ -30,6 +31,7 @@ sealed interface SubscriptionCatalogSyncResult {
         val updated: Int,
         val removed: Int,
         val stagedRemoval: Int,
+        val affectedGroupIds: List<Long> = emptyList(),
     ) : SubscriptionCatalogSyncResult
     data class Blocked(
         val reason: String,

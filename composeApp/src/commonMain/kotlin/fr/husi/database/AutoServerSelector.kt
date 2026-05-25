@@ -614,6 +614,7 @@ object AutoServerSelector {
                         }
                         .thenBy { if (it.id in quickProbePings) 0 else 1 }
                         .thenBy { warmProbeStateRank(probeStates, it.id) }
+                        .thenBy { statusRank(it.status) }
                         .thenBy {
                             compositeSelectionScore(
                                 it,
@@ -623,7 +624,6 @@ object AutoServerSelector {
                                 wlUrlProbes,
                             )
                         }
-                        .thenBy { statusRank(it.status) }
                         .thenBy { pingRank(it.ping) }
                         .thenByDescending { throughputRank(it) }
                         .thenBy { urlTestDelays[it.id] ?: Int.MAX_VALUE }
@@ -724,6 +724,7 @@ object AutoServerSelector {
         sessionFallbackSteps.set(0)
         val best = selectBestProfile(
             rankedFinal = rankedFinal,
+            profilesById = connectPool.associateBy { it.id },
             probeStates = probeStates,
             wlUrlProbes = wlUrlProbes,
             urlTestDelays = urlTestDelays,
@@ -1212,6 +1213,7 @@ object AutoServerSelector {
 
     private fun selectBestProfile(
         rankedFinal: List<Long>,
+        profilesById: Map<Long, ProxyEntity>,
         probeStates: Map<Long, ProxyProbeState>,
         wlUrlProbes: Boolean,
         urlTestDelays: Map<Long, Int>,
@@ -1223,14 +1225,24 @@ object AutoServerSelector {
                 isInFailureCooldown(it),
             )
         }
+        fun preferHealthy(ids: List<Long>): Long? = ids.firstOrNull { id ->
+            val status = profilesById[id]?.status ?: ProxyEntity.STATUS_INITIAL
+            status != ProxyEntity.STATUS_UNAVAILABLE &&
+                status != ProxyEntity.STATUS_INVALID &&
+                status != ProxyEntity.STATUS_UNREACHABLE
+        } ?: ids.firstOrNull()
         if (wlUrlProbes) {
-            urlTestDelays.keys.firstOrNull { it in viable }?.let { return it }
+            val urlVerified = viable.filter { it in urlTestDelays }
+            preferHealthy(urlVerified)?.let { return it }
             viable.firstOrNull {
                 AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(it, urlTestDelays, probeStates)
             }?.let { return it }
             return rankedFinal.first()
         }
-        return viable.firstOrNull() ?: rankedFinal.first()
+        val urlVerified = viable.filter { it in urlTestDelays }
+        return preferHealthy(urlVerified)
+            ?: preferHealthy(viable)
+            ?: rankedFinal.first()
     }
 
     private suspend fun urlTestTopCandidates(

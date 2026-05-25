@@ -20,6 +20,7 @@
 ## 2. Автоподбор серверов и перезапуск
 
 - `AutoServerSelector.prepareForConnect` отталкивается от `DataStore.simpleModeUseWhitelistBuiltinPoolOnly`: если `true`, сначала `ConnectPoolPolicy.build` в режиме `WL_SUBSCRIPTION` (только WL-marked подписки, cap `WL_PREPARE_CAP`). При `NoProfiles` / `AllProbesDead` — разовый probe open-пула; при успехе выставляется `DataStore.simpleModeAutoselectPoolMerged`, далее `MERGED` (WL + open, cap open, fallback до 32 шагов). Иначе — `OPEN` (без WL-marked узлов).
+- Состав WL-пула задаётся каталогом: `pool_role=wl` на `gh.*` подписках → `SubscriptionBean.connectPoolRole` → `WlSubscriptionTag` (USER-подписки и имя группы не участвуют). См. [SUBSCRIPTION_CATALOG.md](./SUBSCRIPTION_CATALOG.md).
 - При смене сети/проваленом health check `SimpleModeVpnCoordinator` вызывает `SimpleModeNetworkAdaptation.reselectForNetwork`, который:
   1. Устанавливает `DataStore.simpleModeUseWhitelistBuiltinPoolOnly = reachability.whitelistOnly`.
   2. Запускает `AutoServerSelector.prepareForConnect` с `owner = ADAPT` (есть дедуплекс, дебаунс, таймауты 30–45 с).

@@ -1,6 +1,7 @@
 package fr.husi.subscription.catalog
 
 import fr.husi.SubscriptionType
+import fr.husi.database.ConnectPoolRole
 import fr.husi.group.SubscriptionFetchProfile
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,6 +29,46 @@ class SubscriptionCatalogParserTest {
         assertEquals("mifa-main", first.sourceId)
         assertEquals(SubscriptionType.RAW, first.subscriptionType)
         assertEquals(SubscriptionFetchProfile.DEFAULT, first.fetchProfile)
+        assertEquals(ConnectPoolRole.ANY, first.poolRole)
+    }
+
+    @Test
+    fun `parse upsert with pool role wl and open`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=2
+            UPSERT|wl-feed|WL feed|https://example.com/wl.txt|RAW|default|wl
+            UPSERT|open-feed|Open feed|https://example.com/open.txt|RAW|default|open
+        """.trimIndent()
+        val document = SubscriptionCatalogParser.parse(raw)
+        val wl = document.entries[0] as SubscriptionCatalogEntry.Upsert
+        val open = document.entries[1] as SubscriptionCatalogEntry.Upsert
+        assertEquals(ConnectPoolRole.WL, wl.poolRole)
+        assertEquals(ConnectPoolRole.OPEN, open.poolRole)
+    }
+
+    @Test
+    fun `parse custom fetch profile with pool and user agent`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=3
+            UPSERT|corp-panel|Corp panel|https://vpn.corp.example/sub|RAW|custom|wl|MyCorpVPN/1.0
+        """.trimIndent()
+        val upsert = SubscriptionCatalogParser.parse(raw).entries.single() as SubscriptionCatalogEntry.Upsert
+        assertEquals(SubscriptionFetchProfile.CUSTOM, upsert.fetchProfile)
+        assertEquals(ConnectPoolRole.WL, upsert.poolRole)
+        assertEquals("MyCorpVPN/1.0", upsert.customUserAgent)
+    }
+
+    @Test
+    fun `starter catalog lines match defaults helper`() {
+        val fromDefaults = SubscriptionCatalogParser.parse(SubscriptionCatalogDefaults.joinToCatalogLines(99L))
+        assertEquals(99L, fromDefaults.generation)
+        assertEquals(SubscriptionCatalogDefaults.STARTER_SEEDS.size, fromDefaults.entries.size)
+        val wlFeed = fromDefaults.entries
+            .filterIsInstance<SubscriptionCatalogEntry.Upsert>()
+            .single { it.sourceId == "white-lattice" }
+        assertEquals(ConnectPoolRole.WL, wlFeed.poolRole)
     }
 
     @Test

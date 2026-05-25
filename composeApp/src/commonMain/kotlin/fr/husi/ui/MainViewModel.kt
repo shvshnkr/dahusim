@@ -283,22 +283,48 @@ class MainViewModel(
             return@launch
         }
         when (text.substringBefore("://", "").lowercase()) {
-            "http", "https" -> _uiEvent.emit(
+            "http", "https" -> resolveHttpImport(text)
+            else -> parseSubscription(text)
+        }
+    }
+
+    private fun resolveHttpImport(url: String) = viewModelScope.launch(Dispatchers.Default) {
+        val resolution = try {
+            onIoDispatcher { ImportLinkClassifier.resolveHttpImport(url) }
+        } catch (e: Exception) {
+            _uiEvent.emit(MainViewModelUiEvent.Snackbar(StringOrRes.Direct(e.readableMessage)))
+            return@launch
+        }
+        when (resolution) {
+            is ImportLinkClassifier.HttpImportResolution.Subscription -> importSubscription(resolution.url)
+            is ImportLinkClassifier.HttpImportResolution.Standalone -> {
+                val count = onIoDispatcher {
+                    importLinkInteractor.importStandaloneProfiles(
+                        resolution.proxies,
+                        sourceUrl = url,
+                        suggestedGroupName = resolution.suggestedGroupName,
+                    )
+                }
+                _uiEvent.emit(
+                    MainViewModelUiEvent.Snackbar(
+                        StringOrRes.PluralsRes(Res.plurals.added, count, count),
+                    ),
+                )
+            }
+            ImportLinkClassifier.HttpImportResolution.Ambiguous -> _uiEvent.emit(
                 MainViewModelUiEvent.AlertDialog(
                     title = StringOrRes.Res(Res.string.import_url),
                     message = StringOrRes.Res(Res.string.import_http_url),
                     confirmButton = AlertButton(StringOrRes.Res(Res.string.subscription_import)) {
-                        importSubscription(text)
+                        importSubscription(url)
                     },
                     dismissButton = AlertButton(StringOrRes.Res(Res.string.profile_import)) {
                         viewModelScope.launch {
-                            parseSubscription(text)
+                            parseSubscription(url)
                         }
                     },
                 ),
             )
-
-            else -> parseSubscription(text)
         }
     }
 

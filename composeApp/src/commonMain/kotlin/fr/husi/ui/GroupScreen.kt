@@ -72,6 +72,7 @@ import fr.husi.compose.rememberScrollHideState
 import fr.husi.compose.setPlainText
 import fr.husi.compose.withNavigation
 import fr.husi.database.SagerDatabase
+import fr.husi.database.isCatalogDeletable
 import fr.husi.fmt.toUniversalLink
 import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionSourceKind
@@ -316,8 +317,12 @@ fun GroupScreen(
                 ) {
                     SwipeToDismissBox(
                         state = swipeState,
-                        enableDismissFromStartToEnd = !groupState.group.ungrouped && !groupState.isUpdating,
-                        enableDismissFromEndToStart = !groupState.group.ungrouped && !groupState.isUpdating,
+                        enableDismissFromStartToEnd = !groupState.group.ungrouped &&
+                            !groupState.isUpdating &&
+                            groupState.group.isCatalogDeletable(),
+                        enableDismissFromEndToStart = !groupState.group.ungrouped &&
+                            !groupState.isUpdating &&
+                            groupState.group.isCatalogDeletable(),
                         backgroundContent = {
                             Box(
                                 modifier = Modifier

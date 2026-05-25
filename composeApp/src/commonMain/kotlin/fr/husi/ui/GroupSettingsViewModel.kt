@@ -7,10 +7,12 @@ import androidx.lifecycle.viewModelScope
 import fr.husi.GroupOrder
 import fr.husi.GroupType
 import fr.husi.SubscriptionType
+import fr.husi.database.CatalogOwnership
 import fr.husi.database.GroupManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
+import fr.husi.database.isCatalogDeletable
 import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionSourceKind
 import fr.husi.group.SubscriptionUserAgentPresets
@@ -119,6 +121,8 @@ internal class GroupSettingsViewModel(
     }
 
     fun delete() = runOnIoDispatcher {
+        val entity = SagerDatabase.groupDao.getById(editingID).firstOrNull() ?: return@runOnIoDispatcher
+        if (!entity.isCatalogDeletable()) return@runOnIoDispatcher
         GroupManager.deleteGroup(editingID)
     }
 
@@ -152,6 +156,11 @@ internal class GroupSettingsViewModel(
 
         if (type == GroupType.SUBSCRIPTION) {
             subscription = (subscription ?: SubscriptionBean().applyDefaultValues()).apply {
+                if (isNew) {
+                    managedByRemote = false
+                    sourceId = ""
+                    catalogOwnership = CatalogOwnership.USER
+                }
                 type = state.subscriptionType
                 token = state.subscriptionToken
                 link = state.subscriptionLink

@@ -1,8 +1,12 @@
 package fr.husi.subscription.catalog
 
 import fr.husi.database.DataStore
+import fr.husi.database.SagerDatabase
+import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
 import fr.husi.ktx.readableMessage
+import fr.husi.utils.simpleModeLog
+import kotlinx.coroutines.flow.firstOrNull
 
 object SubscriptionCatalogCoordinator {
 
@@ -34,12 +38,33 @@ object SubscriptionCatalogCoordinator {
             } else {
                 SubscriptionCatalogApplier.apply(document, hash)
             }
+            if (result is SubscriptionCatalogSyncResult.Success) {
+                refreshAffectedGroups(result)
+            }
             DataStore.subscriptionCatalogLastCheckAt = nowMs
             result
         }.getOrElse { e ->
             Logs.w("subscription catalog sync failed", e)
             DataStore.subscriptionCatalogLastCheckAt = nowMs
             SubscriptionCatalogSyncResult.Error(e.readableMessage)
+        }
+    }
+
+    private suspend fun refreshAffectedGroups(result: SubscriptionCatalogSyncResult.Success) {
+        if (result.created == 0 && result.updated == 0) return
+        for (groupId in result.affectedGroupIds) {
+            val group = SagerDatabase.groupDao.getById(groupId).firstOrNull() ?: continue
+            runCatching {
+                GroupUpdater.executeUpdate(group, byUser = false)
+            }.onFailure {
+                Logs.w("catalog post-sync update failed group=${group.displayName()}", it)
+            }
+            val sub = group.subscription
+            simpleModeLog(
+                "catalog",
+                "catalog_sync group=${group.displayName()} source=${sub?.sourceId.orEmpty()} " +
+                    "pool=${sub?.connectPoolRole ?: -1} created=${result.created} updated=${result.updated}",
+            )
         }
     }
 }

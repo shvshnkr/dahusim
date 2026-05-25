@@ -3,20 +3,21 @@ package fr.husi.database
 import fr.husi.GroupType
 
 /**
- * Stable WL subscription detection: catalog [sourceId] and group name before profile display name.
+ * WL subscription detection for gh-managed catalog feeds via [SubscriptionBean.connectPoolRole].
  */
 internal object WlSubscriptionTag {
 
     private const val GITHUB_PREFIX = "gh."
-    private const val BUILTIN_PREFIX = "builtin."
 
-    /** Known WL-oriented catalog / bootstrap source keys (without prefix). */
+    /** Legacy fallback for gh-managed [ConnectPoolRole.ANY] until catalog pool_role is applied. */
     val KNOWN_WL_SOURCE_IDS: Set<String> = setOf(
         "white-lattice",
         "white-list-vpn-black",
         "aetris-vpn",
         "wlrus-blackl",
         "black-vless-rus-mobile",
+        "vless-wl-rus-mobile",
+        "vless-wl-rus-mobile-2",
     )
 
     data class Resolution(
@@ -44,15 +45,17 @@ internal object WlSubscriptionTag {
     }
 
     fun isWlGroup(group: ProxyGroup): Boolean {
-        if (group.type == GroupType.SUBSCRIPTION) {
-            val sub = group.subscription ?: return isWlGroupName(group.displayName())
-            val raw = sub.sourceId.trim()
-            if (raw.isNotEmpty()) {
-                val key = raw.removePrefix(GITHUB_PREFIX).removePrefix(BUILTIN_PREFIX)
-                if (key in KNOWN_WL_SOURCE_IDS) return true
+        if (group.type != GroupType.SUBSCRIPTION) return false
+        val sub = group.subscription ?: return false
+        if (sub.catalogOwnership != CatalogOwnership.GH_MANAGED) return false
+        return when (sub.connectPoolRole) {
+            ConnectPoolRole.WL -> true
+            ConnectPoolRole.OPEN -> false
+            else -> {
+                val key = sub.sourceId.trim().removePrefix(GITHUB_PREFIX)
+                key in KNOWN_WL_SOURCE_IDS || isWlGroupName(group.displayName())
             }
         }
-        return isWlGroupName(group.displayName())
     }
 
     private fun isWlGroupName(name: String): Boolean {

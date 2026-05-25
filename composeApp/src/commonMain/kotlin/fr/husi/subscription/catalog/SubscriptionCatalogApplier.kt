@@ -1,18 +1,19 @@
 package fr.husi.subscription.catalog
 
 import fr.husi.GroupType
+import fr.husi.database.CatalogOwnership
+import fr.husi.database.ConnectPoolRole
 import fr.husi.database.DataStore
 import fr.husi.database.GroupManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
+import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
 import java.net.URL
 
 object SubscriptionCatalogApplier {
 
-    private const val GITHUB_SOURCE_PREFIX = "gh."
-    private const val BUILTIN_SOURCE_PREFIX = "builtin."
     private const val MAX_BULK_DELETE_ABS = 10
     private const val MAX_BULK_DELETE_PERCENT = 0.30
     private const val PENDING_REMOVE_GRACE_SECONDS = 24L * 60L * 60L
@@ -28,16 +29,23 @@ object SubscriptionCatalogApplier {
             .mapTo(LinkedHashSet()) { it.sourceId }
 
         val subscriptions = SagerDatabase.groupDao.subscriptions()
+        migrateCatalogOwnership(subscriptions)
+
         val githubManaged = subscriptions.filter {
             val sub = it.subscription
-            sub != null && sub.isGithubManagedSourceId()
+            sub != null && sub.catalogOwnership == CatalogOwnership.GH_MANAGED
         }
         val githubManagedBySourceId = githubManaged.associateBy {
-            it.subscription!!.sourceId.removePrefix(GITHUB_SOURCE_PREFIX)
+            it.subscription!!.sourceId.removePrefix(SubscriptionCatalogDefaults.GITHUB_SOURCE_PREFIX)
         }
-        val allByNormalizedLink = subscriptions
-            .filter { it.subscription?.link?.isNotBlank() == true }
-            .associateBy { normalizeLink(it.subscription!!.link) }
+        val builtinManagedBySourceId = subscriptions
+            .filter {
+                val sub = it.subscription
+                sub != null && sub.isBuiltinManagedSourceId()
+            }
+            .associateBy {
+                it.subscription!!.sourceId.removePrefix(SubscriptionCatalogDefaults.BUILTIN_SOURCE_PREFIX)
+            }
 
         if (upserts.isEmpty() && githubManaged.isNotEmpty() && !document.allowEmpty) {
             return SubscriptionCatalogSyncResult.Blocked(
@@ -63,14 +71,28 @@ object SubscriptionCatalogApplier {
         var updated = 0
         var removed = 0
         var stagedRemoval = 0
+        val affectedGroupIds = LinkedHashSet<Long>()
         val nowSeconds = System.currentTimeMillis() / 1000L
 
         for (record in upserts.values) {
             val sourceId = githubSourceId(record.sourceId)
             val existing = githubManagedBySourceId[record.sourceId]
-                ?: allByNormalizedLink[normalizeLink(record.link)]
+                ?: builtinManagedBySourceId[record.sourceId]
             if (existing == null) {
-                GroupManager.createGroup(
+                val userWithSameLink = subscriptions.any { group ->
+                    val sub = group.subscription ?: return@any false
+                    sub.catalogOwnership == CatalogOwnership.USER &&
+                        normalizeLink(sub.link) == normalizeLink(record.link)
+                }
+                if (userWithSameLink) {
+                    runCatching {
+                        Logs.d(
+                            "H16 catalog_upsert_disjoint source=${record.sourceId} " +
+                                "link already owned by USER; creating gh.*",
+                        )
+                    }
+                }
+                val createdGroup = GroupManager.createGroup(
                     ProxyGroup(
                         name = record.name,
                         type = GroupType.SUBSCRIPTION,
@@ -83,27 +105,27 @@ object SubscriptionCatalogApplier {
                             deduplication = true
                             this.sourceId = sourceId
                             managedByRemote = true
+                            catalogOwnership = CatalogOwnership.GH_MANAGED
+                            connectPoolRole = record.poolRole
                             pendingRemoveAt = 0L
                             remoteGenerationSeen = document.generation
                             fetchProfile = record.fetchProfile
                             customUserAgent = record.customUserAgent
                         }.applyDefaultValues()
                     },
+                    notifySubscriptionScheduler = false,
                 )
+                affectedGroupIds += createdGroup.id
                 created++
             } else {
                 val group = existing.copy()
                 val sub = (group.subscription ?: SubscriptionBean().applyDefaultValues()).apply {
                     type = record.subscriptionType
                     link = record.link
-                    if (isBuiltinManagedSourceId()) {
-                        // Promote built-ins to gh.* ownership so future catalog updates match by source_id.
-                        this.sourceId = sourceId
-                        managedByRemote = true
-                    } else if (isGithubManagedSourceId()) {
-                        this.sourceId = sourceId
-                        managedByRemote = true
-                    }
+                    this.sourceId = sourceId
+                    managedByRemote = true
+                    catalogOwnership = CatalogOwnership.GH_MANAGED
+                    connectPoolRole = record.poolRole
                     pendingRemoveAt = 0L
                     remoteGenerationSeen = document.generation
                     fetchProfile = record.fetchProfile
@@ -112,6 +134,7 @@ object SubscriptionCatalogApplier {
                 group.name = record.name
                 group.subscription = sub
                 GroupManager.updateGroup(group)
+                affectedGroupIds += group.id
                 updated++
             }
         }
@@ -143,7 +166,37 @@ object SubscriptionCatalogApplier {
             updated = updated,
             removed = removed,
             stagedRemoval = stagedRemoval,
+            affectedGroupIds = affectedGroupIds.toList(),
         )
+    }
+
+    private suspend fun migrateCatalogOwnership(subscriptions: List<ProxyGroup>) {
+        for (group in subscriptions) {
+            val sub = group.subscription ?: continue
+            if (sub.catalogOwnership != CatalogOwnership.USER) continue
+            val sourceKey = sub.sourceId
+                .removePrefix(SubscriptionCatalogDefaults.GITHUB_SOURCE_PREFIX)
+                .removePrefix(SubscriptionCatalogDefaults.BUILTIN_SOURCE_PREFIX)
+            val newOwnership = when {
+                sub.sourceId == SubscriptionCatalogDefaults.reservedBuiltinSourceId() ->
+                    CatalogOwnership.PROTECTED_RESERVED
+                sub.isGithubManagedSourceId() -> CatalogOwnership.GH_MANAGED
+                else -> CatalogOwnership.USER
+            }
+            var changed = sub.catalogOwnership != newOwnership
+            sub.catalogOwnership = newOwnership
+            if (sub.catalogOwnership == CatalogOwnership.GH_MANAGED &&
+                sub.connectPoolRole == ConnectPoolRole.ANY
+            ) {
+                SubscriptionCatalogDefaults.STARTER_SEEDS
+                    .find { it.sourceKey == sourceKey }
+                    ?.let {
+                        sub.connectPoolRole = it.poolRole
+                        changed = true
+                    }
+            }
+            if (changed) GroupManager.updateGroup(group)
+        }
     }
 
     private fun isOverDestructiveThreshold(
@@ -156,7 +209,8 @@ object SubscriptionCatalogApplier {
         return removalCount.toDouble() / managedCount.toDouble() > MAX_BULK_DELETE_PERCENT
     }
 
-    private fun githubSourceId(sourceId: String): String = "$GITHUB_SOURCE_PREFIX$sourceId"
+    private fun githubSourceId(sourceId: String): String =
+        "${SubscriptionCatalogDefaults.GITHUB_SOURCE_PREFIX}$sourceId"
 
     private fun normalizeLink(link: String): String {
         val trimmed = link.trim()
@@ -169,10 +223,10 @@ object SubscriptionCatalogApplier {
     }
 
     private fun SubscriptionBean.isGithubManagedSourceId(): Boolean {
-        return managedByRemote && sourceId.startsWith(GITHUB_SOURCE_PREFIX)
+        return managedByRemote && sourceId.startsWith(SubscriptionCatalogDefaults.GITHUB_SOURCE_PREFIX)
     }
 
     private fun SubscriptionBean.isBuiltinManagedSourceId(): Boolean {
-        return managedByRemote && sourceId.startsWith(BUILTIN_SOURCE_PREFIX)
+        return managedByRemote && sourceId.startsWith(SubscriptionCatalogDefaults.BUILTIN_SOURCE_PREFIX)
     }
 }

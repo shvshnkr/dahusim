@@ -8,6 +8,7 @@ import com.ernestoyaquello.dragdropswipelazycolumn.OrderedItem
 import fr.husi.database.GroupManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
+import fr.husi.database.isCatalogDeletable
 import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
 import fr.husi.ktx.onIoDispatcher
@@ -121,6 +122,8 @@ class GroupScreenViewModel : ViewModel() {
     }
 
     fun undoableRemove(id: Long) = viewModelScope.launch {
+        val group = uiState.value.groups.find { it.group.id == id }?.group
+        if (group != null && !group.isCatalogDeletable()) return@launch
         hiddenGroupAccess.withLock {
             _uiState.update { state ->
                 val groups = state.groups.toMutableList()

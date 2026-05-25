@@ -20,6 +20,7 @@ import fr.husi.group.RawUpdater
 import fr.husi.ktx.SubscriptionFoundException
 import fr.husi.ktx.onIoDispatcher
 import fr.husi.ktx.runOnDefaultDispatcher
+import fr.husi.ui.ImportLinkClassifier
 import fr.husi.ui.ImportLinkInteractor
 import fr.husi.ui.StringOrRes
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -118,7 +119,22 @@ internal class ScannerActivityViewModel(
 
         when (uri?.scheme) {
             "http", "https" -> viewModelScope.launch {
-                _uiEvent.emit(ScannerUiEvent.AskSubscriptionOrProfile(value))
+                when (val resolution = onIoDispatcher { ImportLinkClassifier.resolveHttpImport(value) }) {
+                    is ImportLinkClassifier.HttpImportResolution.Subscription ->
+                        importSubscription(resolution.url)
+                    is ImportLinkClassifier.HttpImportResolution.Standalone -> {
+                        onIoDispatcher {
+                            importLinkInteractor.importStandaloneProfiles(
+                                resolution.proxies,
+                                sourceUrl = value,
+                                suggestedGroupName = resolution.suggestedGroupName,
+                            )
+                        }
+                        _uiEvent.emit(ScannerUiEvent.Finish)
+                    }
+                    ImportLinkClassifier.HttpImportResolution.Ambiguous ->
+                        _uiEvent.emit(ScannerUiEvent.AskSubscriptionOrProfile(value))
+                }
             }
 
             "sing-box" -> importSubscription(value)

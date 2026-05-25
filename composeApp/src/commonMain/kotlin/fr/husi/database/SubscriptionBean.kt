@@ -36,6 +36,8 @@ class SubscriptionBean : Serializable() {
     var autoUpdate: Boolean = false
     var autoUpdateDelay: Int = 1440
     var lastUpdated: Int = 0
+    var catalogOwnership: Int = CatalogOwnership.USER
+    var connectPoolRole: Int = ConnectPoolRole.ANY
 
     // SIP008
     var bytesUsed: Long = 0L
@@ -46,7 +48,7 @@ class SubscriptionBean : Serializable() {
     var expiryDate: Long = 0L
 
     override fun serializeToBuffer(output: ByteBufferOutput) {
-        output.writeInt(6)
+        output.writeInt(7)
 
         output.writeInt(type)
         output.writeString(link)
@@ -69,6 +71,8 @@ class SubscriptionBean : Serializable() {
         output.writeLong(remoteGenerationSeen)
         output.writeInt(fetchProfile)
         output.writeString(userAgentVersionOverride)
+        output.writeInt(catalogOwnership)
+        output.writeInt(connectPoolRole)
     }
 
     fun serializeForShare(output: ByteBufferOutput) {
@@ -119,6 +123,10 @@ class SubscriptionBean : Serializable() {
         }
         if (version >= 6) {
             userAgentVersionOverride = input.readString()
+        }
+        if (version >= 7) {
+            catalogOwnership = input.readInt()
+            connectPoolRole = input.readInt()
         }
     }
 

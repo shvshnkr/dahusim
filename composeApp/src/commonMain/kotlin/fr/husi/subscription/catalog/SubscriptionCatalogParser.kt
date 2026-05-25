@@ -1,12 +1,14 @@
 package fr.husi.subscription.catalog
 
 import fr.husi.SubscriptionType
+import fr.husi.database.ConnectPoolRole
 import fr.husi.group.SubscriptionFetchProfile
 import java.net.URL
 
 object SubscriptionCatalogParser {
 
     private const val HEADER = "HUSI_SUBSCRIPTION_CATALOG_V1"
+    private val POOL_ROLE_TOKENS = setOf("wl", "open", "any")
 
     fun parse(raw: String): SubscriptionCatalogDocument {
         val lines = raw.lineSequence()
@@ -54,13 +56,14 @@ object SubscriptionCatalogParser {
                             }
                             val subscriptionType = parseSubscriptionType(parts[4].trim())
                             val fetchProfile = parseFetchProfile(parts[5].trim())
-                            val customUserAgent = parts.getOrNull(6).orEmpty().trim()
+                            val (poolRole, customUserAgent) = parseUpsertTail(parts, fetchProfile)
                             entries += SubscriptionCatalogEntry.Upsert(
                                 sourceId = sourceId,
                                 name = name,
                                 link = link,
                                 subscriptionType = subscriptionType,
                                 fetchProfile = fetchProfile,
+                                poolRole = poolRole,
                                 customUserAgent = customUserAgent,
                             )
                         }
@@ -84,6 +87,28 @@ object SubscriptionCatalogParser {
             allowEmpty = allowEmpty,
             entries = entries,
         )
+    }
+
+    private fun parseUpsertTail(parts: List<String>, fetchProfile: Int): Pair<Int, String> {
+        val tail = parts.drop(6)
+        if (tail.isEmpty()) return ConnectPoolRole.ANY to ""
+        if (fetchProfile == SubscriptionFetchProfile.CUSTOM) {
+            if (tail.size >= 2 && tail[0].lowercase() in POOL_ROLE_TOKENS) {
+                return parsePoolRole(tail[0]) to tail[1].trim()
+            }
+            return ConnectPoolRole.ANY to tail[0].trim()
+        }
+        if (tail[0].lowercase() in POOL_ROLE_TOKENS) {
+            return parsePoolRole(tail[0]) to tail.getOrNull(1).orEmpty().trim()
+        }
+        return ConnectPoolRole.ANY to tail[0].trim()
+    }
+
+    private fun parsePoolRole(value: String): Int = when (value.lowercase()) {
+        "wl" -> ConnectPoolRole.WL
+        "open" -> ConnectPoolRole.OPEN
+        "any" -> ConnectPoolRole.ANY
+        else -> error("unsupported pool role: $value")
     }
 
     private fun parseSubscriptionType(value: String): Int = when (value.uppercase()) {

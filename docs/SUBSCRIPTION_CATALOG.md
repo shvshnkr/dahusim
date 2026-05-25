@@ -7,6 +7,19 @@
 - Keep a centrally managed list of subscription links in GitHub.
 - Add/update links without shipping a new app build.
 - Prevent destructive mistakes with strict parsing and anti-wipe guards.
+- Declare WL vs open autoselect pool membership per feed (`pool_role`).
+
+## Ownership categories (disjoint)
+
+| Category | `source_id` / marker | Catalog UPSERT/REMOVE | UI delete | WL autoselect |
+|----------|----------------------|------------------------|-----------|---------------|
+| **PROTECTED_BUILTIN** | `builtin.reserved` | never | blocked | only if user fills the slot |
+| **BACKEND_MANAGED** | `gh.<source_id>` | yes | yes | via `pool_role` |
+| **USER** | empty or non-`gh.`/`builtin.reserved` | never | yes | never (name heuristics ignored) |
+
+Bootstrap seeds use `builtin.<source_id>` until the first matching catalog UPSERT promotes them to `gh.<source_id>`.
+
+If a USER subscription shares a URL with a catalog UPSERT, the app creates a **new** `gh.*` group and leaves the USER group unchanged (log `H16 catalog_upsert_disjoint`).
 
 ## File format
 
@@ -21,7 +34,7 @@ allow_empty=false
 Records:
 
 ```text
-UPSERT|source_id|display_name|https_url|subscription_type|fetch_profile|optional_custom_user_agent
+UPSERT|source_id|display_name|https_url|subscription_type|fetch_profile|pool_role|optional_custom_user_agent
 REMOVE|source_id
 ```
 
@@ -29,42 +42,47 @@ Supported values:
 
 - `subscription_type`: `RAW`, `OOCv1`, `SIP008`
 - `fetch_profile`: `default`, `happ`, `v2rayng`, `v2raytun`, `incy`, `custom`
+- `pool_role` (optional, 7th field): `wl`, `open`, `any` (default `any` when omitted)
 
 Examples:
 
 ```text
-UPSERT|mifa-main|Mifa Main|https://mifa.world/vless|RAW|default
+UPSERT|mifa-main|Mifa Main|https://mifa.world/vless|RAW|default|open
+UPSERT|white-lattice|WhiteLattice|https://example.com/wl.txt|RAW|default|wl
 UPSERT|paid-main|Paid Main|https://example.com/subscription|SIP008|happ
 REMOVE|legacy-id
 ```
 
-## Safety behavior
+Custom User-Agent with pool:
 
-- Catalog must have the exact header `HUSI_SUBSCRIPTION_CATALOG_V1`.
-- `generation` is required and must increase monotonically.
-- Duplicate `source_id` records are rejected.
-- Duplicate `UPSERT` links in the same catalog are rejected.
-- Only `https://` links are accepted for `UPSERT`.
-- App blocks dangerous diffs:
-  - catalog has zero UPSERT while remote-managed items exist;
-  - diff would remove all remote-managed subscriptions;
-  - bulk delete exceeds safety thresholds.
-- Deletions are staged:
-  - first missing generation marks item as pending removal;
-  - actual deletion happens on a later successful sync or after grace period.
-- Only GitHub-catalog-managed subscriptions (`source_id` stored with internal `gh.` prefix)
-  can be auto-removed.
-- Built-in subscriptions are initially marked with internal `builtin.` source ids.
-  On first matching `UPSERT` by link, ownership is promoted to `gh.<source_id>` so later updates
-  are tracked by stable `source_id` (not by link matching).
-- If catalog adds an already existing link, app updates the existing group instead of creating
-  a duplicate.
+```text
+UPSERT|corp-panel|Corp panel|https://vpn.corp.example/sub|RAW|custom|wl|MyCorpVPN/1.0
+```
+
+Legacy 6-field lines (no `pool_role`) remain valid; `pool_role` defaults to `any`.
+
+## Lifecycle (BACKEND_MANAGED only)
+
+| Operation in txt | Effect |
+|------------------|--------|
+| `UPSERT\|id\|...\|wl` | Create/update `gh.id`, set `connectPoolRole=WL` |
+| `REMOVE\|id` | Staged removal |
+| No UPSERT for `id` | Staged removal for existing `gh.id` |
+| Change `wl` → `open` | UPSERT with new `pool_role` (no REMOVE required) |
+
+Deletions are staged: first missing generation marks pending removal; actual deletion on a later sync or after a 24h grace period. Safety guards block wiping all gh-managed groups or oversized bulk deletes.
+
+PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 ## Fetch profile notes
 
 - `default`: Dahusim User-Agent (`husi/…` from BuildConfig).
 - `happ`, `v2rayng`, `v2raytun`, `incy`: client preset; version comes from Quick settings templates (editable, not tied to app release).
 - `custom`: full User-Agent string from the record (supports `$version`, `$version_code`, `$box_version`).
+
+## WL pool
+
+`pool_role` on gh-managed feeds is stored as `SubscriptionBean.connectPoolRole` and drives `WlSubscriptionTag` / `ConnectPoolPolicy` WL autoselect. See [wl.md](./wl.md).
 
 ## Operations
 
@@ -73,4 +91,4 @@ REMOVE|legacy-id
   - sync interval (6..12 hours);
   - manual “Sync catalog now”.
 - Background sync runs periodically with existing subscription schedulers.
-
+- After a successful catalog apply that creates or updates groups, the app runs a targeted `GroupUpdater` pass on affected groups.

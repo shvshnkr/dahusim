@@ -3,6 +3,8 @@ package fr.husi.database
 import fr.husi.GroupType
 import fr.husi.fmt.trojan.TrojanBean
 import kotlin.test.Test
+import fr.husi.database.CatalogOwnership
+import fr.husi.database.ConnectPoolRole
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -145,6 +147,22 @@ class ConnectPoolPolicyTest {
         assertTrue(5L in tag.wlGroupIds)
     }
 
+    @Test
+    fun wlSubscriptionTagUsesConnectPoolRoleWithoutKnownSourceId() {
+        val group = group(5L, "Foreign name", sourceId = "gh.tri-228", poolRole = ConnectPoolRole.WL)
+        val tag = WlSubscriptionTag.resolve(
+            allProxies = listOf(proxy(7L, 5L, 1L)),
+            groups = listOf(group),
+        )
+        assertEquals(1, tag.subsWlMarkedCount)
+    }
+
+    @Test
+    fun userSubscriptionWithWlNameIsNotWlPool() {
+        val group = group(6L, "White lists user", sourceId = "", ownership = CatalogOwnership.USER)
+        assertTrue(!WlSubscriptionTag.isWlGroup(group))
+    }
+
     private fun proxy(id: Long, groupId: Long, order: Long, profileName: String = "node$id") = ProxyEntity().apply {
         this.id = id
         this.groupId = groupId
@@ -153,14 +171,20 @@ class ConnectPoolPolicyTest {
         trojanBean = TrojanBean().apply { name = profileName }
     }
 
-    private fun group(id: Long, name: String, sourceId: String = "") = ProxyGroup().apply {
+    private fun group(
+        id: Long,
+        name: String,
+        sourceId: String = "",
+        poolRole: Int = ConnectPoolRole.ANY,
+        ownership: Int = CatalogOwnership.GH_MANAGED,
+    ) = ProxyGroup().apply {
         this.id = id
         this.name = name
         type = GroupType.SUBSCRIPTION
-        if (sourceId.isNotEmpty()) {
-            subscription = SubscriptionBean().apply {
-                this.sourceId = sourceId
-            }
+        subscription = SubscriptionBean().apply {
+            if (sourceId.isNotEmpty()) this.sourceId = sourceId
+            catalogOwnership = ownership
+            connectPoolRole = poolRole
         }
     }
 }
