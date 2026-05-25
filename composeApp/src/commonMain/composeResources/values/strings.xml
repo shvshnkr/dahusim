@@ -75,6 +75,8 @@
     <string name="subscription_catalog_sync_skipped">Catalog is already up to date</string>
     <string name="subscription_catalog_sync_blocked">Catalog blocked by safety checks: %1$s</string>
     <string name="subscription_catalog_error">Catalog sync failed: %1$s</string>
+    <string name="simple_mode_telegram_probe">Telegram probe</string>
+    <string name="simple_mode_telegram_probe_summary">Do not connect if web.telegram.org is unreachable through the profile</string>
     <string name="probe_2k_settings">2K server probe</string>
     <string name="probe_2k_persistence_enabled">Persist probe state</string>
     <string name="probe_2k_persistence_summary">Stores TCP/URL probe results per profile for large pools</string>

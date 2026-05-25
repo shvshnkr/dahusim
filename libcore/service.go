@@ -383,6 +383,12 @@ func (s *Service) handleRequest(conn net.Conn) error {
 			return E.Cause(err, "handle task request")
 		}
 		return nil
+	case commandNewInstanceGroupURLTest:
+		err := s.handleNewInstanceGroupURLTest(conn)
+		if err != nil {
+			return E.Cause(err, "handle new instance group url test")
+		}
+		return nil
 	default:
 		return E.New("unknown command: ", command)
 	}

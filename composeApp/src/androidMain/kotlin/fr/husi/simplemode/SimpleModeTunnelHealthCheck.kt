@@ -39,6 +39,55 @@ internal object SimpleModeTunnelHealthCheck {
         urls: List<String>,
         timeoutMs: Int,
     ): TunnelProbeOutcome {
+        val primary = SimpleModeHealthRoute.probeUrlPlan(
+            phase,
+            whitelistOnly,
+            SimpleModeHealthRoute.ProbeTier.PRIMARY,
+        )
+        val usePrimary = urls.isEmpty() || urls == primary
+        val primaryUrls = if (usePrimary) primary else urls
+        val outcome = probeUrlWave(
+            phase = phase,
+            whitelistOnly = whitelistOnly,
+            outboundTag = outboundTag,
+            urls = primaryUrls,
+            timeoutMs = timeoutMs,
+            tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+        )
+        if (outcome.latencyMs > 0) return outcome
+        val escalate = SimpleModeHealthRoute.shouldEscalateToConfirm(
+            SimpleModeHealthRoute.ProbeEscalationContext(
+                phase = phase,
+                whitelistOnly = whitelistOnly,
+                lastProbeError = outcome.lastError,
+                primaryProbeFailed = true,
+            ),
+        )
+        if (!escalate) return outcome
+        val confirmUrls = SimpleModeHealthRoute.probeUrlPlan(
+            phase,
+            whitelistOnly,
+            SimpleModeHealthRoute.ProbeTier.CONFIRM,
+        ).filter { it !in primaryUrls }
+        if (confirmUrls.isEmpty()) return outcome
+        return probeUrlWave(
+            phase = phase,
+            whitelistOnly = whitelistOnly,
+            outboundTag = outboundTag,
+            urls = confirmUrls,
+            timeoutMs = timeoutMs,
+            tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
+        )
+    }
+
+    private suspend fun probeUrlWave(
+        phase: String,
+        whitelistOnly: Boolean,
+        outboundTag: String,
+        urls: List<String>,
+        timeoutMs: Int,
+        tier: SimpleModeHealthRoute.ProbeTier,
+    ): TunnelProbeOutcome {
         if (outboundTag.isBlank()) return TunnelProbeOutcome(0, "missing outbound tag")
         val client = Libcore.newClient(null)
         return try {
@@ -58,6 +107,7 @@ internal object SimpleModeTunnelHealthCheck {
                         url = url,
                         ok = true,
                         delayMs = latency,
+                        tier = tier,
                     )
                     return TunnelProbeOutcome(latency, null)
                 }
@@ -82,6 +132,7 @@ internal object SimpleModeTunnelHealthCheck {
                     url = url,
                     ok = false,
                     error = errText,
+                    tier = tier,
                 )
             }
             val allowInconclusive = whitelistOnly && !sawRealFailure

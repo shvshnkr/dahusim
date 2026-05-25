@@ -84,6 +84,28 @@ PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 `pool_role` on gh-managed feeds is stored as `SubscriptionBean.connectPoolRole` and drives `WlSubscriptionTag` / `ConnectPoolPolicy` WL autoselect. See [wl.md](./wl.md).
 
+## Static feeds (`docs/subscription-feeds/`)
+
+`tri_228-open.txt` and `tri_228-wl.txt` are split from upstream `tri_228.txt` (open: `#для wifi и моб инет без бс` … `#для обхода бс`; wl: BS-bypass section and below). When upstream changes, rebuild both files manually and bump catalog `generation` if URLs or `source_id` change.
+
+## Degraded feed / jail
+
+Auto-update tracks **group-level** health in Room (`subscription_update_states`), separate from per-profile probe jail:
+
+| State | Meaning | Connect refresh | Background WorkManager |
+|-------|---------|-----------------|------------------------|
+| **OK** | Last fetch succeeded | Normal due queue | Normal due |
+| **SUSPECT** | 1–2 transient failures | At most **one** retry per connect budget | Due with ~90 s backoff (`nextAttemptAt`) |
+| **JAIL** | Permanent (404/410) or repeated failures | **Skipped** (`H39 sub_refresh_skipped_jail`) | **No notification**; one unjail attempt per cycle after ~2 h |
+
+Jail **does not delete** profiles in the group — it only defers HTTP fetch. Logs: `H39 sub_update_state`, `H39 sub_jail`, `H39 sub_unjail`.
+
+### Subscription update jail (unjail rules)
+
+- **JAIL clears** only via the background WorkManager worker (`pickUnjailGroupId`, at most one feed per cycle after backoff) or a **manual** group update in the UI.
+- **Connect refresh** and **foreground fallback** refresh (`BaseService` tunnel degrade) use `connectRefresh=true`: they skip JAIL feeds and cap SUSPECT to one; they **never** unjail.
+- **Permanent HTTP** (404/410) moves the group to JAIL on the first classified permanent failure.
+
 ## Operations
 
 - Expert settings expose:

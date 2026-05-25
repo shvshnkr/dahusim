@@ -17,6 +17,10 @@ internal object SimpleModeHealthRoute {
     /** BS target: blocked on WL uplink L3; must work via VPN exit. */
     const val TUNNEL_HEALTH_TELEGRAM = "https://web.telegram.org"
 
+    const val TUNNEL_HEALTH_INSTAGRAM = "https://www.instagram.com"
+
+    const val TUNNEL_HEALTH_FACEBOOK = "https://www.facebook.com"
+
     /** WL URL probe reached HTTP (e.g. 405) — tunnel/profile path is up. */
     const val WL_URL_PROBE_SYNTHETIC_MS = 200
 
@@ -25,29 +29,86 @@ internal object SimpleModeHealthRoute {
 
     const val WL_DZEN_HTTP = "http://dzen.ru/"
 
-    fun tunnelBsProbeUrls(): List<String> = listOf(TUNNEL_HEALTH_TELEGRAM)
+    const val PREPARE_TIE_BREAK_MS_WL = 80
+    const val PREPARE_TIE_BREAK_MS_OPEN = 50
 
-    fun healthCheckUrls(whitelistOnly: Boolean): List<String> = if (whitelistOnly) {
-        tunnelBsProbeUrls()
-    } else {
-        listOf(TUNNEL_HEALTH_GSTATIC, normalizeTunnelHealthUrl(DataStore.connectionTestURL))
-            .distinct()
-            .filter { it.isNotBlank() }
+    enum class ProbeTier {
+        PRIMARY,
+        CONFIRM,
     }
 
-    fun postConnectProbeUrls(whitelistOnly: Boolean): List<String> =
-        if (whitelistOnly) {
-            tunnelBsProbeUrls()
-        } else {
-            healthCheckUrls(false)
+    data class ProbeEscalationContext(
+        val phase: String = "",
+        val urlOk: Int = 0,
+        val tcpAlive: Int = 0,
+        val topDelays: List<Pair<Long, Int>> = emptyList(),
+        val whitelistOnly: Boolean = false,
+        val lastProbeError: String? = null,
+        val primaryProbeFailed: Boolean = false,
+    )
+
+    fun primaryBsProbeUrls(): List<String> = listOf(TUNNEL_HEALTH_TELEGRAM)
+
+    fun confirmBsProbeUrls(): List<String> = listOf(
+        TUNNEL_HEALTH_TELEGRAM,
+        TUNNEL_HEALTH_INSTAGRAM,
+        TUNNEL_HEALTH_FACEBOOK,
+    )
+
+    fun tunnelBsProbeUrls(): List<String> = primaryBsProbeUrls()
+
+    fun messengerProbeRequired(whitelistOnly: Boolean): Boolean =
+        whitelistOnly || DataStore.simpleModeTelegramProbe
+
+    fun probeUrlPlan(
+        phase: String,
+        whitelistOnly: Boolean,
+        tier: ProbeTier = ProbeTier.PRIMARY,
+    ): List<String> = if (whitelistOnly) {
+        when (tier) {
+            ProbeTier.PRIMARY -> primaryBsProbeUrls()
+            ProbeTier.CONFIRM -> confirmBsProbeUrls()
         }
+    } else {
+        when (tier) {
+            ProbeTier.PRIMARY -> openPrimaryProbeUrls()
+            ProbeTier.CONFIRM -> openConfirmProbeUrls()
+        }
+    }
+
+    fun healthCheckUrls(whitelistOnly: Boolean): List<String> =
+        probeUrlPlan(phase = "session", whitelistOnly = whitelistOnly, tier = ProbeTier.PRIMARY)
+
+    fun postConnectProbeUrls(whitelistOnly: Boolean): List<String> =
+        probeUrlPlan(phase = "post_connect", whitelistOnly = whitelistOnly, tier = ProbeTier.PRIMARY)
 
     fun prepareProbeUrls(whitelistOnly: Boolean): List<String> =
-        if (whitelistOnly) {
-            tunnelBsProbeUrls()
-        } else {
-            healthCheckUrls(false)
+        probeUrlPlan(phase = "prepare", whitelistOnly = whitelistOnly, tier = ProbeTier.PRIMARY)
+
+    fun shouldEscalateToConfirm(ctx: ProbeEscalationContext): Boolean {
+        if (!ctx.whitelistOnly && ctx.phase != "prepare") return false
+        if (ctx.phase == "prepare") {
+            if (ctx.urlOk == 0 && ctx.tcpAlive > 0) return true
+            if (ctx.topDelays.size >= 2) {
+                val threshold = if (ctx.whitelistOnly) {
+                    PREPARE_TIE_BREAK_MS_WL
+                } else {
+                    PREPARE_TIE_BREAK_MS_OPEN
+                }
+                val sorted = ctx.topDelays.sortedBy { it.second }
+                val gap = sorted[1].second - sorted[0].second
+                if (gap <= threshold) return true
+            }
+            return false
         }
+        if (ctx.phase == "lkg_fast_path") return true
+        if (ctx.primaryProbeFailed &&
+            isProbeFailureInconclusive(ctx.lastProbeError, ctx.whitelistOnly, ctx.phase)
+        ) {
+            return true
+        }
+        return false
+    }
 
     /** WL: skip sing-box tunnel urlTest after connect (prepare TCP/BS direct probe already ran). */
     fun skipTunnelHealthCheck(
@@ -160,10 +221,12 @@ internal object SimpleModeHealthRoute {
         outboundTag: String,
         urls: List<String>,
         timeoutMs: Int,
+        tier: ProbeTier = ProbeTier.PRIMARY,
     ) {
         simpleModeLog(
             "SimpleMode",
-            "H37 health_route phase=$phase wlOnly=$whitelistOnly route=${route.name.lowercase()} " +
+            "H37 health_route phase=$phase wlOnly=$whitelistOnly tier=${tier.name} " +
+                "route=${route.name.lowercase()} " +
                 "outboundTag=${outboundTag.ifBlank { "-" }} timeoutMs=$timeoutMs " +
                 "urls=${urls.joinToString(",") { urlHost(it) }}",
         )
@@ -178,14 +241,37 @@ internal object SimpleModeHealthRoute {
         ok: Boolean,
         delayMs: Int = 0,
         error: String? = null,
+        tier: ProbeTier = ProbeTier.PRIMARY,
     ) {
         val result = if (ok) "ok delayMs=$delayMs" else "fail error=${error.orEmpty()}"
         simpleModeLog(
             "SimpleMode",
-            "H37 health_route phase=$phase wlOnly=$whitelistOnly route=${route.name.lowercase()} " +
+            "H37 health_route phase=$phase wlOnly=$whitelistOnly tier=${tier.name} " +
+                "route=${route.name.lowercase()} " +
                 "outboundTag=${outboundTag.ifBlank { "-" }} url=${urlHost(url)} $result",
         )
     }
+
+    private fun openPrimaryProbeUrls(): List<String> =
+        if (messengerProbeRequired(whitelistOnly = false)) {
+            listOf(TUNNEL_HEALTH_TELEGRAM)
+        } else {
+            listOf(TUNNEL_HEALTH_GSTATIC, normalizeTunnelHealthUrl(DataStore.connectionTestURL))
+                .distinct()
+                .filter { it.isNotBlank() }
+        }
+
+    private fun openConfirmProbeUrls(): List<String> =
+        if (messengerProbeRequired(whitelistOnly = false)) {
+            listOf(
+                TUNNEL_HEALTH_TELEGRAM,
+                TUNNEL_HEALTH_GSTATIC,
+                normalizeTunnelHealthUrl(DataStore.connectionTestURL),
+                TUNNEL_HEALTH_CLOUDFLARE_HTTPS,
+            ).distinct().filter { it.isNotBlank() }
+        } else {
+            (openPrimaryProbeUrls() + TUNNEL_HEALTH_CLOUDFLARE_HTTPS).distinct()
+        }
 
     private fun normalizeTunnelHealthUrl(raw: String): String {
         if (raw.isBlank()) return raw

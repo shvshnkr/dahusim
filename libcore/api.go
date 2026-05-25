@@ -27,6 +27,7 @@ const (
 	commandSubscribeLogs
 	commandImportDeepLink
 	commandRunTask
+	commandNewInstanceGroupURLTest
 )
 
 const (

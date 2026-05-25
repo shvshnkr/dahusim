@@ -1,5 +1,7 @@
 package fr.husi.database
 
+import fr.husi.simplemode.SimpleModeHealthRoute
+
 /**
  * When [AutoServerSelector] must run a full TCP + URL probe pass before connect.
  */
@@ -40,6 +42,14 @@ internal object AutoServerSelectorProbePolicy {
             verifiedProfile == profileId &&
             now - verifiedAt < LAST_KNOWN_GOOD_URL_STALE_MS
     }
+
+    fun openPrepareRejectWithoutUrl(
+        wlUrlProbes: Boolean,
+        shouldQuickProbe: Boolean,
+        urlTestDelays: Map<Long, Int>,
+        openMessengerProbe: Boolean = SimpleModeHealthRoute.messengerProbeRequired(false),
+    ): Boolean =
+        !wlUrlProbes && openMessengerProbe && shouldQuickProbe && urlTestDelays.isEmpty()
 
     fun wlPrepareHasUrlConfirmation(
         profileId: Long,

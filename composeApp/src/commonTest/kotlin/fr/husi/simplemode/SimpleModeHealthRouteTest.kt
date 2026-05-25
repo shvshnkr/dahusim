@@ -1,30 +1,170 @@
 package fr.husi.simplemode
 
+import fr.husi.database.DataStore
+import fr.husi.test.HusiKoinTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class SimpleModeHealthRouteTest {
+class SimpleModeHealthRouteTest : HusiKoinTest() {
+
+    override suspend fun postStartKoin() {
+        DataStore.configurationStore.reset()
+    }
 
     @Test
-    fun wlTunnelHealthUsesBsTargetNotYaOrGstatic() {
-        val urls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = true)
+    fun wlPrimaryProbeIsTelegramOnly() {
+        val urls = SimpleModeHealthRoute.probeUrlPlan(
+            phase = "prepare",
+            whitelistOnly = true,
+            tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+        )
         assertEquals(listOf(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM), urls)
         assertFalse(urls.any { it.contains("ya.ru") })
         assertFalse(urls.any { it.contains("gstatic") })
     }
 
     @Test
-    fun prepareWhitelistUsesTelegramBsProbe() {
+    fun wlConfirmProbeUsesThreeBsHosts() {
+        val urls = SimpleModeHealthRoute.probeUrlPlan(
+            phase = "prepare",
+            whitelistOnly = true,
+            tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
+        )
+        assertEquals(3, urls.size)
+        assertEquals(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM, urls.first())
+        assertTrue(urls.any { it.contains("instagram.com") })
+        assertTrue(urls.any { it.contains("facebook.com") })
+        assertFalse(urls.any { it.contains("gstatic") })
+        assertFalse(urls.any { it.contains("ya.ru") })
+    }
+
+    @Test
+    fun prepareWhitelistDelegatesToPrimaryTier() {
         val urls = SimpleModeHealthRoute.prepareProbeUrls(whitelistOnly = true)
         assertEquals(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM, urls.single())
     }
 
     @Test
-    fun postConnectWhitelistUsesBsProbe() {
+    fun postConnectWhitelistDelegatesToPrimaryTier() {
         val urls = SimpleModeHealthRoute.postConnectProbeUrls(whitelistOnly = true)
         assertEquals(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM, urls.single())
+    }
+
+    @Test
+    fun openPrimaryTelegramOnlyWhenMessengerProbeOn() {
+        DataStore.simpleModeTelegramProbe = true
+        val urls = SimpleModeHealthRoute.probeUrlPlan(
+            phase = "prepare",
+            whitelistOnly = false,
+            tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+        )
+        assertEquals(listOf(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM), urls)
+        assertFalse(urls.any { it.contains("gstatic") })
+    }
+
+    @Test
+    fun openPrimaryGstaticWhenMessengerProbeOff() {
+        DataStore.simpleModeTelegramProbe = false
+        val urls = SimpleModeHealthRoute.probeUrlPlan(
+            phase = "prepare",
+            whitelistOnly = false,
+            tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+        )
+        assertTrue(urls.any { it.contains("gstatic") })
+        assertFalse(urls.any { it.contains("telegram.org") })
+    }
+
+    @Test
+    fun openConfirmTelegramFirstWhenMessengerProbeOn() {
+        DataStore.simpleModeTelegramProbe = true
+        val urls = SimpleModeHealthRoute.probeUrlPlan(
+            phase = "prepare",
+            whitelistOnly = false,
+            tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
+        )
+        assertEquals(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM, urls.first())
+        assertTrue(urls.any { it.contains("gstatic") })
+        assertTrue(urls.any { it.contains("cloudflare.com") })
+        assertFalse(urls.any { it.contains("instagram.com") })
+    }
+
+    @Test
+    fun openConfirmAddsCloudflareNotInstagramWhenMessengerProbeOff() {
+        DataStore.simpleModeTelegramProbe = false
+        val urls = SimpleModeHealthRoute.probeUrlPlan(
+            phase = "prepare",
+            whitelistOnly = false,
+            tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
+        )
+        assertTrue(urls.any { it.contains("gstatic") })
+        assertTrue(urls.any { it.contains("cloudflare.com") })
+        assertFalse(urls.any { it.contains("instagram.com") })
+    }
+
+    @Test
+    fun messengerProbeRequiredAlwaysOnWl() {
+        DataStore.simpleModeTelegramProbe = false
+        assertTrue(SimpleModeHealthRoute.messengerProbeRequired(whitelistOnly = true))
+    }
+
+    @Test
+    fun postConnectOpenUsesTelegramWhenMessengerProbeOn() {
+        DataStore.simpleModeTelegramProbe = true
+        val urls = SimpleModeHealthRoute.postConnectProbeUrls(whitelistOnly = false)
+        assertEquals(listOf(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM), urls)
+    }
+
+    @Test
+    fun sessionHealthOpenUsesTelegramWhenMessengerProbeOn() {
+        DataStore.simpleModeTelegramProbe = true
+        val urls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = false)
+        assertEquals(listOf(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM), urls)
+    }
+
+    @Test
+    fun prepareEscalationWhenUrlDeadButTcpAlive() {
+        assertTrue(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "prepare",
+                    urlOk = 0,
+                    tcpAlive = 3,
+                    whitelistOnly = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun prepareEscalationOnWlTieBreak() {
+        assertTrue(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "prepare",
+                    urlOk = 2,
+                    tcpAlive = 5,
+                    topDelays = listOf(1L to 100, 2L to 150),
+                    whitelistOnly = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun prepareNoEscalationWhenScoresFarApart() {
+        assertFalse(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "prepare",
+                    urlOk = 2,
+                    tcpAlive = 5,
+                    topDelays = listOf(1L to 100, 2L to 300),
+                    whitelistOnly = true,
+                ),
+            ),
+        )
     }
 
     @Test

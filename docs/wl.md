@@ -30,9 +30,10 @@
 
 ## 3. Health checks и целевые URL
 
-- `SimpleModeHealthRoute` хранит матрицу:
-  - WL/BS: health-цели берутся из `tunnelBsProbeUrls()` (по умолчанию `https://web.telegram.org`).
-  - Open-интернет: используется gstatic + пользовательский `DataStore.connectionTestURL`.
+- `SimpleModeHealthRoute` хранит матрицу tier **PRIMARY** / **CONFIRM**:
+  - WL/BS **PRIMARY:** `https://web.telegram.org` (prepare batch, tunnel, post-connect).
+  - WL/BS **CONFIRM** (только при сомнении: tcp-alive без url, tie-break top-3, inconclusive tunnel): telegram + instagram + facebook.
+  - Open **PRIMARY:** при `DataStore.simpleModeTelegramProbe` (default ON, Quick settings «Проверка Telegram») — только `web.telegram.org`; OFF — gstatic + `DataStore.connectionTestURL`. **CONFIRM:** telegram + gstatic + cloudflare (не instagram).
 - `skipTunnelHealthCheck(whitelistOnly)` (с флагом `DataStore.simpleModeWlSkipTunnelHealthCheck`) пропускает проверку туннеля на белых сетях, если требуется.
 - `postConnectTimeoutMs`, `warmupMs` и `maxAttempts` тоже адаптируются под WL (большее время ожидания и больше попыток), а `SimpleModeSessionHealth` перед health check повторно вызывает `NetworkReachabilityProbe.probe(fast = true)` и обновляет `DataStore.activeWhitelistRestrictedNetwork`.
 - Если health check провалился, `SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession` проверяет: был ли fail `inconclusive` (например, underlying WL dial), в этом случае просто переключает флаг и не перезапускает туннель.
@@ -62,7 +63,7 @@
 - `NetworkReachability.whitelistOnly = false`, `googleReachable = true`.
 - `DataStore.simpleModeUseWhitelistBuiltinPoolOnly = false`, `activeWhitelistRestrictedNetwork = false`, `autoConnectPausedUntilGoogle` очищается.
 - `AutoServerSelector` собирает полный пул (`ConnectPoolPolicy.buildOpen`), допускает очередь `MAX_SESSION_FALLBACK_STEPS_OPEN = 32`, `subscriptionCompactReprobe` используется когда состав пула поменялся.
-- Health check targets: Cloudflare/gstatic + `DataStore.connectionTestURL`; `SimpleModeSessionHealth` после двух провалов переключит сервер, а затем `SimpleModeVpnCoordinator` может перезапустить или остановить.
+- Health check targets: по умолчанию `web.telegram.org` (флаг «Проверка Telegram»); при OFF — gstatic/cloudflare + `connectionTestURL`. `SimpleModeSessionHealth` после двух провалов переключит сервер, а затем `SimpleModeVpnCoordinator` может перезапустить или остановить.
 - Фоновые обновления и ProbeScheduler свободно работают (`SimpleModeConnectedMaintenance` всегда можно провести `SubscriptionAutoUpdateRunner.refreshDueWithBudget`, `ProbeScheduler` поддерживает пул).
 - При потере интета `BaseService` установит `autoConnectPausedUntilGoogle = true` и ждёт, пока Google появится снова.
 
@@ -83,5 +84,6 @@
 | `DataStore.autoConnectPausedUntilGoogle` | ставится при отсутствии интернета / когда все профили кончились (`SimpleModeConnectCoordinator`, `BaseService`). Сбрасывается, как только `reachability.googleReachable == true` | `BaseService`, `SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession`, dialogs в UI |
 | `SimpleModeActivity` | отображает текущее состояние («Проверка сети», «Ищем сервер», «Переключаемся…») и не обновляется, если сервис уже коннект | `AutoServerSelector`, `SimpleModeConnectCoordinator`, `SimpleModeVpnCoordinator`, `SimpleModeSessionHealth` |
 | `DataStore.simpleModeWlSkipTunnelHealthCheck` | debug-флаг, который позволяет пропустить туннельный health check на WL, тогда `SimpleModeSessionHealth` просто возвращает `true` | `SimpleModeHealthRoute.skipTunnelHealthCheck` |
+| `DataStore.simpleModeTelegramProbe` | на **OPEN** требует `web.telegram.org` в prepare/post-connect/session; на WL не меняет матрицу (уже BS telegram) | `SimpleModeHealthRoute.messengerProbeRequired`, Quick settings |
 
 Суммарно: простая модель опирается на прямой probing (google/dzen/ya/whitelist), флаги в `DataStore` и адаптационные координаторы (`SimpleModeVpnCoordinator`, `SimpleModeSessionHealth`, `SimpleModeTunnelRestart`). Знание того, какая комбинация reachability флагов включена, позволяет предсказать поведение авто-подбора, health check-фазы и фоновых обновлений.

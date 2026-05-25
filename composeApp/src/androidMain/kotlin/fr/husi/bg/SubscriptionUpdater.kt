@@ -14,6 +14,7 @@ import androidx.work.WorkerParameters
 import androidx.work.multiprocess.RemoteWorkManager
 import fr.husi.Action
 import fr.husi.database.DataStore
+import fr.husi.database.SubscriptionUpdateEligibility
 import fr.husi.lib.R
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.repository.resolveRepository
@@ -94,16 +95,18 @@ actual object SubscriptionUpdater {
             val outcome = SubscriptionAutoUpdateRunner.runWithResult(
                 mode = SubscriptionUpdateMode.BackgroundEco,
             ) { profile ->
-                notification.setContentText(
-                    resolveRepository().getString(
-                        Res.string.subscription_update_message,
-                        profile.displayName(),
-                    ),
-                )
-                // #region agent log
-                simpleModeLog("SimpleMode", "H12 subscription_notification profile=${profile.displayName()} channel=$CHANNEL_ID")
-                // #endregion
-                nm.notify(2, notification.build())
+                if (SubscriptionUpdateEligibility.shouldShowUpdateNotification(profile)) {
+                    notification.setContentText(
+                        resolveRepository().getString(
+                            Res.string.subscription_update_message,
+                            profile.displayName(),
+                        ),
+                    )
+                    // #region agent log
+                    simpleModeLog("SimpleMode", "H12 subscription_notification profile=${profile.displayName()} channel=$CHANNEL_ID")
+                    // #endregion
+                    nm.notify(2, notification.build())
+                }
             }
 
             nm.cancel(2)

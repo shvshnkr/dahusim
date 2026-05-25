@@ -57,6 +57,19 @@ class WhitelistSubscriptionFetchTest {
     }
 
     @Test
+    fun `shouldUseYandexMirror for dahusim catalog feed on whitelist`() {
+        val link =
+            "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
+        assertTrue(
+            WhitelistSubscriptionFetch.shouldUseYandexMirror(
+                link = link,
+                whitelistRestricted = true,
+                vpnConnected = false,
+            ),
+        )
+    }
+
+    @Test
     fun `yandexTranslateUrl encodes source link`() {
         val link = "https://raw.githubusercontent.com/foo/bar/refs/heads/main/a.txt"
         val wrapped = WhitelistSubscriptionFetch.yandexTranslateUrl(link)

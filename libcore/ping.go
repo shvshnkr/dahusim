@@ -352,6 +352,193 @@ func (c *Client) UrlTest(tag, link string, timeout int32) (int32, error) {
 	return latency, nil
 }
 
+func (c *Client) NewInstanceGroupURLTest(config, groupTag, link string, timeout int32) (map[string]int32, error) {
+	err := vario.WriteUint8(c.conn, commandNewInstanceGroupURLTest)
+	if err != nil {
+		return nil, E.Cause(err, "write command")
+	}
+	err = vario.WriteString(c.conn, config)
+	if err != nil {
+		return nil, E.Cause(err, "write config")
+	}
+	err = vario.WriteString(c.conn, groupTag)
+	if err != nil {
+		return nil, E.Cause(err, "write group tag")
+	}
+	err = vario.WriteString(c.conn, link)
+	if err != nil {
+		return nil, E.Cause(err, "write link")
+	}
+	err = vario.WriteInt32(c.conn, timeout)
+	if err != nil {
+		return nil, E.Cause(err, "write timeout")
+	}
+	resultCode, err := vario.ReadUint8(c.conn)
+	if err != nil {
+		return nil, E.Cause(err, "read result code")
+	}
+	if resultCode != resultNoError {
+		errMsg, err := vario.ReadString(c.conn)
+		if err != nil {
+			return nil, E.Cause(err, "read error message")
+		}
+		return nil, E.New(errMsg)
+	}
+	count, err := vario.ReadUvarint(c.conn)
+	if err != nil {
+		return nil, E.Cause(err, "read delay count")
+	}
+	delays := make(map[string]int32, int(count))
+	for i := uint64(0); i < count; i++ {
+		tag, err := vario.ReadString(c.conn)
+		if err != nil {
+			return nil, E.Cause(err, "read tag")
+		}
+		delay, err := vario.ReadInt32(c.conn)
+		if err != nil {
+			return nil, E.Cause(err, "read delay")
+		}
+		if delay > 0 {
+			delays[tag] = delay
+		}
+	}
+	return delays, nil
+}
+
+func (s *Service) handleNewInstanceGroupURLTest(conn io.ReadWriter) error {
+	config, err := vario.ReadString(conn)
+	if err != nil {
+		return E.Cause(err, "read config")
+	}
+	groupTag, err := vario.ReadString(conn)
+	if err != nil {
+		return E.Cause(err, "read group tag")
+	}
+	link, err := vario.ReadString(conn)
+	if err != nil {
+		return E.Cause(err, "read link")
+	}
+	timeout, err := vario.ReadInt32(conn)
+	if err != nil {
+		return E.Cause(err, "read timeout")
+	}
+
+	delays, err := s.newInstanceGroupURLTest(config, groupTag, link, timeout)
+	if err != nil {
+		_ = vario.WriteUint8(conn, resultCommonError)
+		_ = vario.WriteString(conn, err.Error())
+		return nil
+	}
+
+	err = vario.WriteUint8(conn, resultNoError)
+	if err != nil {
+		return E.Cause(err, "write result")
+	}
+	err = vario.WriteUvarint(conn, uint64(len(delays)))
+	if err != nil {
+		return E.Cause(err, "write delay count")
+	}
+	for tag, delay := range delays {
+		err = vario.WriteString(conn, tag)
+		if err != nil {
+			return E.Cause(err, "write tag")
+		}
+		err = vario.WriteInt32(conn, delay)
+		if err != nil {
+			return E.Cause(err, "write delay")
+		}
+	}
+	return nil
+}
+
+func (s *Service) newInstanceGroupURLTest(config, groupTag, link string, timeout int32) (map[string]int32, error) {
+	instance, err := newBoxInstance(config, s.platformInterface, true)
+	if err != nil {
+		return nil, E.Cause(err, "create instance")
+	}
+	defer instance.Close()
+	err = instance.Start()
+	if err != nil {
+		return nil, E.Cause(err, "start instance")
+	}
+
+	outboundManager := instance.Outbound()
+	outbound, loaded := outboundManager.Outbound(groupTag)
+	if !loaded {
+		return nil, E.New("group [", groupTag, "] is not found")
+	}
+	outboundGroup, isOutboundGroup := outbound.(adapter.OutboundGroup)
+	if !isOutboundGroup {
+		return nil, E.New("[", groupTag, "] is not a group")
+	}
+
+	ctx, cancel := context.WithTimeout(instance.ctx, time.Duration(timeout)*time.Millisecond)
+	defer cancel()
+
+	if urlTestGroup, isURLTestGroup := outboundGroup.(adapter.URLTestGroup); isURLTestGroup {
+		_, err = urlTestGroup.URLTest(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		historyStorage := instance.api.HistoryStorage()
+		if historyStorage == nil {
+			return map[string]int32{}, nil
+		}
+		outbounds := common.FilterNotNil(common.Map(outboundGroup.All(), func(it string) adapter.Outbound {
+			itOutbound, _ := outboundManager.Outbound(it)
+			return itOutbound
+		}))
+		errGroup, _ := errgroup.WithContext(ctx)
+		errGroup.SetLimit(10)
+		checked := make(map[string]bool)
+		for _, detour := range outbounds {
+			tag := detour.Tag()
+			realTag := group.RealTag(detour)
+			if checked[realTag] {
+				continue
+			}
+			checked[realTag] = true
+			p, loaded := outboundManager.Outbound(realTag)
+			if !loaded {
+				continue
+			}
+			errGroup.Go(func() error {
+				t, err := urltest.URLTest(ctx, link, p)
+				if err != nil {
+					log.DebugContext(ctx, "outbound ", tag, " unavailable: ", err)
+				} else {
+					log.DebugContext(ctx, "outbound ", tag, " available: ", t, "ms")
+					historyStorage.StoreURLTestHistory(realTag, &adapter.URLTestHistory{
+						Time:  time.Now(),
+						Delay: t,
+					})
+				}
+				return nil
+			})
+		}
+		_ = errGroup.Wait()
+	}
+
+	historyStorage := instance.historyStorage()
+	if historyStorage == nil {
+		return map[string]int32{}, nil
+	}
+	delays := make(map[string]int32)
+	for _, memberTag := range outboundGroup.All() {
+		detour, loaded := outboundManager.Outbound(memberTag)
+		if !loaded {
+			continue
+		}
+		realTag := group.RealTag(detour)
+		history := historyStorage.LoadURLTestHistory(realTag)
+		if history != nil && history.Delay > 0 {
+			delays[memberTag] = int32(history.Delay)
+		}
+	}
+	return delays, nil
+}
+
 func (s *Service) handleUrlTest(conn io.ReadWriter, instance *boxInstance) error {
 	tag, err := vario.ReadString(conn)
 	if err != nil {

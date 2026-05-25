@@ -7,6 +7,7 @@ import fr.husi.database.DataStore
 import fr.husi.database.ProxyEntity
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
+import fr.husi.database.SubscriptionUpdateStateStore
 import fr.husi.database.SubscriptionBean
 import fr.husi.fmt.AbstractBean
 import fr.husi.fmt.Deduplication
@@ -310,6 +311,7 @@ abstract class GroupUpdater {
 
         subscription.lastUpdated = (System.currentTimeMillis() / 1000).toInt()
         SagerDatabase.groupDao.updateGroup(proxyGroup)
+        SubscriptionUpdateStateStore.recordSuccess(proxyGroup.id)
 
         return GroupUpdateResult.Success(
             group = proxyGroup,
@@ -423,6 +425,7 @@ abstract class GroupUpdater {
                         ),
                     )
                     // #endregion
+                    SubscriptionUpdateStateStore.recordFailureFromMessage(proxyGroup.id, e.readableMessage)
                     GroupUpdateResult.Failure(
                         group = proxyGroup,
                         message = e.readableMessage,

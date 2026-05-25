@@ -26,12 +26,13 @@
 | Фаза | Open net | WL (БС uplink) |
 |------|----------|----------------|
 | Uplink / `whitelistOnly` | google 204 | dzen, ya, whitelist sources — **direct only** |
-| Prepare URL (direct sing-box per profile) | gstatic + user test URL | **БС через профиль** (`tunnelBsProbeUrls`) |
-| Post-connect / session tunnel | gstatic + user URL | **БС через live tunnel** (`web.telegram.org`); skip only via `simpleModeWlSkipTunnelHealthCheck` (default **off**) |
+| Prepare URL (direct sing-box per profile) | **OPEN + «Проверка Telegram» (default):** `web.telegram.org` only; OFF: gstatic + user test URL; CONFIRM: telegram + gstatic + cloudflare | **БС PRIMARY:** `web.telegram.org` only; **CONFIRM** (tie / tcp-alive / wave-2): + instagram + facebook |
+| Post-connect / session tunnel | **OPEN + флаг:** telegram only; OFF: gstatic + user URL (+ cloudflare on CONFIRM) | **БС PRIMARY:** telegram; **CONFIRM** при inconclusive: + instagram + facebook |
+| Prepare batch (WL, N>1) | — | sing-box **urltest group** (`PrepareGroupUrlProbe`), fallback per-profile |
 
 ## Файлы
 
-- `SimpleModeHealthRoute.kt` — единая матрица URL и skip-политика
+- `SimpleModeHealthRoute.kt` — единая матрица URL и skip-политика; `DataStore.simpleModeTelegramProbe` (default ON) ослабляет только **OPEN**
 - `NetworkReachabilityProbe.kt` — только uplink, не туннель
 - `BaseService.kt` / `SimpleModeSessionHealth.kt` — post-connect и periodic tunnel health
 

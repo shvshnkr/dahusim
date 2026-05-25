@@ -22,15 +22,74 @@ import java.io.File
  */
 internal object DirectProfileUrlProbe {
 
-    suspend fun urlTestDelay(profile: ProxyEntity, whitelistOnly: Boolean = false): Int? = coroutineScope {
-        for (url in SimpleModeHealthRoute.prepareProbeUrls(whitelistOnly = whitelistOnly)) {
+    suspend fun urlTestDelay(profile: ProxyEntity, whitelistOnly: Boolean = false): Int? =
+        urlTestDelay(profile, whitelistOnly, tier = SimpleModeHealthRoute.ProbeTier.PRIMARY)
+
+    suspend fun urlTestDelay(
+        profile: ProxyEntity,
+        whitelistOnly: Boolean,
+        tier: SimpleModeHealthRoute.ProbeTier,
+    ): Int? = coroutineScope {
+        val phase = "prepare"
+        val openMessengerRequired =
+            SimpleModeHealthRoute.messengerProbeRequired(whitelistOnly) && !whitelistOnly
+        if (tier == SimpleModeHealthRoute.ProbeTier.CONFIRM) {
+            if (openMessengerRequired) {
+                return@coroutineScope urlTestDelay(
+                    profile,
+                    SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+                    whitelistOnly,
+                    tier,
+                )
+            }
+            for (url in SimpleModeHealthRoute.probeUrlPlan(phase, whitelistOnly, tier)) {
+                urlTestDelay(profile, url, whitelistOnly, tier)?.let { return@coroutineScope it }
+            }
+            return@coroutineScope null
+        }
+        val primaryUrls = if (openMessengerRequired) {
+            listOf(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM)
+        } else {
+            SimpleModeHealthRoute.probeUrlPlan(phase, whitelistOnly, SimpleModeHealthRoute.ProbeTier.PRIMARY)
+        }
+        var lastError: String? = null
+        for (url in primaryUrls) {
             urlTestDelay(profile, url, whitelistOnly)?.let { return@coroutineScope it }
+            lastError = "primary url test failed"
+        }
+        if (
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = phase,
+                    whitelistOnly = whitelistOnly,
+                    lastProbeError = lastError,
+                    primaryProbeFailed = true,
+                ),
+            )
+        ) {
+            val confirmUrls = SimpleModeHealthRoute.probeUrlPlan(
+                phase,
+                whitelistOnly,
+                SimpleModeHealthRoute.ProbeTier.CONFIRM,
+            )
+            for (url in confirmUrls) {
+                if (url in primaryUrls) continue
+                urlTestDelay(profile, url, whitelistOnly, SimpleModeHealthRoute.ProbeTier.CONFIRM)
+                    ?.let { return@coroutineScope it }
+            }
         }
         null
     }
 
     suspend fun urlTestDelay(profile: ProxyEntity, testUrl: String, whitelistOnly: Boolean = false): Int? =
-        coroutineScope {
+        urlTestDelay(profile, testUrl, whitelistOnly, SimpleModeHealthRoute.ProbeTier.PRIMARY)
+
+    suspend fun urlTestDelay(
+        profile: ProxyEntity,
+        testUrl: String,
+        whitelistOnly: Boolean,
+        tier: SimpleModeHealthRoute.ProbeTier,
+    ): Int? = coroutineScope {
         var client: Client? = null
         var processes: GuardedProcessPool? = null
         val cacheFiles = ArrayList<File>()

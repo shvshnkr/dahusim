@@ -130,6 +130,7 @@ object SimpleModeConnectCoordinator {
                             SubscriptionAutoUpdateRunner.refreshDueWithBudget(
                                 mode = SubscriptionUpdateMode.ForegroundInteractive,
                                 budgetMs = refreshBudgetMs,
+                                connectRefresh = true,
                             )
                         }.also { outcome ->
                             simpleModeLog(

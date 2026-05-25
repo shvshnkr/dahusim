@@ -2,11 +2,13 @@ package fr.husi.database
 
 import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
+import fr.husi.fmt.PrepareTestConfigBuilder
 import fr.husi.ktx.Logs
 import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -42,6 +44,7 @@ sealed class PrepareForConnectResult {
 object AutoServerSelector {
 
     private const val TCP_PROBE_BATCH_CAP = 128
+    private const val URL_BATCH_CAP = 32
     /** Upper bound on connect-time TCP rounds (128 × 16 ≈ 2k profiles per prepare). */
     private const val TCP_PROBE_MAX_ROUNDS = 16
     private const val PROFILE_FAILURE_COOLDOWN_MS = 30L * 60 * 1000
@@ -127,6 +130,8 @@ object AutoServerSelector {
     }
 
     private const val WL_URL_PROBE_EARLY_EXIT = 8
+    private const val TCP_SURVIVOR_URL_CAP = 64
+    private const val CONFIRM_TCP_TOP_K = 12
 
     suspend fun prepareForConnect(
         networkHandoff: Boolean = false,
@@ -479,12 +484,13 @@ object AutoServerSelector {
                     subscriptionWlIds = subscriptionWhitelistIds,
                 )
                 val baseIds = baseUrlTest.map { it.id }.toSet()
+                val tcpSurvivors = quickProbePings.size.coerceAtMost(TCP_SURVIVOR_URL_CAP)
                 val extraTcpForUrlTest = if (quickProbePings.isNotEmpty()) {
                     connectPool
                         .asSequence()
                         .filter { it.id !in baseIds && quickProbePings.containsKey(it.id) }
                         .sortedBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
-                        .take(extraUrlTestByTcp)
+                        .take((tcpSurvivors - baseUrlTest.size).coerceAtLeast(0))
                         .toList()
                 } else {
                     emptyList()
@@ -497,7 +503,8 @@ object AutoServerSelector {
                 if (missing.isNotEmpty()) {
                     simpleModeLog(
                         "SimpleMode",
-                        "H17 urltest_supplement candidates=${missing.size} cap=$urlSupplementCap",
+                        "H17 urltest_supplement candidates=${missing.size} cap=$urlSupplementCap " +
+                            "url_wave=1 tcp_survivors=$tcpSurvivors",
                     )
                     merged.putAll(
                         urlTestTopCandidates(
@@ -510,6 +517,63 @@ object AutoServerSelector {
                             Probe2kProgress.publishScan(done, total)
                         },
                     )
+                }
+                var urlWave = 1
+                if (merged.isEmpty() && quickProbePings.isNotEmpty()) {
+                    val wave2Pool = connectPool
+                        .filter { it.id !in merged && quickProbePings.containsKey(it.id) }
+                        .sortedBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
+                        .drop(urlTestCandidates.size % quickProbePings.size.coerceAtLeast(1))
+                        .take(CONFIRM_TCP_TOP_K)
+                    if (wave2Pool.isNotEmpty()) {
+                        urlWave = 2
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H17 urltest_wave2 candidates=${wave2Pool.size} tier=CONFIRM " +
+                                "tcp_survivors=$tcpSurvivors",
+                        )
+                        merged.putAll(
+                            urlTestTopCandidates(
+                                wave2Pool,
+                                urlConcurrency,
+                                session,
+                                whitelistBuiltinOnly = wlUrlProbes,
+                                tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
+                            ) { done, total ->
+                                setSimpleModeActivity("Testing URL $done/$total")
+                                Probe2kProgress.publishScan(done, total)
+                            },
+                        )
+                    }
+                }
+                val topDelays = merged.entries.sortedBy { it.value }.take(3)
+                if (SimpleModeHealthRoute.shouldEscalateToConfirm(
+                        SimpleModeHealthRoute.ProbeEscalationContext(
+                            phase = "prepare",
+                            urlOk = merged.size,
+                            tcpAlive = quickProbePings.size,
+                            topDelays = topDelays.map { it.key to it.value },
+                            whitelistOnly = wlUrlProbes,
+                        ),
+                    ) && topDelays.size >= 2
+                ) {
+                    val tieIds = topDelays.map { it.key }.toSet()
+                    val tiePool = urlTestCandidates.filter { it.id in tieIds }
+                    if (tiePool.isNotEmpty()) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H17 urltest_tiebreak candidates=${tiePool.size} tier=CONFIRM url_wave=$urlWave",
+                        )
+                        merged.putAll(
+                            urlTestTopCandidates(
+                                tiePool,
+                                urlConcurrency,
+                                session,
+                                whitelistBuiltinOnly = wlUrlProbes,
+                                tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
+                            ),
+                        )
+                    }
                 }
                 urlTestDelays = merged
             }
@@ -561,13 +625,15 @@ object AutoServerSelector {
         }
         if (urlTestCandidates.isNotEmpty()) {
             val urlOk = urlTestDelays.size
+            val tcpSurvivors = quickProbePings.size
             val urlHead = urlTestDelays.entries
                 .sortedBy { it.value }
                 .take(5)
                 .joinToString(";") { "${it.key}:${it.value}" }
             simpleModeLog(
                 "SimpleMode",
-                "H17 urltest_done success=$urlOk tested=${urlTestCandidates.size} best=$urlHead",
+                "H17 urltest_done success=$urlOk tested=${urlTestCandidates.size} " +
+                    "tcp_survivors=$tcpSurvivors best=$urlHead",
             )
         }
 
@@ -781,6 +847,18 @@ object AutoServerSelector {
             )
             return PrepareForConnectResult.AllProbesDead
         }
+        if (AutoServerSelectorProbePolicy.openPrepareRejectWithoutUrl(
+                wlUrlProbes = wlUrlProbes,
+                shouldQuickProbe = shouldQuickProbe,
+                urlTestDelays = urlTestDelays,
+            )
+        ) {
+            simpleModeLog(
+                "SimpleMode",
+                "H22 prepare_open_no_telegram_ok best=$best tcpAlive=$quickProbeAlive pool=${connectPool.size}",
+            )
+            return PrepareForConnectResult.AllProbesDead
+        }
         return PrepareForConnectResult.Success(best)
     }
 
@@ -928,11 +1006,13 @@ object AutoServerSelector {
         AutoServerSelectorSessionFallback.syncIndexForConnected(profileId)
     }
 
-    fun markConnected(profileId: Long) {
+    fun markConnected(profileId: Long, recordUrlVerified: Boolean = true) {
         sessionFallbackSteps.set(0)
         DataStore.autoSelectLastKnownGood = profileId
         recentProbeFailures.remove(profileId)
-        AutoServerSelectorProbePolicy.recordPostConnectUrlVerified(profileId)
+        if (recordUrlVerified) {
+            AutoServerSelectorProbePolicy.recordPostConnectUrlVerified(profileId)
+        }
         AutoServerSelectorSessionFallback.syncIndexForConnected(profileId)
         if (DataStore.probe2kPersistenceEnabled) {
             runBlocking { ProxyProbeStateStore.recordConnected(profileId) }
@@ -986,7 +1066,17 @@ object AutoServerSelector {
         if (isInFailureCooldown(goodId)) return null
         ensurePrepareCurrent(session)
         setSimpleModeActivity("Verifying last server…")
-        val lkgDelay = DirectProfileUrlProbe.urlTestDelay(good, whitelistOnly = wlUrlProbes) ?: return null
+        val lkgTier = when {
+            wlUrlProbes -> SimpleModeHealthRoute.ProbeTier.CONFIRM
+            SimpleModeHealthRoute.messengerProbeRequired(false) ->
+                SimpleModeHealthRoute.ProbeTier.PRIMARY
+            else -> SimpleModeHealthRoute.ProbeTier.CONFIRM
+        }
+        val lkgDelay = DirectProfileUrlProbe.urlTestDelay(
+            good,
+            whitelistOnly = wlUrlProbes,
+            tier = lkgTier,
+        ) ?: return null
         if (lkgDelay <= 0) return null
         ensurePrepareCurrent(session)
         val urlPool = buildStratifiedUrlPool(
@@ -1094,6 +1184,18 @@ object AutoServerSelector {
      * Picks URL-test candidates round-robin across subscription groups so one group
      * does not monopolize the probe budget.
      */
+    private fun stratifiedListRotationOffset(
+        proxies: List<ProxyEntity>,
+        probeStates: Map<Long, ProxyProbeState>,
+    ): Int {
+        val byGroup = proxies.groupBy { it.groupId }
+        if (byGroup.size != 1) return 0
+        val list = byGroup.values.first()
+        if (list.size <= 80) return 0
+        val tick = probeStates.values.sumOf { it.lastCheckedAt }
+        return (tick % list.size).toInt()
+    }
+
     private fun buildStratifiedUrlPool(
         proxies: List<ProxyEntity>,
         cap: Int,
@@ -1103,16 +1205,23 @@ object AutoServerSelector {
         subscriptionWlIds: Set<Long> = emptySet(),
     ): List<ProxyEntity> {
         if (proxies.isEmpty() || cap <= 0) return emptyList()
+        val rotation = stratifiedListRotationOffset(proxies, probeStates)
         val byGroup = proxies.groupBy { it.groupId }
         val groupQueues = byGroup.mapValues { (_, list) ->
-            list.sortedWith(
+            val sorted = list.sortedWith(
                 heuristicPreTcpOrder(
                     priorityFirstIds = priorityFirstIds,
                     probeStates = probeStates,
                     poolMode = poolMode,
                     subscriptionWlIds = subscriptionWlIds,
                 ),
-            ).toMutableList()
+            )
+            if (rotation <= 0 || sorted.size <= 1) {
+                sorted.toMutableList()
+            } else {
+                val offset = rotation % sorted.size
+                (sorted.drop(offset) + sorted.take(offset)).toMutableList()
+            }
         }
         val groupOrder = groupQueues.keys.sorted()
         val picked = ArrayList<ProxyEntity>(cap.coerceAtMost(proxies.size))
@@ -1250,15 +1359,88 @@ object AutoServerSelector {
         concurrency: Int,
         session: PrepareSession,
         whitelistBuiltinOnly: Boolean = false,
+        tier: SimpleModeHealthRoute.ProbeTier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Map<Long, Int> = coroutineScope {
         val total = candidates.size
         if (total == 0) return@coroutineScope emptyMap()
+        val messengerRequired = SimpleModeHealthRoute.messengerProbeRequired(whitelistBuiltinOnly)
+        val useBatch = whitelistBuiltinOnly || total > 24 ||
+            (messengerRequired && !whitelistBuiltinOnly && total > 12)
         val semaphore = Semaphore(concurrency)
         val result = HashMap<Long, Int>()
+        if (useBatch && tier == SimpleModeHealthRoute.ProbeTier.PRIMARY) {
+            if (!isPrepareCurrent(session)) return@coroutineScope emptyMap()
+            val part = PrepareTestConfigBuilder.partitionForBatch(candidates)
+            val batchSlice = part.batchable.take(URL_BATCH_CAP)
+            var batchUsable = false
+            if (batchSlice.isNotEmpty()) {
+                val batch = PrepareGroupUrlProbe.urlTestDelays(
+                    batchSlice,
+                    whitelistOnly = whitelistBuiltinOnly,
+                    tier = tier,
+                )
+                when {
+                    batch == null -> Unit
+                    batch.isEmpty() -> Unit
+                    else -> {
+                        result.putAll(batch)
+                        batchUsable = true
+                    }
+                }
+            }
+            val perProfile = if (batchUsable) {
+                part.pluginRequired + part.batchable.drop(URL_BATCH_CAP)
+            } else {
+                candidates
+            }
+            if (perProfile.isEmpty()) {
+                onProgress(total, total)
+                return@coroutineScope result.toMap()
+            }
+            urlTestPerProfile(
+                perProfile = perProfile,
+                total = total,
+                concurrency = concurrency,
+                session = session,
+                whitelistBuiltinOnly = whitelistBuiltinOnly,
+                tier = tier,
+                onProgress = onProgress,
+                result = result,
+                semaphore = semaphore,
+                earlyExitTarget = if (whitelistBuiltinOnly) WL_URL_PROBE_EARLY_EXIT else Int.MAX_VALUE,
+            )
+            return@coroutineScope result.toMap()
+        }
+        urlTestPerProfile(
+            perProfile = candidates,
+            total = total,
+            concurrency = concurrency,
+            session = session,
+            whitelistBuiltinOnly = whitelistBuiltinOnly,
+            tier = tier,
+            onProgress = onProgress,
+            result = result,
+            semaphore = semaphore,
+            earlyExitTarget = if (whitelistBuiltinOnly) WL_URL_PROBE_EARLY_EXIT else Int.MAX_VALUE,
+        )
+        result.toMap()
+    }
+
+    private suspend fun CoroutineScope.urlTestPerProfile(
+        perProfile: List<ProxyEntity>,
+        total: Int,
+        concurrency: Int,
+        session: PrepareSession,
+        whitelistBuiltinOnly: Boolean,
+        tier: SimpleModeHealthRoute.ProbeTier,
+        onProgress: (done: Int, total: Int) -> Unit,
+        result: HashMap<Long, Int>,
+        semaphore: Semaphore,
+        earlyExitTarget: Int,
+    ) {
         val done = AtomicInteger(0)
         var lastReported = 0
-        val earlyExitTarget = if (whitelistBuiltinOnly) WL_URL_PROBE_EARLY_EXIT else Int.MAX_VALUE
         fun reportProgress() {
             val count = done.incrementAndGet()
             if (count == total || count - lastReported >= 1) {
@@ -1267,7 +1449,7 @@ object AutoServerSelector {
             }
         }
         onProgress(0, total)
-        candidates.map { proxy ->
+        perProfile.map { proxy ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
                     if (!isPrepareCurrent(session) || !currentCoroutineContext().isActive) {
@@ -1288,6 +1470,7 @@ object AutoServerSelector {
                         val ms = DirectProfileUrlProbe.urlTestDelay(
                             proxy,
                             whitelistOnly = whitelistBuiltinOnly,
+                            tier = tier,
                         )
                         if (ms != null && ms > 0) {
                             synchronized(result) {
@@ -1300,7 +1483,6 @@ object AutoServerSelector {
                 }
             }
         }.awaitAll()
-        result.toMap()
     }
 
     private data class TcpProbeBatchResult(

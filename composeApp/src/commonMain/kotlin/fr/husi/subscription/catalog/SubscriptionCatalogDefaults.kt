@@ -55,10 +55,20 @@ object SubscriptionCatalogDefaults {
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
-            "tri-228",
-            "tri_228",
-            "https://raw.githubusercontent.com/nzea243/ikoV31tud_vpn/refs/heads/main/tri_228.txt",
-            ConnectPoolRole.OPEN,
+            sourceKey = "tri-228-open",
+            name = "tri_228 open",
+            link = "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/tri_228-open.txt",
+            poolRole = ConnectPoolRole.OPEN,
+            legacyLinks = setOf(
+                "https://gitverse.ru/api/repos/nzea234/ekaterina_nevilikaya228/raw/branch/master/tri_228.txt",
+                "https://raw.githubusercontent.com/nzea243/ikoV31tud_vpn/refs/heads/main/tri_228.txt",
+            ),
+        ),
+        CatalogSeed(
+            sourceKey = "tri-228-wl",
+            name = "tri_228 wl",
+            link = "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/tri_228-wl.txt",
+            poolRole = ConnectPoolRole.WL,
         ),
         CatalogSeed(
             "white-lattice",

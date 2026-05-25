@@ -13,11 +13,12 @@ import fr.husi.fmt.KryoConverters
         ProxyGroup::class,
         ProxyEntity::class,
         ProxyProbeState::class,
+        SubscriptionUpdateState::class,
         RuleEntity::class,
         AssetEntity::class,
         PluginEntity::class,
     ],
-    version = 19,
+    version = 20,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3, spec = SagerDatabase_Migration_2_3::class),
@@ -35,6 +36,8 @@ import fr.husi.fmt.KryoConverters
         AutoMigration(from = 15, to = 16),
         AutoMigration(from = 16, to = 17),
         AutoMigration(from = 17, to = 18),
+        AutoMigration(from = 18, to = 19),
+        AutoMigration(from = 19, to = 20),
     ],
 )
 @TypeConverters(value = [KryoConverters::class])
@@ -48,6 +51,7 @@ abstract class SagerDatabase : RoomDatabase() {
         val groupDao get() = instance.groupDao()
         val proxyDao get() = instance.proxyDao()
         val probeStateDao get() = instance.probeStateDao()
+        val subscriptionUpdateStateDao get() = instance.subscriptionUpdateStateDao()
         val rulesDao get() = instance.rulesDao()
         val assetDao get() = instance.assetDao()
         val pluginDao get() = instance.pluginDao()
@@ -57,6 +61,7 @@ abstract class SagerDatabase : RoomDatabase() {
     abstract fun groupDao(): ProxyGroup.Dao
     abstract fun proxyDao(): ProxyEntity.Dao
     abstract fun probeStateDao(): ProxyProbeStateDao
+    abstract fun subscriptionUpdateStateDao(): SubscriptionUpdateStateDao
     abstract fun rulesDao(): RuleEntity.Dao
     abstract fun assetDao(): AssetEntity.Dao
     abstract fun pluginDao(): PluginEntity.Dao

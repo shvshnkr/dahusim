@@ -842,6 +842,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_all_servers_dead_message">Профили из подписок не ответили на проверки. Можно ждать интернета без БС (для обычных обновлений списков) или выйти из приложения.</string>
     <string name="simple_mode_wait_for_google_action">Ждать интернета без БС</string>
     <string name="simple_mode_exit_app_action">Выйти из приложения</string>
+    <string name="simple_mode_telegram_probe">Проверка Telegram</string>
+    <string name="simple_mode_telegram_probe_summary">Не подключаться к серверу, если web.telegram.org через профиль недоступен</string>
     <string name="probe_2k_settings">Проверка серверов (2K)</string>
     <string name="probe_2k_persistence_enabled">Сохранять состояние проверок</string>
     <string name="probe_2k_persistence_summary">Хранит результаты TCP/URL-проверок по каждому профилю для больших пулов</string>

@@ -16,6 +16,7 @@ import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.ktx.parseProxies
+import fr.husi.simplemode.probeSimpleModeNetwork
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import fr.husi.subscription.catalog.SubscriptionCatalogDefaults
 import kotlinx.coroutines.flow.first
@@ -32,6 +33,7 @@ object DefaultUserBootstrap {
     )
 
     suspend fun bootstrapAll() {
+        applyBootstrapNetworkProbe()
         ensureReservedBuiltinSlot()
         bootstrapDefaultSubscriptions()
         runCatching {
@@ -46,6 +48,18 @@ object DefaultUserBootstrap {
             ProfileManager.applyRouteQuickProfile(DataStore.routeQuickProfile)
         }
         removeLegacyBuiltinHelpersGroup()
+    }
+
+    private suspend fun applyBootstrapNetworkProbe() {
+        val net = probeSimpleModeNetwork()
+        DataStore.activeWhitelistRestrictedNetwork = net.whitelistOnly
+        if (net.whitelistOnly) {
+            DataStore.simpleModeUseWhitelistBuiltinPoolOnly = true
+        }
+        Logs.d(
+            "DefaultUserBootstrap: network probe whitelistOnly=${net.whitelistOnly} " +
+                "hasInternet=${net.hasAnyInternet}",
+        )
     }
 
     private suspend fun removeLegacyBuiltinHelpersGroup() {

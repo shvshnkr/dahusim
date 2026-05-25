@@ -172,6 +172,7 @@ fun QuickSettingsScreen(
                     item("quick_settings_section_probes", PreferenceType.CATEGORY) {
                         PreferenceCategory(text = { Text(stringResource(Res.string.quick_settings_section_probes)) })
                     }
+                    simpleModeProbeSettings()
                     probe2kSettings(::showMessage)
                     probeParallelismCategory()
                     connectionTestConcurrentPreference()

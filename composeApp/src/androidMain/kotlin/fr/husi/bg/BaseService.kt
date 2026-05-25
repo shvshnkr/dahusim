@@ -676,7 +676,7 @@ class BaseService {
                                 lastHealthError = postConnectLastError,
                             )
                             if (recovered) {
-                                AutoServerSelector.markConnected(profile.id)
+                                AutoServerSelector.markConnected(profile.id, recordUrlVerified = false)
                                 simpleModeLog(
                                     "SimpleMode",
                                     "H10 post_connect_inconclusive_connected profileId=${profile.id}",
@@ -700,6 +700,7 @@ class BaseService {
                             SubscriptionAutoUpdateRunner.refreshDueWithBudget(
                                 mode = SubscriptionUpdateMode.ForegroundInteractive,
                                 budgetMs = fallbackRefreshBudgetMs,
+                                connectRefresh = true,
                             )
                         }
                         val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
@@ -804,6 +805,7 @@ class BaseService {
                         SubscriptionAutoUpdateRunner.refreshDueWithBudget(
                             mode = SubscriptionUpdateMode.ForegroundInteractive,
                             budgetMs = fallbackRefreshBudgetMs,
+                            connectRefresh = true,
                         )
                     }
                     val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
@@ -869,6 +871,7 @@ class BaseService {
                         SubscriptionAutoUpdateRunner.refreshDueWithBudget(
                             mode = SubscriptionUpdateMode.ForegroundInteractive,
                             budgetMs = fallbackRefreshBudgetMs,
+                            connectRefresh = true,
                         )
                     }
                     val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
