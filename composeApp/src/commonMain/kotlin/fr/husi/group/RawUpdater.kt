@@ -18,7 +18,6 @@ import fr.husi.ktx.isIpAddress
 import fr.husi.ktx.kxs
 import fr.husi.ktx.parseProxies
 import fr.husi.ktx.toJsonMapKxs
-import fr.husi.libcore.Libcore
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.Res
 import fr.husi.resources.no_proxies_found
@@ -67,34 +66,16 @@ object RawUpdater : GroupUpdater() {
             )
             // #endregion
         } else {
-            val fetchLink = WhitelistSubscriptionFetch.resolveFetchLink(
-                link = subscription.link,
-                whitelistRestricted = DataStore.activeWhitelistRestrictedNetwork,
-                vpnConnected = DataStore.serviceState.connected,
+            val fetch = SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = subscription.link,
+                    userAgent = SubscriptionFetchProfile.resolveUserAgent(subscription),
+                    purpose = SubscriptionHttpFetch.FetchPurpose.GroupUpdate,
+                    logContext = "group=${proxyGroup.displayName()}",
+                ),
             )
-            val viaYandexMirror = fetchLink != subscription.link
-            if (viaYandexMirror) {
-                simpleModeLog(
-                    "SimpleMode",
-                    "H29 subscription_fetch_mirror yandex host=${subscription.link.substringBefore('?')}",
-                )
-            }
-
-            val response = Libcore.newHttpClient().apply {
-                if (DataStore.serviceState.connected) {
-                    useSocks5(
-                        DataStore.mixedPort,
-                        DataStore.inboundUsername,
-                        DataStore.inboundPassword,
-                    )
-                }
-            }.newRequest().apply {
-                setURL(fetchLink)
-                val resolvedUa = SubscriptionFetchProfile.resolveUserAgent(subscription)
-                Logs.d("subscription fetch UA: $resolvedUa")
-                setUserAgent(resolvedUa)
-            }.execute()
-            val body = WhitelistSubscriptionFetch.extractSubscriptionBody(response.contentString)
+            val body = fetch.body
+            val viaYandexMirror = fetch.viaYandexMirror
             proxies = parseRaw(body) ?: errNotFound()
             // #region agent log
             simpleModeLog(
@@ -110,7 +91,7 @@ object RawUpdater : GroupUpdater() {
                 data = mapOf(
                     "group" to proxyGroup.displayName(),
                     "parsed" to proxies.size.toString(),
-                    "bytes" to response.contentString.length.toString(),
+                    "bytes" to fetch.rawContentLength.toString(),
                     "link" to subscription.link,
                 ),
             )
@@ -119,8 +100,8 @@ object RawUpdater : GroupUpdater() {
             // https://github.com/crossutility/Quantumult/blob/master/extra-subscription-feature.md
             // Subscription-Userinfo: upload=2375927198; download=12983696043; total=1099511627776; expire=1862111613
             // Be careful that some value may be empty.
-            val userInfo = response.getHeader("Subscription-Userinfo")
-            if (userInfo.isNotBlank()) {
+            val userInfo = fetch.subscriptionUserInfo
+            if (!userInfo.isNullOrBlank()) {
                 var used = 0L
                 var total = 0L
                 var expired = 0L

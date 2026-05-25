@@ -1,15 +1,13 @@
 package fr.husi.ui
 
-import fr.husi.database.DataStore
 import fr.husi.database.SubscriptionBean
 import fr.husi.group.RawUpdater
 import fr.husi.group.SubscriptionFetchProfile
+import fr.husi.group.SubscriptionHttpFetch
 import fr.husi.group.SubscriptionSourceKind
 import fr.husi.group.SubscriptionUserAgentPresets
-import fr.husi.group.WhitelistSubscriptionFetch
 import fr.husi.ktx.SubscriptionFoundException
 import fr.husi.ktx.parseProxies
-import fr.husi.libcore.Libcore
 import java.net.URL
 
 /**
@@ -103,56 +101,45 @@ object ImportLinkClassifier {
         }
     }
 
-    private suspend fun classifyFetchedBody(body: String, sourceUrl: String): HttpImportResolution {
+    internal suspend fun classifyFetchedBody(body: String, sourceUrl: String): HttpImportResolution {
         return try {
-            val proxies = RawUpdater.parseRaw(body)
-            when {
-                proxies.isNullOrEmpty() -> {
-                    if (looksLikeSubscriptionUrl(sourceUrl)) {
-                        HttpImportResolution.Subscription(sourceUrl)
-                    } else {
-                        HttpImportResolution.Ambiguous
-                    }
-                }
-                proxies.size == 1 -> HttpImportResolution.Standalone(
-                    proxies = proxies,
-                    suggestedGroupName = suggestImportGroupName(sourceUrl),
-                )
-                else -> HttpImportResolution.Subscription(sourceUrl)
-            }
+            classifyParsedProxies(RawUpdater.parseRaw(body), sourceUrl)
         } catch (e: SubscriptionFoundException) {
             HttpImportResolution.Subscription(e.link)
         } catch (_: Exception) {
+            classifyParsedProxies(null, sourceUrl)
+        }
+    }
+
+    internal fun classifyParsedProxies(
+        proxies: List<fr.husi.fmt.AbstractBean>?,
+        sourceUrl: String,
+    ): HttpImportResolution = when {
+        proxies.isNullOrEmpty() -> {
             if (looksLikeSubscriptionUrl(sourceUrl)) {
                 HttpImportResolution.Subscription(sourceUrl)
             } else {
                 HttpImportResolution.Ambiguous
             }
         }
+        proxies.size == 1 -> HttpImportResolution.Standalone(
+            proxies = proxies,
+            suggestedGroupName = suggestImportGroupName(sourceUrl),
+        )
+        else -> HttpImportResolution.Subscription(sourceUrl)
     }
 
     private suspend fun fetchHttpBody(link: String): String {
-        val fetchLink = WhitelistSubscriptionFetch.resolveFetchLink(
-            link = link,
-            whitelistRestricted = DataStore.activeWhitelistRestrictedNetwork,
-            vpnConnected = DataStore.serviceState.connected,
-        )
         val subscription = SubscriptionBean().apply {
             this.link = link
             fetchProfile = SubscriptionUserAgentPresets.inferFetchProfileForNewLink(link)
         }
-        val response = Libcore.newHttpClient().apply {
-            if (DataStore.serviceState.connected) {
-                useSocks5(
-                    DataStore.mixedPort,
-                    DataStore.inboundUsername,
-                    DataStore.inboundPassword,
-                )
-            }
-        }.newRequest().apply {
-            setURL(fetchLink)
-            setUserAgent(SubscriptionFetchProfile.resolveUserAgent(subscription))
-        }.execute()
-        return WhitelistSubscriptionFetch.extractSubscriptionBody(response.contentString)
+        return SubscriptionHttpFetch.fetchText(
+            SubscriptionHttpFetch.Request(
+                canonicalLink = link,
+                userAgent = SubscriptionFetchProfile.resolveUserAgent(subscription),
+                purpose = SubscriptionHttpFetch.FetchPurpose.ImportPreview,
+            ),
+        ).body
     }
 }
