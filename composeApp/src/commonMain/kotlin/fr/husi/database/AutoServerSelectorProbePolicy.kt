@@ -41,6 +41,21 @@ internal object AutoServerSelectorProbePolicy {
             now - verifiedAt < LAST_KNOWN_GOOD_URL_STALE_MS
     }
 
+    fun wlPrepareHasUrlConfirmation(
+        profileId: Long,
+        urlTestDelays: Map<Long, Int>,
+        probeStates: Map<Long, ProxyProbeState>,
+        lkgUrlFresh: (Long) -> Boolean = ::isLastKnownGoodUrlFresh,
+    ): Boolean {
+        if (profileId in urlTestDelays) return true
+        val state = probeStates[profileId]
+        if (state != null && state.lastUrlMs > 0) {
+            val now = System.currentTimeMillis()
+            if (now - state.lastOkAt <= Probe2kDefaults.ALIVE_URL_FRESH_MS) return true
+        }
+        return lkgUrlFresh(profileId)
+    }
+
     fun forceFullProbeReason(
         proxies: List<ProxyEntity>,
         whitelistBuiltinOnly: Boolean,

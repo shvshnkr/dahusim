@@ -771,6 +771,15 @@ object AutoServerSelector {
             forceFullProbeReason = forceFullProbeReason,
             probeStates = probeStates,
         )
+        if (wlUrlProbes && shouldQuickProbe && urlTestDelays.isEmpty() &&
+            !AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(best, urlTestDelays, probeStates)
+        ) {
+            simpleModeLog(
+                "SimpleMode",
+                "H22 prepare_wl_no_url_ok best=$best tcpAlive=$quickProbeAlive pool=${connectPool.size}",
+            )
+            return PrepareForConnectResult.AllProbesDead
+        }
         return PrepareForConnectResult.Success(best)
     }
 
@@ -1214,12 +1223,12 @@ object AutoServerSelector {
                 isInFailureCooldown(it),
             )
         }
-        if (wlUrlProbes && urlTestDelays.isEmpty() && quickProbePings.isNotEmpty()) {
-            viable.firstOrNull { (probeStates[it]?.lastUrlMs ?: 0) > 0 }?.let { return it }
-            if (quickProbePings.size <= 2) {
-                return viable.firstOrNull() ?: rankedFinal.first()
-            }
-            viable.firstOrNull { quickProbePings.containsKey(it) }?.let { return it }
+        if (wlUrlProbes) {
+            urlTestDelays.keys.firstOrNull { it in viable }?.let { return it }
+            viable.firstOrNull {
+                AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(it, urlTestDelays, probeStates)
+            }?.let { return it }
+            return rankedFinal.first()
         }
         return viable.firstOrNull() ?: rankedFinal.first()
     }

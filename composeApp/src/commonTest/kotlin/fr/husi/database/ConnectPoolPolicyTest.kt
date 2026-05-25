@@ -73,6 +73,38 @@ class ConnectPoolPolicyTest {
     }
 
     @Test
+    fun wlListHeadIncludesLowestUserOrderPerGroup() {
+        val groups = listOf(
+            group(1L, "White lists A", sourceId = "white-lattice"),
+            group(2L, "White lists B", sourceId = "wlrus-blackl"),
+        )
+        val proxies = buildList {
+            for (g in 1L..2L) {
+                for (i in 1L..20L) {
+                    add(proxy(id = g * 1000 + i, groupId = g, order = i))
+                }
+            }
+        }
+        val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION,
+            allProxies = proxies,
+            groups = groups,
+            handoffIds = emptySet(),
+            probeStates = emptyMap(),
+        )
+        val ids = result.orderedProxies.map { it.id }
+        assertTrue(1001L in ids)
+        assertTrue(1002L in ids)
+        assertTrue(2001L in ids)
+        assertTrue(2002L in ids)
+        val head = ids.take(8).toSet()
+        assertTrue(1001L in head)
+        assertTrue(1002L in head)
+        assertTrue(2001L in head)
+        assertTrue(2002L in head)
+    }
+
+    @Test
     fun urlHintedRisesBeforeStratifiedTailOnWl() {
         val groups = listOf(group(1L, "White lists", sourceId = "white-lattice"))
         val pool = listOf(

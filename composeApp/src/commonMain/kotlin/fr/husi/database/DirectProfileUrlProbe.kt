@@ -61,7 +61,9 @@ internal object DirectProfileUrlProbe {
         } catch (e: PluginNotFoundException) {
             Logs.w("DirectProfileUrlProbe plugin: ${e.plugin}")
         } catch (e: Exception) {
-            Logs.d("DirectProfileUrlProbe ${profile.displayName()} $testUrl: ${e.readableMessage}")
+            val msg = e.readableMessage
+            Logs.d("DirectProfileUrlProbe ${profile.displayName()} $testUrl: $msg")
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk(msg, whitelistOnly)?.let { out = it }
         } finally {
             client?.closeQuietly()
             processes?.close(this@coroutineScope)

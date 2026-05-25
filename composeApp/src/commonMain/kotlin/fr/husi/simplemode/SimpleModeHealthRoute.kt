@@ -17,6 +17,9 @@ internal object SimpleModeHealthRoute {
     /** BS target: blocked on WL uplink L3; must work via VPN exit. */
     const val TUNNEL_HEALTH_TELEGRAM = "https://web.telegram.org"
 
+    /** WL URL probe reached HTTP (e.g. 405) — tunnel/profile path is up. */
+    const val WL_URL_PROBE_SYNTHETIC_MS = 200
+
     /** Uplink-only on WL (reachable without VPN). Never use for tunnel urlTest. */
     const val WL_YA_HTTPS = "https://ya.ru/"
 
@@ -116,12 +119,17 @@ internal object SimpleModeHealthRoute {
         return e.contains("no recent network activity")
     }
 
-    private fun isWlHttpProbeInconclusive(error: String?): Boolean {
+    internal fun isWlHttpProbeInconclusive(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
         val e = error.lowercase()
         return e.contains("method not allowed") ||
             e.contains("405") ||
             e.contains("operation not permitted")
+    }
+
+    fun wlUrlProbeTreatAsOk(error: String?, whitelistOnly: Boolean): Int? {
+        if (!whitelistOnly) return null
+        return if (isWlHttpProbeInconclusive(error)) WL_URL_PROBE_SYNTHETIC_MS else null
     }
 
     fun logInconclusivePass(phase: String, whitelistOnly: Boolean, reason: String) {

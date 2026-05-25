@@ -69,6 +69,16 @@ class SimpleModeHealthRouteTest {
     }
 
     @Test
+    fun wlUrlProbeTreats405AsSyntheticOk() {
+        assertEquals(
+            SimpleModeHealthRoute.WL_URL_PROBE_SYNTHETIC_MS,
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk("HTTP 405 method not allowed", whitelistOnly = true),
+        )
+        assertEquals(null, SimpleModeHealthRoute.wlUrlProbeTreatAsOk("connection refused", whitelistOnly = true))
+        assertEquals(null, SimpleModeHealthRoute.wlUrlProbeTreatAsOk("method not allowed", whitelistOnly = false))
+    }
+
+    @Test
     fun openNetDoesNotTreatTimeoutAsInconclusive() {
         assertFalse(
             SimpleModeHealthRoute.isProbeFailureInconclusive(

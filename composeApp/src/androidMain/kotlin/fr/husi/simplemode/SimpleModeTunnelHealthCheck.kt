@@ -63,6 +63,14 @@ internal object SimpleModeTunnelHealthCheck {
                 }
                 val errText = attempt.exceptionOrNull()?.message
                 lastError = errText
+                SimpleModeHealthRoute.wlUrlProbeTreatAsOk(errText, whitelistOnly)?.let { synthetic ->
+                    SimpleModeHealthRoute.logInconclusivePass(
+                        phase = phase,
+                        whitelistOnly = true,
+                        reason = "wl_http_reached",
+                    )
+                    return TunnelProbeOutcome(synthetic, errText)
+                }
                 if (!SimpleModeHealthRoute.isProbeFailureInconclusive(errText, whitelistOnly, phase)) {
                     sawRealFailure = true
                 }
