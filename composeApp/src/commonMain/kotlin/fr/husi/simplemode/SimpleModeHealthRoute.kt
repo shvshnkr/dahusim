@@ -159,12 +159,22 @@ internal object SimpleModeHealthRoute {
             else -> null
         }
 
+    internal fun isHttpRateLimitOrTransientResponse(error: String?): Boolean {
+        if (error.isNullOrBlank()) return false
+        val e = error.lowercase()
+        if (e.contains("rate limit") || e.contains("too many requests")) return true
+        return e.contains("429") || e.contains("502") || e.contains("503") || e.contains("504")
+    }
+
     fun isProbeFailureInconclusive(
         error: String?,
         whitelistOnly: Boolean,
         phase: String = "",
     ): Boolean {
         if (error.isNullOrBlank()) return false
+        if (isHttpRateLimitOrTransientResponse(error)) {
+            return phase == "post_connect" || phase == "session_periodic" || phase.isBlank()
+        }
         if (!whitelistOnly) return false
         if (isWlTunnelBootstrapFailure(error)) {
             return phase == "session_periodic" ||
@@ -189,6 +199,8 @@ internal object SimpleModeHealthRoute {
     }
 
     fun wlUrlProbeTreatAsOk(error: String?, whitelistOnly: Boolean): Int? {
+        if (error.isNullOrBlank()) return null
+        if (isHttpRateLimitOrTransientResponse(error)) return WL_URL_PROBE_SYNTHETIC_MS
         if (!whitelistOnly) return null
         return if (isWlHttpProbeInconclusive(error)) WL_URL_PROBE_SYNTHETIC_MS else null
     }

@@ -114,10 +114,15 @@ internal object SimpleModeTunnelHealthCheck {
                 val errText = attempt.exceptionOrNull()?.message
                 lastError = errText
                 SimpleModeHealthRoute.wlUrlProbeTreatAsOk(errText, whitelistOnly)?.let { synthetic ->
+                    val reason = if (SimpleModeHealthRoute.isHttpRateLimitOrTransientResponse(errText)) {
+                        "http_rate_limit"
+                    } else {
+                        "wl_http_reached"
+                    }
                     SimpleModeHealthRoute.logInconclusivePass(
                         phase = phase,
-                        whitelistOnly = true,
-                        reason = "wl_http_reached",
+                        whitelistOnly = whitelistOnly,
+                        reason = reason,
                     )
                     return TunnelProbeOutcome(synthetic, errText)
                 }

@@ -228,4 +228,73 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
             ),
         )
     }
+
+    @Test
+    fun http429SyntheticOkAndInconclusiveOnOpenSessionPeriodic() {
+        val err = "unexpected HTTP response status: 429"
+        assertEquals(
+            SimpleModeHealthRoute.WL_URL_PROBE_SYNTHETIC_MS,
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk(err, whitelistOnly = false),
+        )
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                err,
+                whitelistOnly = false,
+                phase = "session_periodic",
+            ),
+        )
+    }
+
+    @Test
+    fun http429InconclusiveOnOpenPostConnect() {
+        val err = "unexpected HTTP response status: 429"
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                err,
+                whitelistOnly = false,
+                phase = "post_connect",
+            ),
+        )
+    }
+
+    @Test
+    fun http503SyntheticOkOnOpen() {
+        assertEquals(
+            SimpleModeHealthRoute.WL_URL_PROBE_SYNTHETIC_MS,
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk(
+                "unexpected HTTP response status: 503",
+                whitelistOnly = false,
+            ),
+        )
+    }
+
+    @Test
+    fun openRealFailuresNotSyntheticOrInconclusive() {
+        assertEquals(
+            null,
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk("connection refused", whitelistOnly = false),
+        )
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "context deadline exceeded",
+                whitelistOnly = false,
+                phase = "session_periodic",
+            ),
+        )
+    }
+
+    @Test
+    fun wl405RegressionUnchanged() {
+        assertEquals(
+            SimpleModeHealthRoute.WL_URL_PROBE_SYNTHETIC_MS,
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk("HTTP 405 method not allowed", whitelistOnly = true),
+        )
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "method not allowed",
+                whitelistOnly = true,
+                phase = "post_connect",
+            ),
+        )
+    }
 }
