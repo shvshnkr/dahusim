@@ -31,6 +31,7 @@ import fr.husi.resources.app_update_up_to_date
 import fr.husi.resources.update
 import fr.husi.update.AppUpdateCheckResult
 import fr.husi.update.AppUpdateCoordinator
+import fr.husi.update.AppUpdateUpdater
 import fr.husi.update.AppUpdateInstallResult
 import kotlinx.coroutines.launch
 import me.zhanghai.compose.preference.Preference
@@ -45,25 +46,37 @@ internal fun LazyListScope.appUpdateSettings(
         PreferenceCategory(text = { Text(stringResource(Res.string.app_update_settings)) })
     }
     item(Key.APP_UPDATE_CHECK_ENABLED, PreferenceType.SWITCH) {
+        val scope = rememberCoroutineScope()
         val enabled by DataStore.configurationStore
             .booleanFlow(Key.APP_UPDATE_CHECK_ENABLED, true)
             .collectAsStateWithLifecycle(true)
         SwitchPreference(
             value = enabled,
-            onValueChange = { DataStore.appUpdateCheckEnabled = it },
+            onValueChange = {
+                DataStore.appUpdateCheckEnabled = it
+                scope.launch {
+                    runCatching { AppUpdateUpdater.reconfigureUpdater() }
+                }
+            },
             title = { Text(stringResource(Res.string.app_update_check_enabled)) },
             summary = { Text(stringResource(Res.string.app_update_check_enabled_sum)) },
             icon = { Icon(vectorResource(Res.drawable.update), null) },
         )
     }
     item(Key.APP_UPDATE_CHECK_INTERVAL_HOURS, PreferenceType.TEXT_FIELD) {
+        val scope = rememberCoroutineScope()
         val hours by DataStore.configurationStore
             .intFlow(Key.APP_UPDATE_CHECK_INTERVAL_HOURS, 24)
             .collectAsStateWithLifecycle(24)
         var preview by remember(hours) { mutableStateOf(hours.toFloat()) }
         me.zhanghai.compose.preference.SliderPreference(
             value = hours.toFloat(),
-            onValueChange = { DataStore.appUpdateCheckIntervalHours = it.toInt().coerceAtLeast(1) },
+            onValueChange = {
+                DataStore.appUpdateCheckIntervalHours = it.toInt().coerceAtLeast(1)
+                scope.launch {
+                    runCatching { AppUpdateUpdater.reconfigureUpdater() }
+                }
+            },
             sliderValue = preview,
             onSliderValueChange = { preview = it },
             title = { Text(stringResource(Res.string.app_update_check_interval_hours)) },

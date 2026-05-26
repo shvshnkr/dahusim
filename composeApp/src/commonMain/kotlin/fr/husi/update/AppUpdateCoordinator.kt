@@ -20,11 +20,9 @@ object AppUpdateCoordinator {
         }
 
         val now = currentEpochSeconds()
-        if (!manual && !isCheckDue(now)) {
+        if (!manual && !AppUpdateAutoUpdatePlanner.isCheckDue(now)) {
             return@onDefaultDispatcher AppUpdateCheckResult.UpToDate
         }
-
-        DataStore.appUpdateLastCheckAt = now
 
         val result = runCatching {
             val manifest = repository.fetchManifest()
@@ -34,8 +32,10 @@ object AppUpdateCoordinator {
                 "SimpleMode",
                 "H36 app_update_check_fail error=${error.message ?: error.javaClass.simpleName}",
             )
-            AppUpdateCheckResult.Error(error.message ?: error.toString())
+            return@onDefaultDispatcher AppUpdateCheckResult.Error(error.message ?: error.toString())
         }
+
+        DataStore.appUpdateLastCheckAt = now
 
         when (result) {
             is AppUpdateCheckResult.Available -> {
@@ -77,13 +77,6 @@ object AppUpdateCoordinator {
 
     suspend fun reopenDownloadedArtifact(): AppUpdateInstallResult {
         return AppUpdatePlatform.reopenDownloadedArtifact()
-    }
-
-    private fun isCheckDue(now: Long): Boolean {
-        val last = DataStore.appUpdateLastCheckAt
-        if (last <= 0L) return true
-        val intervalSeconds = DataStore.appUpdateCheckIntervalHours.coerceAtLeast(1) * 3600L
-        return now - last >= intervalSeconds
     }
 
     private fun isDismissed(offer: AppUpdateOffer): Boolean {

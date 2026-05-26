@@ -22,6 +22,7 @@ import fr.husi.libcore.loadCA
 import fr.husi.repository.AndroidRepository
 import fr.husi.repository.SagerRepository
 import fr.husi.update.AppUpdateCoordinator
+import fr.husi.update.AppUpdateUpdater
 import fr.husi.utils.CrashHandler
 import fr.husi.utils.PackageCache
 import fr.husi.utils.copyBundledRuleSetAssetsIfNeeded
@@ -89,6 +90,9 @@ class Application : Application(),
                 DefaultUserBootstrap.bootstrapAll()
                 SubscriptionUpdater.reconfigureUpdater()
                 RouteAssetUpdater.reconfigureUpdater()
+                AppUpdateUpdater.reconfigureUpdater()
+            }
+            runCatching {
                 AppUpdateCoordinator.checkForUpdate(manual = false)
             }
             registerReceiver(

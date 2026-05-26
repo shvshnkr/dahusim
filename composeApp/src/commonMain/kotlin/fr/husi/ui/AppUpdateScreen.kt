@@ -80,6 +80,7 @@ import fr.husi.resources.update
 import fr.husi.resources.warning_amber
 import fr.husi.update.AppUpdateCheckResult
 import fr.husi.update.AppUpdateCoordinator
+import fr.husi.update.AppUpdateUpdater
 import fr.husi.update.AppUpdateInstallResult
 import fr.husi.update.AppUpdatePlatform
 import kotlinx.coroutines.launch
@@ -333,7 +334,12 @@ fun AppUpdateScreen(
                         }
                         Switch(
                             checked = checkEnabled,
-                            onCheckedChange = { DataStore.appUpdateCheckEnabled = it },
+                            onCheckedChange = {
+                                DataStore.appUpdateCheckEnabled = it
+                                scope.launch {
+                                    runCatching { AppUpdateUpdater.reconfigureUpdater() }
+                                }
+                            },
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -355,6 +361,9 @@ fun AppUpdateScreen(
                                 onValueChangeFinished = {
                                     DataStore.appUpdateCheckIntervalHours =
                                         intervalPreview.coerceAtLeast(1)
+                                    scope.launch {
+                                        runCatching { AppUpdateUpdater.reconfigureUpdater() }
+                                    }
                                 },
                                 valueRange = 6f..168f,
                                 steps = 27,

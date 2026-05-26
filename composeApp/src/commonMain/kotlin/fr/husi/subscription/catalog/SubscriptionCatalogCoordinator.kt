@@ -1,5 +1,6 @@
 package fr.husi.subscription.catalog
 
+import fr.husi.bg.SubscriptionUpdater
 import fr.husi.database.DataStore
 import fr.husi.database.SagerDatabase
 import fr.husi.group.GroupUpdater
@@ -40,6 +41,10 @@ object SubscriptionCatalogCoordinator {
             }
             if (result is SubscriptionCatalogSyncResult.Success) {
                 refreshAffectedGroups(result)
+                if (result.created > 0 || result.updated > 0 || result.repairedAutoUpdate > 0) {
+                    runCatching { SubscriptionUpdater.reconfigureUpdater() }
+                        .onFailure { Logs.w("subscription catalog: reconfigure auto update scheduler", it) }
+                }
             }
             DataStore.subscriptionCatalogLastCheckAt = nowMs
             result

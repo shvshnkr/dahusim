@@ -12,7 +12,9 @@ import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
 import fr.husi.fmt.v2ray.VLESSBean
+import fr.husi.bg.SubscriptionUpdater
 import fr.husi.group.GroupUpdater
+import fr.husi.subscription.catalog.SubscriptionCatalogApplier
 import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.ktx.parseProxies
@@ -36,6 +38,14 @@ object DefaultUserBootstrap {
         applyBootstrapNetworkProbe()
         ensureReservedBuiltinSlot()
         bootstrapDefaultSubscriptions()
+        runCatching {
+            val repaired = SubscriptionCatalogApplier.repairManagedAutoUpdateFlags()
+            if (repaired > 0) {
+                SubscriptionUpdater.reconfigureUpdater()
+            }
+        }.onFailure {
+            Logs.w("DefaultUserBootstrap: repair managed subscription auto update", it)
+        }
         runCatching {
             SubscriptionCatalogCoordinator.syncIfDue(manual = false)
         }.onFailure {

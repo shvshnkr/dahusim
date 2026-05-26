@@ -47,4 +47,7 @@ interface SubscriptionUpdateStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(states: List<SubscriptionUpdateState>)
+
+    @Query("DELETE FROM subscription_update_states")
+    suspend fun deleteAll()
 }

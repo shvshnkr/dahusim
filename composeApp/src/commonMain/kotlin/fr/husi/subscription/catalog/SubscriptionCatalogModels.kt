@@ -32,6 +32,7 @@ sealed interface SubscriptionCatalogSyncResult {
         val removed: Int,
         val stagedRemoval: Int,
         val affectedGroupIds: List<Long> = emptyList(),
+        val repairedAutoUpdate: Int = 0,
     ) : SubscriptionCatalogSyncResult
     data class Blocked(
         val reason: String,

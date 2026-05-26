@@ -13,6 +13,7 @@ import fr.husi.bg.SagerConnection
 import fr.husi.compose.theme.AppTheme
 import fr.husi.database.DataStore
 import fr.husi.database.ProbeScheduler
+import fr.husi.update.AppUpdateCoordinator
 import fr.husi.permission.LocalPermissionPlatform
 import fr.husi.permission.rememberAndroidPermissionPlatform
 import fr.husi.repository.resolveRepository
@@ -81,6 +82,9 @@ class MainActivity : ComposeActivity(), AndroidScopeComponent {
     override fun onStart() {
         serviceConnection.updateConnectionId(SagerConnection.CONNECTION_ID_MAIN_ACTIVITY_FOREGROUND)
         super.onStart()
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { AppUpdateCoordinator.checkForUpdate(manual = false) }
+        }
         if (!DataStore.serviceState.connected) {
             lifecycleScope.launch(Dispatchers.IO) {
                 runCatching { ProbeScheduler.runBackgroundMaintenanceIfDue() }

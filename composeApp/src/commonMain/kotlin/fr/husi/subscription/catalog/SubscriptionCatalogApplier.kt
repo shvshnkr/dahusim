@@ -1,6 +1,7 @@
 package fr.husi.subscription.catalog
 
 import fr.husi.GroupType
+import fr.husi.bg.SubscriptionUpdater
 import fr.husi.database.CatalogOwnership
 import fr.husi.database.ConnectPoolRole
 import fr.husi.database.DataStore
@@ -17,6 +18,7 @@ object SubscriptionCatalogApplier {
     private const val MAX_BULK_DELETE_ABS = 10
     private const val MAX_BULK_DELETE_PERCENT = 0.30
     private const val PENDING_REMOVE_GRACE_SECONDS = 24L * 60L * 60L
+    internal const val MANAGED_AUTO_UPDATE_DELAY_MINUTES = 720
 
     suspend fun apply(
         document: SubscriptionCatalogDocument,
@@ -28,8 +30,12 @@ object SubscriptionCatalogApplier {
             .filterIsInstance<SubscriptionCatalogEntry.Remove>()
             .mapTo(LinkedHashSet()) { it.sourceId }
 
-        val subscriptions = SagerDatabase.groupDao.subscriptions()
+        var subscriptions = SagerDatabase.groupDao.subscriptions()
         migrateCatalogOwnership(subscriptions)
+        val repairedAutoUpdate = repairManagedAutoUpdateFlags()
+        if (repairedAutoUpdate > 0) {
+            subscriptions = SagerDatabase.groupDao.subscriptions()
+        }
 
         val githubManaged = subscriptions.filter {
             val sub = it.subscription
@@ -100,8 +106,7 @@ object SubscriptionCatalogApplier {
                         subscription = SubscriptionBean().apply {
                             type = record.subscriptionType
                             link = record.link
-                            autoUpdate = true
-                            autoUpdateDelay = 720
+                            applyManagedAutoUpdatePolicy()
                             deduplication = true
                             this.sourceId = sourceId
                             managedByRemote = true
@@ -130,6 +135,7 @@ object SubscriptionCatalogApplier {
                     remoteGenerationSeen = document.generation
                     fetchProfile = record.fetchProfile
                     customUserAgent = record.customUserAgent
+                    applyManagedAutoUpdatePolicy()
                 }
                 group.name = record.name
                 group.subscription = sub
@@ -161,13 +167,32 @@ object SubscriptionCatalogApplier {
         DataStore.subscriptionCatalogLastAppliedGeneration = document.generation
         DataStore.subscriptionCatalogLastAppliedHash = rawHash
 
+        if (created > 0 || updated > 0 || repairedAutoUpdate > 0) {
+            runCatching { SubscriptionUpdater.reconfigureUpdater() }
+                .onFailure { Logs.w("subscription catalog: reconfigure auto update scheduler", it) }
+        }
+
         return SubscriptionCatalogSyncResult.Success(
             created = created,
             updated = updated,
             removed = removed,
             stagedRemoval = stagedRemoval,
             affectedGroupIds = affectedGroupIds.toList(),
+            repairedAutoUpdate = repairedAutoUpdate,
         )
+    }
+
+    suspend fun repairManagedAutoUpdateFlags(): Int {
+        val subscriptions = SagerDatabase.groupDao.subscriptions()
+        var repaired = 0
+        for (group in subscriptions) {
+            val sub = group.subscription ?: continue
+            if (!sub.needsManagedAutoUpdateRepair()) continue
+            sub.applyManagedAutoUpdatePolicy()
+            SagerDatabase.groupDao.updateGroup(group)
+            repaired++
+        }
+        return repaired
     }
 
     private suspend fun migrateCatalogOwnership(subscriptions: List<ProxyGroup>) {
@@ -228,5 +253,14 @@ object SubscriptionCatalogApplier {
 
     private fun SubscriptionBean.isBuiltinManagedSourceId(): Boolean {
         return managedByRemote && sourceId.startsWith(SubscriptionCatalogDefaults.BUILTIN_SOURCE_PREFIX)
+    }
+
+    private fun SubscriptionBean.applyManagedAutoUpdatePolicy() {
+        autoUpdate = true
+        autoUpdateDelay = MANAGED_AUTO_UPDATE_DELAY_MINUTES
+    }
+
+    private fun SubscriptionBean.needsManagedAutoUpdateRepair(): Boolean {
+        return catalogOwnership == CatalogOwnership.GH_MANAGED && !autoUpdate
     }
 }

@@ -13,6 +13,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import fr.husi.database.ProbeScheduler
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
+import fr.husi.update.AppUpdateAutoUpdatePlanner
+import fr.husi.update.AppUpdateCoordinator
 
 /**
  * Periodic subscription and route-asset updates while the desktop JVM is alive.
@@ -24,17 +26,21 @@ internal object DesktopBackgroundCoordinator {
     private val scope = CoroutineScope(supervisor + Dispatchers.Default)
     private var subscriptionLoopJob: Job? = null
     private var routeAssetLoopJob: Job? = null
+    private var appUpdateLoopJob: Job? = null
 
     fun start() {
         reconfigureSubscriptions()
         reconfigureRouteAssets()
+        reconfigureAppUpdates()
     }
 
     fun stop() {
         subscriptionLoopJob?.cancel()
         routeAssetLoopJob?.cancel()
+        appUpdateLoopJob?.cancel()
         subscriptionLoopJob = null
         routeAssetLoopJob = null
+        appUpdateLoopJob = null
         scope.cancel()
     }
 
@@ -49,6 +55,13 @@ internal object DesktopBackgroundCoordinator {
         routeAssetLoopJob?.cancel()
         routeAssetLoopJob = scope.launch {
             routeAssetLoop()
+        }
+    }
+
+    fun reconfigureAppUpdates() {
+        appUpdateLoopJob?.cancel()
+        appUpdateLoopJob = scope.launch {
+            appUpdateLoop()
         }
     }
 
@@ -79,6 +92,21 @@ internal object DesktopBackgroundCoordinator {
             }.onFailure {
                 if (it.isCoroutineCancellation()) return@onFailure
                 Logs.e("desktop route asset auto update", it)
+            }
+            delay(plan.repeatIntervalMinutes * 60_000L)
+        }
+    }
+
+    private suspend fun appUpdateLoop() {
+        while (currentCoroutineContext().isActive) {
+            val plan = AppUpdateAutoUpdatePlanner.plan() ?: return
+            delay(plan.initialDelaySeconds * 1000L)
+            if (!currentCoroutineContext().isActive) return
+            runCatching {
+                AppUpdateCoordinator.checkForUpdate(manual = false)
+            }.onFailure {
+                if (it.isCoroutineCancellation()) return@onFailure
+                Logs.e("desktop app update check", it)
             }
             delay(plan.repeatIntervalMinutes * 60_000L)
         }

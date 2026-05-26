@@ -37,7 +37,7 @@ actual object SubscriptionUpdater {
         RemoteWorkManager.getInstance(repo.context).cancelUniqueWork(WORK_NAME)
 
         val plan = SubscriptionAutoUpdatePlanner.plan() ?: return
-        val repeatIntervalMinutes = plan.repeatIntervalMinutes.coerceAtLeast(15).toLong()
+        val repeatIntervalMinutes = androidSubscriptionPeriodicIntervalMinutes(plan.repeatIntervalMinutes)
 
         // main process
         RemoteWorkManager.getInstance(repo.context).enqueueUniquePeriodicWork(

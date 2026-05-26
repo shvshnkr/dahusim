@@ -9,10 +9,13 @@ import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
 import fr.husi.ktx.applyDefaultValues
+import fr.husi.bg.SubscriptionAutoUpdatePlanner
 import fr.husi.test.HusiKoinTest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class SubscriptionCatalogApplierTest : HusiKoinTest() {
@@ -104,6 +107,63 @@ class SubscriptionCatalogApplierTest : HusiKoinTest() {
         assertTrue(staged.subscription!!.pendingRemoveAt > 0L)
         val kept = subs.single { it.subscription?.sourceId == "gh.keep-open" }
         assertEquals(0L, kept.subscription!!.pendingRemoveAt)
+    }
+
+    @Test
+    fun `upsert on existing gh group enables autoUpdate`() = runBlocking {
+        val group = GroupManager.createGroup(
+            ProxyGroup(name = "Legacy GH", type = GroupType.SUBSCRIPTION).apply {
+                subscription = SubscriptionBean().apply {
+                    sourceId = "gh.legacy-feed"
+                    link = "https://example.com/legacy.txt"
+                    managedByRemote = true
+                    catalogOwnership = CatalogOwnership.GH_MANAGED
+                    autoUpdate = false
+                    autoUpdateDelay = 1440
+                }.applyDefaultValues()
+            },
+            notifySubscriptionScheduler = false,
+        )
+        val document = SubscriptionCatalogParser.parse(
+            """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=1
+            UPSERT|legacy-feed|Legacy GH|https://example.com/legacy-v2.txt|RAW|default|open
+            """.trimIndent(),
+        )
+        val result = SubscriptionCatalogApplier.apply(document, "hash-legacy-upsert")
+        assertTrue(result is SubscriptionCatalogSyncResult.Success)
+        assertEquals(1, result.updated)
+
+        val reloaded = SagerDatabase.groupDao.getById(group.id).first()
+        assertNotNull(reloaded)
+        assertTrue(reloaded!!.subscription!!.autoUpdate)
+        assertEquals(
+            SubscriptionCatalogApplier.MANAGED_AUTO_UPDATE_DELAY_MINUTES,
+            reloaded.subscription!!.autoUpdateDelay,
+        )
+        assertNotNull(SubscriptionAutoUpdatePlanner.plan())
+    }
+
+    @Test
+    fun `repairManagedAutoUpdateFlags fixes gh managed without upsert`() = runBlocking {
+        GroupManager.createGroup(
+            ProxyGroup(name = "Stale GH", type = GroupType.SUBSCRIPTION).apply {
+                subscription = SubscriptionBean().apply {
+                    sourceId = "gh.stale"
+                    link = "https://example.com/stale.txt"
+                    managedByRemote = true
+                    catalogOwnership = CatalogOwnership.GH_MANAGED
+                    autoUpdate = false
+                }.applyDefaultValues()
+            },
+            notifySubscriptionScheduler = false,
+        )
+        val repaired = SubscriptionCatalogApplier.repairManagedAutoUpdateFlags()
+        assertEquals(1, repaired)
+        val sub = SagerDatabase.groupDao.subscriptions().single().subscription!!
+        assertTrue(sub.autoUpdate)
+        assertEquals(SubscriptionCatalogApplier.MANAGED_AUTO_UPDATE_DELAY_MINUTES, sub.autoUpdateDelay)
     }
 
     @Test

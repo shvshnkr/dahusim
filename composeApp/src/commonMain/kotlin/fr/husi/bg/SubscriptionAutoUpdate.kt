@@ -440,3 +440,8 @@ internal fun secondsUntilDue(
 }
 
 internal fun currentEpochSeconds(): Long = System.currentTimeMillis() / 1000L
+
+/** WorkManager periodic interval floor (see [SubscriptionUpdater.reconfigureUpdater]). */
+internal fun androidSubscriptionPeriodicIntervalMinutes(repeatIntervalMinutes: Int): Long {
+    return repeatIntervalMinutes.coerceAtLeast(15).toLong()
+}
