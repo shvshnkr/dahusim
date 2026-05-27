@@ -16,6 +16,8 @@ class MainViewModelTest : HusiKoinMainDispatcherTest() {
 
     override suspend fun postStartKoin() {
         DataStore.configurationStore.reset()
+        // Other tests may leave subscription groups in the in-memory DB; skip network sync in init.
+        DataStore.firstLaunchSubscriptionUiRefreshDone = true
     }
     /**
      * https://codeberg.org/xchacha20-poly1305/husi/issues/50

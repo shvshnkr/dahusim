@@ -1,6 +1,7 @@
 package fr.husi.ui.profile
 
-import fr.husi.test.MainDispatcherTest
+import fr.husi.database.DataStore
+import fr.husi.test.HusiKoinMainDispatcherTest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -11,7 +12,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class ProfileEditorViewModelTest : MainDispatcherTest() {
+class ProfileEditorViewModelTest : HusiKoinMainDispatcherTest() {
+
+    override suspend fun postStartKoin() {
+        DataStore.configurationStore.reset()
+        DataStore.firstLaunchSubscriptionUiRefreshDone = true
+    }
 
     @Test
     fun `initialize with same args should reset dirty state`() = runTest(dispatcher.scheduler) {
