@@ -52,6 +52,7 @@ object SubscriptionCatalogCoordinator {
             val raw = fetch(url)
             val hash = raw.hashCode().toString()
             val document = SubscriptionCatalogParser.parse(raw)
+            DataStore.subscriptionCatalogLastCheckAt = nowMs
             val result = if (document.generation <= DataStore.subscriptionCatalogLastAppliedGeneration) {
                 SubscriptionCatalogSyncResult.Skipped
             } else {
@@ -64,7 +65,6 @@ object SubscriptionCatalogCoordinator {
                         .onFailure { Logs.w("subscription catalog: reconfigure auto update scheduler", it) }
                 }
             }
-            DataStore.subscriptionCatalogLastCheckAt = nowMs
             result
         }.getOrElse { e ->
             runCatching { Logs.w("subscription catalog sync failed", e) }

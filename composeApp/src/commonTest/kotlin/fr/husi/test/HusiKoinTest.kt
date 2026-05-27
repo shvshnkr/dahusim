@@ -12,6 +12,7 @@ abstract class HusiKoinTest {
 
     @BeforeTest
     fun setUpKoin() = runBlocking {
+        UnitTestPlatform.stopBackgroundLoops()
         preStartKoin()
         initHusiKoin(testRepository())
         postStartKoin()
@@ -20,6 +21,7 @@ abstract class HusiKoinTest {
     @AfterTest
     fun tearDownKoin() = runBlocking {
         preStopKoin()
+        UnitTestPlatform.stopBackgroundLoops()
         stopKoin()
         postStopKoin()
     }

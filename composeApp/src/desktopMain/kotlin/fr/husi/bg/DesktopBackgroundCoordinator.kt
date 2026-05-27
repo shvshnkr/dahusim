@@ -13,6 +13,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import fr.husi.database.ProbeScheduler
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
+import fr.husi.test.isHusiUnitTest
 import fr.husi.update.AppUpdateAutoUpdatePlanner
 import fr.husi.update.AppUpdateCoordinator
 
@@ -29,6 +30,7 @@ internal object DesktopBackgroundCoordinator {
     private var appUpdateLoopJob: Job? = null
 
     fun start() {
+        if (isHusiUnitTest) return
         reconfigureSubscriptions()
         reconfigureRouteAssets()
         reconfigureAppUpdates()
@@ -45,6 +47,7 @@ internal object DesktopBackgroundCoordinator {
     }
 
     fun reconfigureSubscriptions() {
+        if (isHusiUnitTest) return
         subscriptionLoopJob?.cancel()
         subscriptionLoopJob = scope.launch {
             subscriptionLoop()
@@ -52,6 +55,7 @@ internal object DesktopBackgroundCoordinator {
     }
 
     fun reconfigureRouteAssets() {
+        if (isHusiUnitTest) return
         routeAssetLoopJob?.cancel()
         routeAssetLoopJob = scope.launch {
             routeAssetLoop()
@@ -59,6 +63,7 @@ internal object DesktopBackgroundCoordinator {
     }
 
     fun reconfigureAppUpdates() {
+        if (isHusiUnitTest) return
         appUpdateLoopJob?.cancel()
         appUpdateLoopJob = scope.launch {
             appUpdateLoop()

@@ -482,6 +482,9 @@ tasks.matching { it.name == "packageUberJarForCurrentOS" }.configureEach {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    if (name == "desktopTest") {
+        systemProperty("husi.unitTest", "true")
+    }
 }
 
 val matrixTest by tasks.registering(Test::class) {
