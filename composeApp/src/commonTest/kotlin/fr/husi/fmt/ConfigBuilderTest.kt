@@ -554,6 +554,81 @@ class ConfigBuilderTest : HusiKoinTest() {
     }
 
     @Test
+    fun `buildConfig should map plain packages to process path on desktop route rules`() = runBlocking {
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "main",
+            host = "1.1.1.1",
+            port = 1080,
+        )
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "process-path-rule",
+                packages = setOf("com.example.app"),
+                domains = "example.org",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val routeRules = parseRouteRules(buildConfig(proxy))
+        val routeRule = routeRules.firstOrNull {
+            it["domain"]?.jsonArray?.map { item -> item.jsonPrimitive.content } == listOf("example.org")
+        }
+        assertNotNull(routeRule)
+        assertEquals(null, routeRule["package_name"])
+        assertEquals(listOf("com.example.app"), routeRule["process_path"]?.jsonArray?.map { it.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `buildConfig should keep explicit process selectors on route and dns rules`() = runBlocking {
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "main",
+            host = "1.1.1.1",
+            port = 1080,
+        )
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "process-selector-rule",
+                packages = setOf("name:proc-a", "regexp:^/apps/.*"),
+                domains = "set+dns:custom-domain-set",
+                ip = "set+dns:custom-ip-set",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val routeRules = parseRouteRules(buildConfig(proxy))
+        val routeRule = routeRules.firstOrNull {
+            it["rule_set"]?.jsonArray?.map { item -> item.jsonPrimitive.content } == listOf(
+                "custom-domain-set",
+                "custom-ip-set",
+            )
+        }
+        assertNotNull(routeRule)
+        assertEquals(listOf("proc-a"), routeRule["process_name"]?.jsonArray?.map { it.jsonPrimitive.content })
+        assertEquals(listOf("^/apps/.*"), routeRule["process_path_regex"]?.jsonArray?.map { it.jsonPrimitive.content })
+
+        val dnsRules = parseDnsRules(buildConfig(proxy))
+        val responseRule = dnsRules.firstOrNull {
+            it["match_response"]?.jsonPrimitive?.content == "true"
+        }
+        assertNotNull(responseRule)
+        assertEquals(listOf("proc-a"), responseRule["process_name"]?.jsonArray?.map { it.jsonPrimitive.content })
+        assertEquals(
+            listOf("^/apps/.*"),
+            responseRule["process_path_regex"]?.jsonArray?.map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
     fun `buildConfig routes ru geosite via proxy on whitelist network with russian exit`() = runBlocking {
         DataStore.activeWhitelistRestrictedNetwork = true
         val group = ProxyGroup(name = "group").applyDefaultValues()
@@ -738,6 +813,12 @@ class ConfigBuilderTest : HusiKoinTest() {
 
     private fun parseDnsRules(result: ConfigBuildResult) =
         Json.parseToJsonElement(result.config).jsonObject["dns"]!!
+            .jsonObject["rules"]!!
+            .jsonArray
+            .map { it.jsonObject }
+
+    private fun parseRouteRules(result: ConfigBuildResult) =
+        Json.parseToJsonElement(result.config).jsonObject["route"]!!
             .jsonObject["rules"]!!
             .jsonArray
             .map { it.jsonObject }
