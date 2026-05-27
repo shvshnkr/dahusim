@@ -15,23 +15,41 @@ object SubscriptionCatalogCoordinator {
 
     suspend fun syncIfDue(
         manual: Boolean,
+    ): SubscriptionCatalogSyncResult = syncIfDue(manual) { url -> repository.fetch(url) }
+
+    internal fun isCatalogAutoSyncDue(
+        manual: Boolean,
+        nowMs: Long,
+        lastCheckAt: Long,
+        intervalHours: Int,
+    ): Boolean {
+        if (manual) return true
+        val intervalMs = intervalHours.coerceIn(6, 12) * 60L * 60L * 1000L
+        val elapsed = nowMs - lastCheckAt
+        return elapsed !in 0 until intervalMs
+    }
+
+    internal suspend fun syncIfDue(
+        manual: Boolean,
+        fetch: suspend (String) -> String,
     ): SubscriptionCatalogSyncResult {
         if (!DataStore.subscriptionCatalogEnabled) return SubscriptionCatalogSyncResult.Skipped
         val url = DataStore.subscriptionCatalogUrl.trim()
         if (url.isBlank()) return SubscriptionCatalogSyncResult.Skipped
 
         val nowMs = System.currentTimeMillis()
-        if (!manual) {
-            val intervalMs =
-                DataStore.subscriptionCatalogCheckIntervalHours.coerceIn(6, 12) * 60L * 60L * 1000L
-            val elapsed = nowMs - DataStore.subscriptionCatalogLastCheckAt
-            if (elapsed in 0 until intervalMs) {
-                return SubscriptionCatalogSyncResult.Skipped
-            }
+        if (!isCatalogAutoSyncDue(
+                manual = manual,
+                nowMs = nowMs,
+                lastCheckAt = DataStore.subscriptionCatalogLastCheckAt,
+                intervalHours = DataStore.subscriptionCatalogCheckIntervalHours,
+            )
+        ) {
+            return SubscriptionCatalogSyncResult.Skipped
         }
 
         return runCatching {
-            val raw = repository.fetch(url)
+            val raw = fetch(url)
             val hash = raw.hashCode().toString()
             val document = SubscriptionCatalogParser.parse(raw)
             val result = if (document.generation <= DataStore.subscriptionCatalogLastAppliedGeneration) {
@@ -49,8 +67,7 @@ object SubscriptionCatalogCoordinator {
             DataStore.subscriptionCatalogLastCheckAt = nowMs
             result
         }.getOrElse { e ->
-            Logs.w("subscription catalog sync failed", e)
-            DataStore.subscriptionCatalogLastCheckAt = nowMs
+            runCatching { Logs.w("subscription catalog sync failed", e) }
             SubscriptionCatalogSyncResult.Error(e.readableMessage)
         }
     }

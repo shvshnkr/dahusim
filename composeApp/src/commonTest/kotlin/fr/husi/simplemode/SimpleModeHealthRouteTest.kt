@@ -230,6 +230,29 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun messengerProbeFailuresAreConclusive() {
+        // When simple-mode requires the messenger probe (web.telegram.org), timeouts must
+        // trigger server degradation/re-selection. Otherwise client can look "connected"
+        // while Telegram traffic never comes.
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "timeout: no recent network activity",
+                whitelistOnly = true,
+                phase = "post_connect",
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "context deadline exceeded",
+                whitelistOnly = true,
+                phase = "post_connect",
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+    }
+
+    @Test
     fun http429SyntheticOkAndInconclusiveOnOpenSessionPeriodic() {
         val err = "unexpected HTTP response status: 429"
         assertEquals(

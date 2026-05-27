@@ -99,6 +99,7 @@ internal object SimpleModeVpnCoordinator {
     suspend fun tryRecoverAfterUnhealthySession(
         failedProfileId: Long,
         lastHealthError: String? = null,
+        messengerProbeInvolved: Boolean = false,
     ): Boolean {
         if (!DataStore.simpleMode) return false
         val whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
@@ -109,6 +110,7 @@ internal object SimpleModeVpnCoordinator {
             error = lastHealthError,
             whitelistOnly = whitelistOnly,
             phase = "post_connect",
+            probeUrl = if (messengerProbeInvolved) SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM else null,
         )
         if (inconclusive) {
             simpleModeLog(

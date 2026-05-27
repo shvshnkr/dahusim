@@ -93,3 +93,18 @@ sealed class AppUpdateInstallResult {
     data object Cancelled : AppUpdateInstallResult()
     data class Failed(val message: String) : AppUpdateInstallResult()
 }
+
+enum class AppUpdateInstallStage {
+    IDLE,
+    PREPARING,
+    DOWNLOADING,
+    VERIFYING,
+    LAUNCHING_INSTALLER,
+    AWAITING_USER_ACTION,
+}
+
+data class AppUpdateInstallState(
+    val active: Boolean = false,
+    val stage: AppUpdateInstallStage = AppUpdateInstallStage.IDLE,
+    val errorMessage: String? = null,
+)

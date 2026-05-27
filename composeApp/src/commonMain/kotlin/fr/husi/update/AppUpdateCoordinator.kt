@@ -13,6 +13,8 @@ object AppUpdateCoordinator {
     private val repository = AppUpdateRepository()
     private val _pendingOffer = MutableStateFlow<AppUpdateOffer?>(null)
     val pendingOffer: StateFlow<AppUpdateOffer?> = _pendingOffer.asStateFlow()
+    private val _installState = MutableStateFlow(AppUpdateInstallState())
+    val installState: StateFlow<AppUpdateInstallState> = _installState.asStateFlow()
 
     suspend fun checkForUpdate(manual: Boolean = false): AppUpdateCheckResult = onDefaultDispatcher {
         if (!DataStore.appUpdateCheckEnabled && !manual) {
@@ -68,9 +70,35 @@ object AppUpdateCoordinator {
 
     suspend fun installPendingOffer(): AppUpdateInstallResult {
         val offer = _pendingOffer.value ?: return AppUpdateInstallResult.Cancelled
-        val result = AppUpdatePlatform.installOffer(offer)
+        updateInstallState(
+            active = true,
+            stage = AppUpdateInstallStage.PREPARING,
+            errorMessage = null,
+        )
+        val result = AppUpdatePlatform.installOffer(offer) { stage ->
+            updateInstallState(
+                active = true,
+                stage = stage,
+                errorMessage = null,
+            )
+        }
         if (result is AppUpdateInstallResult.Success || result is AppUpdateInstallResult.PendingUserAction) {
             _pendingOffer.value = null
+        }
+        when (result) {
+            AppUpdateInstallResult.Success,
+            AppUpdateInstallResult.Cancelled,
+            -> updateInstallState(active = false, stage = AppUpdateInstallStage.IDLE, errorMessage = null)
+            AppUpdateInstallResult.PendingUserAction -> updateInstallState(
+                active = false,
+                stage = AppUpdateInstallStage.AWAITING_USER_ACTION,
+                errorMessage = null,
+            )
+            is AppUpdateInstallResult.Failed -> updateInstallState(
+                active = false,
+                stage = AppUpdateInstallStage.IDLE,
+                errorMessage = result.message,
+            )
         }
         return result
     }
@@ -82,5 +110,17 @@ object AppUpdateCoordinator {
     private fun isDismissed(offer: AppUpdateOffer): Boolean {
         if (offer.mandatory) return false
         return DataStore.appUpdateDismissedVersionCode == offer.versionCode
+    }
+
+    private fun updateInstallState(
+        active: Boolean,
+        stage: AppUpdateInstallStage,
+        errorMessage: String?,
+    ) {
+        _installState.value = AppUpdateInstallState(
+            active = active,
+            stage = stage,
+            errorMessage = errorMessage,
+        )
     }
 }

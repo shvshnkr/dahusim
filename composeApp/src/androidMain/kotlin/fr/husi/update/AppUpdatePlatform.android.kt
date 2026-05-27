@@ -51,7 +51,10 @@ actual object AppUpdatePlatform {
         openInstallPermissionSettings()
     }
 
-    actual suspend fun installOffer(offer: AppUpdateOffer): AppUpdateInstallResult = onDefaultDispatcher {
+    actual suspend fun installOffer(
+        offer: AppUpdateOffer,
+        onStageChanged: (AppUpdateInstallStage) -> Unit,
+    ): AppUpdateInstallResult = onDefaultDispatcher {
         val repo = resolveRepository()
         val apkInfo = offer.androidApk
             ?: return@onDefaultDispatcher failed(repo, Res.string.app_update_no_apk)
@@ -65,15 +68,19 @@ actual object AppUpdatePlatform {
         val apkFile = File(cacheDir, "update-${offer.versionCode}.apk")
 
         runCatching {
+            onStageChanged(AppUpdateInstallStage.PREPARING)
             simpleModeLog(
                 "SimpleMode",
                 "H36 app_update_install_start version=${offer.versionCode} urlHost=${apkHost(apkInfo.url)}",
             )
+            onStageChanged(AppUpdateInstallStage.DOWNLOADING)
             AppUpdateDownload.download(apkInfo.url, apkFile)
+            onStageChanged(AppUpdateInstallStage.VERIFYING)
             if (!sha256Matches(apkFile, apkInfo.sha256)) {
                 throw IllegalStateException(repo.getString(Res.string.app_update_apk_hash_mismatch))
             }
             verifySigning(repo, offer, apkFile)
+            onStageChanged(AppUpdateInstallStage.LAUNCHING_INSTALLER)
             installApkAndAwait(repo, apkFile)
         }.fold(
             onSuccess = { result ->

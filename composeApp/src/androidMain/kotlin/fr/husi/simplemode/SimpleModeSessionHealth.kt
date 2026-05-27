@@ -130,7 +130,10 @@ internal object SimpleModeSessionHealth {
         AutoServerSelector.recordHealthProbeFailure(profileId, error = null)
         DataStore.simpleModeActivity = "Server degraded, switching…"
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
-        if (SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(profileId)) {
+        if (SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
+                failedProfileId = profileId,
+                messengerProbeInvolved = wlOnly,
+            )) {
             return
         }
         val next = AutoServerSelector.tryMoveToFallback(profileId)

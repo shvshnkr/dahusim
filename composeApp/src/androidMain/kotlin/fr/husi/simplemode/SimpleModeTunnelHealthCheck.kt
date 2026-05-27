@@ -126,7 +126,13 @@ internal object SimpleModeTunnelHealthCheck {
                     )
                     return TunnelProbeOutcome(synthetic, errText)
                 }
-                if (!SimpleModeHealthRoute.isProbeFailureInconclusive(errText, whitelistOnly, phase)) {
+                if (!SimpleModeHealthRoute.isProbeFailureInconclusive(
+                        errText,
+                        whitelistOnly,
+                        phase,
+                        probeUrl = url,
+                    )
+                ) {
                     sawRealFailure = true
                 }
                 SimpleModeHealthRoute.logProbeAttempt(

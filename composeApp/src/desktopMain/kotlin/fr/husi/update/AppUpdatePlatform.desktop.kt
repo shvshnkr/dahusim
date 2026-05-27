@@ -14,7 +14,10 @@ actual object AppUpdatePlatform {
 
     actual fun requestInstallPackagePermission() = Unit
 
-    actual suspend fun installOffer(offer: AppUpdateOffer): AppUpdateInstallResult = onDefaultDispatcher {
+    actual suspend fun installOffer(
+        offer: AppUpdateOffer,
+        onStageChanged: (AppUpdateInstallStage) -> Unit,
+    ): AppUpdateInstallResult = onDefaultDispatcher {
         val desktopAsset = when {
             PlatformInfo.isLinux -> offer.linuxAsset?.let {
                 DesktopAsset(
@@ -36,7 +39,10 @@ actual object AppUpdatePlatform {
         val target = File(cacheDir, fileName)
 
         runCatching {
+            onStageChanged(AppUpdateInstallStage.PREPARING)
+            onStageChanged(AppUpdateInstallStage.DOWNLOADING)
             AppUpdateDownload.download(desktopAsset.binary.url, target)
+            onStageChanged(AppUpdateInstallStage.VERIFYING)
             if (desktopAsset.binary.size > 0L && target.length() != desktopAsset.binary.size) {
                 error("Downloaded file size mismatch")
             }
@@ -48,6 +54,7 @@ actual object AppUpdatePlatform {
                 error("Desktop integration is not available")
             }
             val desktop = Desktop.getDesktop()
+            onStageChanged(AppUpdateInstallStage.LAUNCHING_INSTALLER)
             if (PlatformInfo.isWindows && desktopAsset.kind != "installer") {
                 // zip/jar requires manual extraction/run; opening folder is less error-prone than opening file.
                 openFileOrParent(desktop, target, forceParent = true)

@@ -5,10 +5,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.husi.ktx.onDefaultDispatcher
 import fr.husi.resources.Res
@@ -32,7 +30,7 @@ fun AppUpdatePromptHost(
     showMessage: (String) -> Unit,
 ) {
     val offer by AppUpdateCoordinator.pendingOffer.collectAsStateWithLifecycle()
-    var installing by remember { mutableStateOf(false) }
+    val installState by AppUpdateCoordinator.installState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val repository = remember { resolveRepository() }
     val disableChecksText = stringResource(Res.string.app_update_disable_checks)
@@ -57,9 +55,8 @@ fun AppUpdatePromptHost(
             },
             confirmButton = {
                 TextButton(
-                    enabled = !installing,
+                    enabled = !installState.active,
                     onClick = {
-                        installing = true
                         scope.launch {
                             when (val result = onDefaultDispatcher { AppUpdateCoordinator.installPendingOffer() }) {
                                 AppUpdateInstallResult.Success,
@@ -81,7 +78,6 @@ fun AppUpdatePromptHost(
                                     ),
                                 )
                             }
-                            installing = false
                         }
                     },
                 ) {
@@ -92,7 +88,7 @@ fun AppUpdatePromptHost(
                 if (!pending.mandatory) {
                     androidx.compose.foundation.layout.Row {
                         TextButton(
-                            enabled = !installing,
+                            enabled = !installState.active,
                             onClick = {
                                 AppUpdateCoordinator.disableChecks()
                                 showMessage(disableChecksText)
@@ -101,7 +97,7 @@ fun AppUpdatePromptHost(
                             Text(stringResource(Res.string.app_update_disable_checks))
                         }
                         TextButton(
-                            enabled = !installing,
+                            enabled = !installState.active,
                             onClick = { AppUpdateCoordinator.dismissOffer(pending) },
                         ) {
                             Text(stringResource(Res.string.app_update_later))

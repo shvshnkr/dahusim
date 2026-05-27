@@ -7,6 +7,9 @@ expect object AppUpdatePlatform {
     fun canInstallPackages(): Boolean
     /** Android: opens system screen to allow APK installs. No-op elsewhere. */
     fun requestInstallPackagePermission()
-    suspend fun installOffer(offer: AppUpdateOffer): AppUpdateInstallResult
+    suspend fun installOffer(
+        offer: AppUpdateOffer,
+        onStageChanged: (AppUpdateInstallStage) -> Unit = {},
+    ): AppUpdateInstallResult
     suspend fun reopenDownloadedArtifact(): AppUpdateInstallResult
 }

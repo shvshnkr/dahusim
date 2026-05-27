@@ -170,8 +170,13 @@ internal object SimpleModeHealthRoute {
         error: String?,
         whitelistOnly: Boolean,
         phase: String = "",
+        probeUrl: String? = null,
     ): Boolean {
         if (error.isNullOrBlank()) return false
+        // Messenger probe is a "must succeed" signal in simple-mode. When it times out, we
+        // must treat it as a real degradation and allow server re-selection.
+        // Otherwise the client can appear "connected" while Telegram traffic never comes.
+        if (probeUrl == TUNNEL_HEALTH_TELEGRAM) return false
         if (isHttpRateLimitOrTransientResponse(error)) {
             return phase == "post_connect" || phase == "session_periodic" || phase.isBlank()
         }

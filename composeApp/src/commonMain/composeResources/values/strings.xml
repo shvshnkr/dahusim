@@ -42,6 +42,10 @@
     <string name="app_update_available_title">Update available</string>
     <string name="app_update_available_message">%1$s (%2$d) is available. Install now?</string>
     <string name="app_update_install">Install</string>
+    <string name="app_update_install_stage_preparing">Preparing update package…</string>
+    <string name="app_update_install_stage_downloading">Downloading update package…</string>
+    <string name="app_update_install_stage_verifying">Verifying downloaded package…</string>
+    <string name="app_update_install_stage_launching_installer">Opening system installer…</string>
     <string name="app_update_install_pending">Confirm installation in system package installer</string>
     <string name="app_update_install_pending_desktop">Installer/download opened. Complete installation manually, then restart daHusiM.</string>
     <string name="app_update_later">Later</string>

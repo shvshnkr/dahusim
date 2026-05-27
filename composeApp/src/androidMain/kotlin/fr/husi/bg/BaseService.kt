@@ -671,9 +671,12 @@ class BaseService {
                         val wlOnly = reachability.whitelistOnly ||
                             DataStore.activeWhitelistRestrictedNetwork
                         if (DataStore.simpleMode) {
+                            val messengerProbeInvolved =
+                                postConnectUrls.any { it == SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM }
                             val recovered = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                                 failedProfileId = profile.id,
                                 lastHealthError = postConnectLastError,
+                                messengerProbeInvolved = messengerProbeInvolved,
                             )
                             if (recovered) {
                                 AutoServerSelector.markConnected(profile.id, recordUrlVerified = false)

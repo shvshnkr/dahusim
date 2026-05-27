@@ -67,6 +67,10 @@ import fr.husi.resources.app_update_install_permission
 import fr.husi.resources.app_update_install_permission_denied
 import fr.husi.resources.app_update_install_permission_granted
 import fr.husi.resources.app_update_install_permission_sum
+import fr.husi.resources.app_update_install_stage_downloading
+import fr.husi.resources.app_update_install_stage_launching_installer
+import fr.husi.resources.app_update_install_stage_preparing
+import fr.husi.resources.app_update_install_stage_verifying
 import fr.husi.resources.app_update_installed_version
 import fr.husi.resources.app_update_last_check_at
 import fr.husi.resources.app_update_last_check_never
@@ -82,6 +86,7 @@ import fr.husi.update.AppUpdateCheckResult
 import fr.husi.update.AppUpdateCoordinator
 import fr.husi.update.AppUpdateUpdater
 import fr.husi.update.AppUpdateInstallResult
+import fr.husi.update.AppUpdateInstallStage
 import fr.husi.update.AppUpdatePlatform
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
@@ -114,6 +119,7 @@ fun AppUpdateScreen(
         .collectAsStateWithLifecycle(0L)
 
     val pendingOffer by AppUpdateCoordinator.pendingOffer.collectAsStateWithLifecycle()
+    val installState by AppUpdateCoordinator.installState.collectAsStateWithLifecycle()
 
     var checking by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -299,9 +305,25 @@ fun AppUpdateScreen(
                                     refreshInstallPermission()
                                 }
                             },
+                            enabled = !installState.active,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
+                            if (installState.active) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                            }
                             Text(stringResource(Res.string.app_update_install))
+                        }
+                        val installStageText = installStageText(installState.stage)
+                        if (installStageText != null) {
+                            Text(
+                                text = installStageText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -479,6 +501,26 @@ fun AppUpdateScreen(
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+@Composable
+private fun installStageText(stage: AppUpdateInstallStage): String? = when (stage) {
+    AppUpdateInstallStage.PREPARING -> stringResource(Res.string.app_update_install_stage_preparing)
+    AppUpdateInstallStage.DOWNLOADING -> stringResource(Res.string.app_update_install_stage_downloading)
+    AppUpdateInstallStage.VERIFYING -> stringResource(Res.string.app_update_install_stage_verifying)
+    AppUpdateInstallStage.LAUNCHING_INSTALLER -> {
+        stringResource(Res.string.app_update_install_stage_launching_installer)
+    }
+    AppUpdateInstallStage.AWAITING_USER_ACTION -> {
+        stringResource(
+            if (PlatformInfo.isAndroid) {
+                Res.string.app_update_install_pending
+            } else {
+                Res.string.app_update_install_pending_desktop
+            },
+        )
+    }
+    AppUpdateInstallStage.IDLE -> null
 }
 
 @OptIn(FormatStringsInDatetimeFormats::class)

@@ -134,6 +134,10 @@
     <string name="app_update_available_title">Доступно обновление</string>
     <string name="app_update_available_message">Доступна версия %1$s (%2$d). Установить сейчас?</string>
     <string name="app_update_install">Установить</string>
+    <string name="app_update_install_stage_preparing">Подготовка пакета обновления…</string>
+    <string name="app_update_install_stage_downloading">Скачивание пакета обновления…</string>
+    <string name="app_update_install_stage_verifying">Проверка скачанного пакета…</string>
+    <string name="app_update_install_stage_launching_installer">Открытие системного установщика…</string>
     <string name="app_update_install_pending">Подтвердите установку в системном установщике пакетов</string>
     <string name="app_update_later">Позже</string>
     <string name="app_update_install_failed">Не удалось установить обновление: %1$s</string>
