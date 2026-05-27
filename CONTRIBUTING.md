@@ -8,6 +8,14 @@ Welcome, and thank you for contributing! 🎉
 
 **Readable > Useful > High performance but poorly readable.**
 
+Features with **periodic / background / auto-*** behavior (WorkManager, `*IfDue`, silent checks)
+must ship with a filled **feature contract** (`user_visible_promise`, triggers, manual vs auto,
+failure behavior, verification). Before merge, review **symmetry D1–D7** against reference features
+(subscriptions, route assets, app update): planner + scheduler, timestamps only after success,
+distinct failure UI, WL/BS HTTP routing, documented ops outside APK. «Manual works» is not acceptance
+for auto paths — add an invariant test in `composeApp/src/commonTest/` with the change.
+
+
 Truly readable code is more than just clear—it's understandable even without context (**contextless readability**).
 
 ---

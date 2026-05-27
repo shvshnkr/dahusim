@@ -37,6 +37,13 @@ docs/local/
 # Local architecture kit (not committed)
 docs/2K_*.md
 
+# Local AI agent instructions (not committed)
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.cursor/
+docs/CODE_REVIEW_PROMPT.md
+
 # Local AI maps, worklog, codex-mini drafts (not committed)
 /AI/
 
