@@ -1,23 +1,31 @@
 package fr.husi.ui
 
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fr.husi.compose.ScrollableDialog
 import fr.husi.ktx.onDefaultDispatcher
 import fr.husi.resources.Res
 import fr.husi.resources.app_update_available_message
 import fr.husi.resources.app_update_available_title
+import fr.husi.resources.app_update_disable_checks
 import fr.husi.resources.app_update_install
 import fr.husi.resources.app_update_install_failed
 import fr.husi.resources.app_update_install_pending
 import fr.husi.resources.app_update_install_pending_desktop
 import fr.husi.resources.app_update_later
-import fr.husi.resources.app_update_disable_checks
 import fr.husi.repository.resolveRepository
 import fr.husi.update.AppUpdateCoordinator
 import fr.husi.update.AppUpdateInstallResult
@@ -36,7 +44,33 @@ fun AppUpdatePromptHost(
     val disableChecksText = stringResource(Res.string.app_update_disable_checks)
 
     offer?.let { pending ->
-        AlertDialog(
+        val installEnabled = !installState.active
+        val onInstall: () -> Unit = {
+            scope.launch {
+                when (val result = onDefaultDispatcher { AppUpdateCoordinator.installPendingOffer() }) {
+                    AppUpdateInstallResult.Success,
+                    AppUpdateInstallResult.Cancelled,
+                    -> Unit
+                    AppUpdateInstallResult.PendingUserAction -> showMessage(
+                        repository.getString(
+                            if (PlatformInfo.isAndroid) {
+                                Res.string.app_update_install_pending
+                            } else {
+                                Res.string.app_update_install_pending_desktop
+                            },
+                        ),
+                    )
+                    is AppUpdateInstallResult.Failed -> showMessage(
+                        repository.getString(
+                            Res.string.app_update_install_failed,
+                            result.message,
+                        ),
+                    )
+                }
+            }
+        }
+
+        ScrollableDialog(
             onDismissRequest = {
                 if (!pending.mandatory) {
                     AppUpdateCoordinator.dismissOffer(pending)
@@ -54,53 +88,44 @@ fun AppUpdatePromptHost(
                 Text(body)
             },
             confirmButton = {
-                TextButton(
-                    enabled = !installState.active,
-                    onClick = {
-                        scope.launch {
-                            when (val result = onDefaultDispatcher { AppUpdateCoordinator.installPendingOffer() }) {
-                                AppUpdateInstallResult.Success,
-                                AppUpdateInstallResult.Cancelled,
-                                -> Unit
-                                AppUpdateInstallResult.PendingUserAction -> showMessage(
-                                    repository.getString(
-                                        if (PlatformInfo.isAndroid) {
-                                            Res.string.app_update_install_pending
-                                        } else {
-                                            Res.string.app_update_install_pending_desktop
-                                        },
-                                    ),
-                                )
-                                is AppUpdateInstallResult.Failed -> showMessage(
-                                    repository.getString(
-                                        Res.string.app_update_install_failed,
-                                        result.message,
-                                    ),
-                                )
-                            }
-                        }
-                    },
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(stringResource(Res.string.app_update_install))
-                }
-            },
-            dismissButton = {
-                if (!pending.mandatory) {
-                    androidx.compose.foundation.layout.Row {
+                    Button(
+                        onClick = onInstall,
+                        enabled = installEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(Res.string.app_update_install))
+                    }
+                    if (!pending.mandatory) {
                         TextButton(
-                            enabled = !installState.active,
+                            onClick = { AppUpdateCoordinator.dismissOffer(pending) },
+                            enabled = installEnabled,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                stringResource(Res.string.app_update_later),
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        TextButton(
                             onClick = {
                                 AppUpdateCoordinator.disableChecks()
                                 showMessage(disableChecksText)
                             },
+                            enabled = installEnabled,
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(stringResource(Res.string.app_update_disable_checks))
-                        }
-                        TextButton(
-                            enabled = !installState.active,
-                            onClick = { AppUpdateCoordinator.dismissOffer(pending) },
-                        ) {
-                            Text(stringResource(Res.string.app_update_later))
+                            Text(
+                                stringResource(Res.string.app_update_disable_checks),
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
