@@ -12,6 +12,7 @@ import fr.husi.fmt.internal.ProxySetBean
 import fr.husi.fmt.socks.SOCKSBean
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.platform.PlatformInfo
+import fr.husi.repository.resolveRepository
 import fr.husi.test.HusiKoinTest
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -633,6 +634,46 @@ class ConfigBuilderTest : HusiKoinTest() {
         assertEquals("direct", routeRuGeositeOutbound(result))
     }
 
+    @Test
+    fun `buildConfig prefers local rule set paths when requested`() = runBlocking {
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "main",
+            host = "1.1.1.1",
+            port = 1080,
+        )
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU bypass",
+                domains = "set+dns:geosite-category-ru",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        geoDir.mkdirs()
+        val localRuleSetFile = geoDir.resolve("geosite-category-ru.srs")
+        localRuleSetFile.writeText("test")
+        try {
+            val result = buildConfig(proxy, preferLocalRuleSet = true)
+            val routeRuleSets = parseRouteRuleSets(result)
+            val localRuleSet = routeRuleSets.firstOrNull {
+                it["tag"]?.jsonPrimitive?.content == "geosite-category-ru"
+            }
+            assertNotNull(localRuleSet)
+            val path = localRuleSet["path"]?.jsonPrimitive?.content
+            assertNotNull(path)
+            assertTrue(path.endsWith("/geo/geosite-category-ru.srs"))
+            assertEquals(null, localRuleSet["url"])
+        } finally {
+            localRuleSetFile.delete()
+        }
+    }
+
     private fun routeRuGeositeOutbound(result: ConfigBuildResult): String? {
         val routes = Json.parseToJsonElement(result.config).jsonObject["route"]
             ?.jsonObject?.get("rules")?.jsonArray ?: return null
@@ -666,6 +707,12 @@ class ConfigBuilderTest : HusiKoinTest() {
             .jsonArray
             .first { it.jsonObject["tag"]!!.jsonPrimitive.content == TAG_TUN }
             .jsonObject
+
+    private fun parseRouteRuleSets(result: ConfigBuildResult) =
+        Json.parseToJsonElement(result.config).jsonObject["route"]!!
+            .jsonObject["rule_set"]!!
+            .jsonArray
+            .map { it.jsonObject }
 
     private suspend fun createSocksProxy(
         groupId: Long,
