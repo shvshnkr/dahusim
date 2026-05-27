@@ -181,8 +181,10 @@ jobs:
         run: |
           set -e
           VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          VER_CODE=$(grep '^VERSION_CODE=' husi.properties | cut -d= -f2-)
           SAFE_VER=$(printf '%s' "$VER" | tr ' /+' '---' | sed 's/[^0-9A-Za-z._-]/_/g')
           echo "version_name=$VER" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VER_CODE" >> "$GITHUB_OUTPUT"
           echo "safe_version=$SAFE_VER" >> "$GITHUB_OUTPUT"
           mkdir -p release_assets
           count=0
@@ -200,28 +202,23 @@ jobs:
             count=$((count + 1))
           done
           [ "$count" -ge 1 ]
+          SHORT_SHA=$(git rev-parse --short HEAD)
           {
             echo "## Pre-release: dahusim $VER"
+            echo
+            echo "**versionName:** \`$VER\` · **versionCode:** \`$VER_CODE\` · **commit:** \`$SHORT_SHA\` · **CI:** #${{ github.run_number }}"
             echo
             echo "**Как скачать:** внизу страницы блок **Assets** — по одному APK на архитектуру (**arm64-v8a**, **armeabi-v7a**, **x86_64**, **x86**). Имена вида \`dahusim_<версия>_play_debug_<abi>.apk\`."
             echo
             echo "**Этот pre-release — только Android APK.** Сборки **Linux / Windows desktop** (zip, deb, …) публикуются **другими** workflows; для desktop на ПК нужен **Java 21+**, см. README."
             echo
             echo "В этой ветке в описаниях **«КВН»** используется **вместо** слова «VPN» (шутливая подмена, не гарантия «услуги»). Возможен **автовыбор** публичных/открытых серверов энтузиастов — риск и закон на вас, см. README."
-            echo
-            echo "## Коммит сборки"
-            echo
-            git log -1 --oneline
-            echo
-            echo "## Недавние коммиты"
-            echo
-            git log -25 --oneline --no-merges
           } > release_body.md
 
       - uses: softprops/action-gh-release@v3
         with:
           prerelease: true
           tag_name: android-${{ github.run_id }}
-          name: "dahusim ${{ steps.rel.outputs.version_name }} Android (сборка ${{ github.run_number }})"
+          name: "dahusim ${{ steps.rel.outputs.version_name }} (${{ steps.rel.outputs.version_code }}) · Android · CI #${{ github.run_number }}"
           body_path: release_body.md
           files: release_assets/*.apk

@@ -158,11 +158,9 @@ jobs:
             {
               echo "Promoted from all-platforms run \`${{ steps.resolve.outputs.run_id }}\`."
               echo
+              echo "**versionName:** \`${{ steps.version.outputs.version_name }}\` · **versionCode:** \`${{ steps.version.outputs.version_code }}\`"
+              echo
               echo "Source commit: \`${{ steps.resolve.outputs.head_sha }}\`"
-              echo
-              echo "Recent commits:"
-              echo
-              git log --oneline --no-merges -25 "${{ steps.resolve.outputs.head_sha }}"
             } > release_notes.md
           fi
 

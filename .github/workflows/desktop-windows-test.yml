@@ -109,8 +109,11 @@ jobs:
         run: |
           set -euo pipefail
           VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          VER_CODE=$(grep '^VERSION_CODE=' husi.properties | cut -d= -f2-)
           PKG=$(grep '^PACKAGE_NAME=' husi.properties | cut -d= -f2-)
           SHORT=$(git rev-parse --short HEAD)
+          echo "version_name=$VER" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VER_CODE" >> "$GITHUB_OUTPUT"
           mkdir -p release_assets
           shopt -s nullglob
           for f in composeApp/build/compose/packages/windows/*.zip; do
@@ -133,14 +136,15 @@ jobs:
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           set -euo pipefail
-          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          VER="${{ steps.assets.outputs.version_name }}"
+          VER_CODE="${{ steps.assets.outputs.version_code }}"
           TAG="windows-desktop-windows-amd64-${{ github.run_id }}"
           {
             echo "## Windows desktop · **windows/amd64**"
             echo
             echo "**Платформа:** \`windows/amd64\` (сборка DESKTOP_TARGET=windows/amd64)."
             echo
-            echo "**Версия:** \`${VER}\` **Коммит:** \`$(git rev-parse --short HEAD)\` **Тег:** \`${TAG}\`"
+            echo "**versionName:** \`${VER}\` · **versionCode:** \`${VER_CODE}\` · **commit:** \`$(git rev-parse --short HEAD)\` · **тег:** \`${TAG}\` · **CI:** #${{ github.run_number }}"
             echo
             echo "**Где скачать:** репозиторий → вкладка **Releases** (не артефакты Actions) → этот пре-релиз → внизу **Assets**."
             echo
@@ -151,10 +155,6 @@ jobs:
             echo "**Форматы в Assets:** portable zip, NSIS installer (.exe), uber JAR."
             echo
             echo "**Требование:** на целевой машине **Java 21+** (JRE не входит в zip/installer/JAR). Симптом «UAC и тишина» при старой Java: [husi#30](https://codeberg.org/xchacha20-poly1305/husi/issues/30). Кракозябры в трее/уведомлениях: [husi#79](https://codeberg.org/xchacha20-poly1305/husi/issues/79), [husi#81](https://codeberg.org/xchacha20-poly1305/husi/issues/81)."
-            echo
-            echo "## Коммит"
-            echo
-            git log -1 --oneline
           } > release_body.md
 
       - uses: softprops/action-gh-release@v3
@@ -166,7 +166,7 @@ jobs:
           fail_on_unmatched_files: true
           tag_name: windows-desktop-windows-amd64-${{ github.run_id }}
           target_commitish: ${{ github.sha }}
-          name: Windows desktop · windows/amd64 · test ${{ github.run_number }}
+          name: Windows desktop · ${{ steps.assets.outputs.version_name }} (${{ steps.assets.outputs.version_code }}) · windows/amd64 · CI #${{ github.run_number }}
           body_path: release_body.md
           files: |
             release_assets/*
