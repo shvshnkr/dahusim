@@ -1,0 +1,150 @@
+name: Android instrumented smoke (PR)
+
+on:
+  pull_request:
+    paths:
+      - "androidApp/**"
+      - "composeApp/**"
+      - "buildSrc/**"
+      - "gradle/**"
+      - "gradle.properties"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "repositories.gradle.kts"
+      - "buildScript/**"
+      - "libcore/**"
+      - "husi.properties"
+      - "run"
+      - "Makefile"
+      - ".github/CRONET_GO_VERSION"
+      - ".github/workflows/android-instrumented-smoke.yml"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: android-instrumented-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  libcore:
+    name: Libcore (Android AAR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Go version
+        id: goversion
+        run: |
+          source buildScript/init/version.sh
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ steps.goversion.outputs.go_version }}
+          cache-dependency-path: libcore/go.sum
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Setup Android NDK r29
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+          add-to-path: true
+          local-cache: false
+
+      - name: Build libcore.aar
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          ./run lib core --android
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libcore-android
+          path: composeApp/libs/libcore.aar
+          if-no-files-found: error
+
+  instrumented-smoke:
+    name: Instrumented smoke · API 35
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: libcore
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: libcore-android
+          path: composeApp/libs
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Geo / Gradle init assets
+        run: ./run init action gradle
+
+      - name: Write local.properties
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          echo "sdk.dir=${SDK}" > local.properties
+
+      - name: Run connectedPlayDebugAndroidTest
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          emulator-boot-timeout: 900
+          disable-animations: true
+          script: |
+            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest \
+              --tests "fr.husi.InstrumentedSmokeTest" \
+              --no-daemon
+        env:
+          BUILD_PLUGIN: none
+          ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
+          GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
+
+      - name: Publish JUnit report in Checks
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "androidApp/build/outputs/androidTest-results/connected/**/*.xml"
+          check_name: "Android smoke · instrumented"
+          detailed_summary: true
+          include_passed: false
+          fail_on_failure: false
+          annotate_only: true
+
+      - name: Upload instrumented smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-instrumented-smoke
+          path: |
+            androidApp/build/outputs/androidTest-results/connected/**
+            androidApp/build/reports/androidTests/connected/**
+          if-no-files-found: warn
+          retention-days: 14

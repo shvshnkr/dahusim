@@ -483,3 +483,19 @@ tasks.matching { it.name == "packageUberJarForCurrentOS" }.configureEach {
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
+
+val matrixTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Run only matrix-style common tests"
+    val desktopTest = tasks.named<Test>("desktopTest")
+    dependsOn("desktopTestClasses")
+    testClassesDirs = desktopTest.get().testClassesDirs
+    classpath = desktopTest.get().classpath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("*.NetworkSwitchMatrixTest")
+        includeTestsMatching("*.PoolDegradationMatrixTest")
+        includeTestsMatching("*.RecoveryMatrixTest")
+        includeTestsMatching("*.InScanNetworkFlapMatrixTest")
+    }
+}

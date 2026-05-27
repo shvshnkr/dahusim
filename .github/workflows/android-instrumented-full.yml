@@ -1,0 +1,211 @@
+name: Android instrumented full (nightly/manual)
+
+on:
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: android-instrumented-full-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  libcore:
+    name: Libcore (Android AAR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Go version
+        id: goversion
+        run: |
+          source buildScript/init/version.sh
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ steps.goversion.outputs.go_version }}
+          cache-dependency-path: libcore/go.sum
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Setup Android NDK r29
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+          add-to-path: true
+          local-cache: false
+
+      - name: Build libcore.aar
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          ./run lib core --android
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libcore-android
+          path: composeApp/libs/libcore.aar
+          if-no-files-found: error
+
+  instrumented-matrix:
+    name: Full instrumented · API ${{ matrix.api-level }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    needs: libcore
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 35]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: libcore-android
+          path: composeApp/libs
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Geo / Gradle init assets
+        run: ./run init action gradle
+
+      - name: Write local.properties
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          echo "sdk.dir=${SDK}" > local.properties
+
+      - name: Run connectedPlayDebugAndroidTest
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          emulator-boot-timeout: 900
+          disable-animations: true
+          script: |
+            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest \
+              --tests "fr.husi.DeviceLifecycleInstrumentedTest" \
+              --tests "fr.husi.AppRecoveryInstrumentedTest" \
+              --no-daemon
+        env:
+          BUILD_PLUGIN: none
+          ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
+          GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
+
+      - name: Publish JUnit report in Checks
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "androidApp/build/outputs/androidTest-results/connected/**/*.xml"
+          check_name: "Android full instrumented · API ${{ matrix.api-level }}"
+          detailed_summary: true
+          include_passed: false
+          fail_on_failure: false
+          annotate_only: true
+
+      - name: Upload instrumented matrix artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-instrumented-full-api-${{ matrix.api-level }}
+          path: |
+            androidApp/build/outputs/androidTest-results/connected/**
+            androidApp/build/reports/androidTests/connected/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  instrumented-summary:
+    name: Aggregate instrumented summary
+    needs: instrumented-matrix
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download instrumented artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: android-instrumented-full-api-*
+          path: artifacts
+
+      - name: Build instrumented summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import glob
+          import json
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          artifact_dirs = sorted(Path("artifacts").glob("android-instrumented-full-api-*"))
+          summary = {
+              "run_id": os.getenv("GITHUB_RUN_ID"),
+              "workflow": os.getenv("GITHUB_WORKFLOW"),
+              "scenarios": [],
+          }
+
+          total_failures = 0
+          total_errors = 0
+
+          for artifact_dir in artifact_dirs:
+              api = artifact_dir.name.replace("android-instrumented-full-api-", "")
+              xml_files = sorted(glob.glob(str(artifact_dir / "**" / "*.xml"), recursive=True))
+              failures = errors = tests = 0
+              for xml_path in xml_files:
+                  try:
+                      root = ET.parse(xml_path).getroot()
+                  except ET.ParseError:
+                      continue
+                  suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+                  for suite in suites:
+                      tests += int(suite.attrib.get("tests", 0))
+                      failures += int(suite.attrib.get("failures", 0))
+                      errors += int(suite.attrib.get("errors", 0))
+              summary["scenarios"].append({
+                  "api_level": api,
+                  "tests": tests,
+                  "failures": failures,
+                  "errors": errors,
+                  "status": "failed" if (failures + errors) > 0 else "passed",
+              })
+              total_failures += failures
+              total_errors += errors
+
+          summary["totals"] = {
+              "failures": total_failures,
+              "errors": total_errors,
+              "status": "failed" if (total_failures + total_errors) > 0 else "passed",
+          }
+          Path("instrumented-full-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+          PY
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: instrumented-full-summary
+          path: instrumented-full-summary.json
+          if-no-files-found: error
+          retention-days: 14

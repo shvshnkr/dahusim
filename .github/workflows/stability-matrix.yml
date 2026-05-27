@@ -1,12 +1,9 @@
-name: JDK matrix (composeApp desktop tests)
+name: Stability matrix (no emulator)
 
-# Auto on PR+main (path-scoped) and manual run.
 on:
   pull_request:
     paths:
-      - "androidApp/**"
       - "composeApp/**"
-      - "library/**"
       - "buildSrc/**"
       - "gradle/**"
       - "gradle.properties"
@@ -14,23 +11,17 @@ on:
       - "build.gradle.kts"
       - "repositories.gradle.kts"
       - "buildScript/**"
+      - "library/**"
       - "libcore/**"
-      - "launcher/**"
-      - "release/linux/**"
-      - "release/windows/**"
-      - "release/desktop/**"
       - "husi.properties"
-      - "plugin/**"
       - "run"
       - "Makefile"
       - ".github/CRONET_GO_VERSION"
-      - ".github/workflows/jdk-matrix-test.yml"
+      - ".github/workflows/stability-matrix.yml"
   push:
     branches: [main]
     paths:
-      - "androidApp/**"
       - "composeApp/**"
-      - "library/**"
       - "buildSrc/**"
       - "gradle/**"
       - "gradle.properties"
@@ -38,25 +29,20 @@ on:
       - "build.gradle.kts"
       - "repositories.gradle.kts"
       - "buildScript/**"
+      - "library/**"
       - "libcore/**"
-      - "launcher/**"
-      - "release/linux/**"
-      - "release/windows/**"
-      - "release/desktop/**"
       - "husi.properties"
-      - "plugin/**"
       - "run"
       - "Makefile"
       - ".github/CRONET_GO_VERSION"
-      - ".github/workflows/jdk-matrix-test.yml"
+      - ".github/workflows/stability-matrix.yml"
   workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# Long-running: do not cancel in-progress on new pushes (same idea as build.yml).
 concurrency:
-  group: jdk-matrix-${{ github.workflow }}-${{ github.ref }}
+  group: stability-matrix-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -142,15 +128,33 @@ jobs:
           path: composeApp/libs/libcore-desktop-linux-amd64.jar
           if-no-files-found: error
 
-  compose-app-desktop-tests:
-    name: JDK ${{ matrix.java-version }} · desktopTest
+  stability-tests:
+    name: ${{ matrix.scenario.name }}
     needs: libcore-desktop-linux-amd64
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        java-version: [21, 22, 23, 24, 25, 26]
+        scenario:
+          - id: network-switch
+            name: "stability · network switch matrix"
+            test_class: "fr.husi.database.NetworkSwitchMatrixTest"
+          - id: pool-degradation
+            name: "stability · pool degradation matrix"
+            test_class: "fr.husi.database.PoolDegradationMatrixTest"
+          - id: recovery
+            name: "stability · recovery matrix"
+            test_class: "fr.husi.database.RecoveryMatrixTest"
+          - id: in-scan-flap
+            name: "stability · in-scan flap matrix"
+            test_class: "fr.husi.database.InScanNetworkFlapMatrixTest"
+          - id: auto-subscription
+            name: "stability · auto subscription synthetic"
+            test_class: "fr.husi.bg.SubscriptionAutoUpdateSyntheticTest"
+          - id: auto-route-assets
+            name: "stability · auto route assets synthetic"
+            test_class: "fr.husi.bg.RouteAssetAutoUpdateSyntheticTest"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -162,13 +166,9 @@ jobs:
           name: libcore-desktop-linux-amd64
           path: composeApp/libs
 
-      - name: Verify libcore jar
-        run: |
-          test -f composeApp/libs/libcore-desktop-linux-amd64.jar
-
       - uses: actions/setup-java@v5
         with:
-          java-version: ${{ matrix.java-version }}
+          java-version: "21"
           distribution: "temurin"
 
       - uses: android-actions/setup-android@v3
@@ -188,50 +188,50 @@ jobs:
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
           echo "sdk.dir=${SDK}" > local.properties
 
-      - name: exportLibraryDefinitions + desktopTest
-        id: desktop-tests
+      - name: Run stability scenario
         env:
           BUILD_PLUGIN: none
           GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
         run: |
           xvfb-run -a --server-args="-screen 0 1280x720x24" \
-            ./gradlew :composeApp:exportLibraryDefinitions :composeApp:desktopTest --no-daemon
+            ./gradlew :composeApp:exportLibraryDefinitions :composeApp:desktopTest \
+            --tests "${{ matrix.scenario.test_class }}" --no-daemon
 
       - name: Publish JUnit report in Checks
         if: always()
         uses: mikepenz/action-junit-report@v5
         with:
           report_paths: "composeApp/build/test-results/desktopTest/**/*.xml"
-          check_name: "JUnit · JDK ${{ matrix.java-version }} · desktopTest"
+          check_name: "Stability · ${{ matrix.scenario.id }}"
           detailed_summary: true
           include_passed: false
           fail_on_failure: false
           annotate_only: true
 
-      - name: Upload desktopTest artifacts (JDK scoped)
+      - name: Upload scenario artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results-jdk-${{ matrix.java-version }}
+          name: stability-results-${{ matrix.scenario.id }}
           path: |
             composeApp/build/test-results/desktopTest/**
             composeApp/build/reports/tests/desktopTest/**
           if-no-files-found: warn
           retention-days: 14
 
-  ci-test-summary:
-    name: Aggregate matrix test summary
-    needs: compose-app-desktop-tests
+  stability-summary:
+    name: Aggregate stability summary
+    needs: stability-tests
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download all matrix test artifacts
+      - name: Download scenario artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: test-results-jdk-*
+          pattern: stability-results-*
           path: artifacts
 
-      - name: Build summary json + markdown
+      - name: Build stability summary json + markdown
         shell: bash
         run: |
           python - <<'PY'
@@ -241,14 +241,14 @@ jobs:
           import xml.etree.ElementTree as ET
           from pathlib import Path
 
-          artifact_dirs = sorted(Path("artifacts").glob("test-results-jdk-*"))
+          artifact_dirs = sorted(Path("artifacts").glob("stability-results-*"))
           summary = {
               "run_id": os.getenv("GITHUB_RUN_ID"),
               "repository": os.getenv("GITHUB_REPOSITORY"),
               "workflow": os.getenv("GITHUB_WORKFLOW"),
               "ref": os.getenv("GITHUB_REF"),
               "head_sha": os.getenv("GITHUB_SHA"),
-              "matrix": [],
+              "scenarios": [],
           }
 
           total_tests = 0
@@ -257,7 +257,7 @@ jobs:
           total_skipped = 0
 
           for artifact_dir in artifact_dirs:
-              jdk = artifact_dir.name.replace("test-results-jdk-", "")
+              scenario_id = artifact_dir.name.replace("stability-results-", "")
               xml_files = sorted(glob.glob(str(artifact_dir / "**" / "*.xml"), recursive=True))
               tests = failures = errors = skipped = 0
 
@@ -278,8 +278,8 @@ jobs:
                       errors += int(suite.attrib.get("errors", 0))
                       skipped += int(suite.attrib.get("skipped", 0))
 
-              matrix_entry = {
-                  "jdk": jdk,
+              scenario_entry = {
+                  "scenario": scenario_id,
                   "tests": tests,
                   "failures": failures,
                   "errors": errors,
@@ -288,7 +288,7 @@ jobs:
                   "status": "failed" if (failures + errors) > 0 else "passed",
                   "artifact": artifact_dir.name,
               }
-              summary["matrix"].append(matrix_entry)
+              summary["scenarios"].append(scenario_entry)
               total_tests += tests
               total_failures += failures
               total_errors += errors
@@ -302,15 +302,14 @@ jobs:
               "status": "failed" if (total_failures + total_errors) > 0 else "passed",
           }
 
-          Path("ci-test-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+          Path("stability-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
           lines = []
-          lines.append("# CI Test Summary")
+          lines.append("# Stability Matrix Summary")
           lines.append("")
           lines.append(f"- run_id: `{summary['run_id']}`")
           lines.append(f"- workflow: `{summary['workflow']}`")
           lines.append(f"- ref: `{summary['ref']}`")
-          lines.append(f"- head_sha: `{summary['head_sha']}`")
           lines.append("")
           lines.append("## Totals")
           lines.append("")
@@ -320,29 +319,29 @@ jobs:
           lines.append(f"- errors: `{summary['totals']['errors']}`")
           lines.append(f"- skipped: `{summary['totals']['skipped']}`")
           lines.append("")
-          lines.append("## Per JDK")
+          lines.append("## Per scenario")
           lines.append("")
-          for item in summary["matrix"]:
+          for item in summary["scenarios"]:
               lines.append(
-                  f"- JDK {item['jdk']}: status=`{item['status']}`, tests={item['tests']}, "
+                  f"- {item['scenario']}: status=`{item['status']}`, tests={item['tests']}, "
                   f"failures={item['failures']}, errors={item['errors']}, skipped={item['skipped']}, "
                   f"xml_files={item['xml_files']}, artifact=`{item['artifact']}`"
               )
 
-          Path("ci-test-summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          Path("stability-summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
 
       - name: Publish summary to workflow UI
         shell: bash
         run: |
-          cat ci-test-summary.md >> "$GITHUB_STEP_SUMMARY"
+          cat stability-summary.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload aggregated summary artifact
+      - name: Upload summary artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ci-test-summary
+          name: stability-summary
           path: |
-            ci-test-summary.json
-            ci-test-summary.md
+            stability-summary.json
+            stability-summary.md
           if-no-files-found: error
           retention-days: 14
