@@ -674,6 +674,46 @@ class ConfigBuilderTest : HusiKoinTest() {
         }
     }
 
+    @Test
+    fun `buildConfig prefers local rule set paths by default when local geo exists`() = runBlocking {
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "main",
+            host = "1.1.1.1",
+            port = 1080,
+        )
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU blocked",
+                domains = "set+dns:geosite-ru-blocked",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        geoDir.mkdirs()
+        val localRuleSetFile = geoDir.resolve("geosite-ru-blocked.srs")
+        localRuleSetFile.writeText("test")
+        try {
+            val result = buildConfig(proxy)
+            val routeRuleSets = parseRouteRuleSets(result)
+            val localRuleSet = routeRuleSets.firstOrNull {
+                it["tag"]?.jsonPrimitive?.content == "geosite-ru-blocked"
+            }
+            assertNotNull(localRuleSet)
+            val path = localRuleSet["path"]?.jsonPrimitive?.content
+            assertNotNull(path)
+            assertTrue(path.endsWith("/geo/geosite-ru-blocked.srs"))
+            assertEquals(null, localRuleSet["url"])
+        } finally {
+            localRuleSetFile.delete()
+        }
+    }
+
     private fun routeRuGeositeOutbound(result: ConfigBuildResult): String? {
         val routes = Json.parseToJsonElement(result.config).jsonObject["route"]
             ?.jsonObject?.get("rules")?.jsonArray ?: return null

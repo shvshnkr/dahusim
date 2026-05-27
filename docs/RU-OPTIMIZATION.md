@@ -15,12 +15,11 @@ This profile is **maintained only in this project** (default branch `main` in th
 
    In sing-box terms, **geosite-ru** is the domain/rule list tagged `ru` in the community
    **geosite** database (not “all .ru TLD” literally, though overlap is large). **geoip-ru** is
-   the **GeoIP** country database’s **RU** segment for IP CIDRs. With a built-in rule-set
-   provider (Official / Loyalsoldier / Chocolate4U), the app wires these as **remote** `.srs`
-   from GitHub so they work even if **Route → rule assets** was never downloaded into `geo/`.
-   **Custom** route provider only changes how **Route → Update** downloads bundles; the live
-   sing-box config still loads standard `geosite-*` / `geoip-*` tags from **SagerNet** raw URLs
-   so presets work without a filled `geo/` folder.
+   the **GeoIP** country database’s **RU** segment for IP CIDRs. Live configs are now
+   **local-first**: when `external/geo/*.srs` exists, sing-box uses local paths and does not
+   bootstrap through GitHub raw URLs. On first start (or missing local assets), config falls back
+   to remote `geosite-*` / `geoip-*` URLs so presets still work before route assets are populated.
+   In-box geosite bundle also includes `geosite-ru-blocked` and `geosite-ru-blocked-all`.
 
 2. **Per-app bypass — "Scan Russian apps".** Same idea as the China scanner: package-name
    prefixes **and** manifest/DEX checks for RU-related class names (vendor/SDK-style

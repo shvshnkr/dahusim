@@ -1376,17 +1376,19 @@ fun buildConfig(
         var ruleSetResource: String? = null
         var geositeLink: String? = null
         var geoipLink: String? = null
-        if (preferLocalRuleSet && !forExport && !forTest) {
-            val localGeoDir = repository.externalAssetsDir.resolve("geo")
-            val hasLocalRuleSets = localGeoDir.exists() &&
-                localGeoDir.isDirectory &&
-                localGeoDir.listFiles()?.any { it.extension.equals("srs", ignoreCase = true) } == true
-            if (hasLocalRuleSets) {
-                ruleSetResource = localGeoDir.invariantPathString()
-            }
+        val localGeoDir = repository.externalAssetsDir.resolve("geo")
+        val hasLocalRuleSets = localGeoDir.exists() &&
+            localGeoDir.isDirectory &&
+            localGeoDir.listFiles()?.any { it.extension.equals("srs", ignoreCase = true) } == true
+        val useLocalRuleSets = (!forExport && !forTest && hasLocalRuleSets) ||
+            (preferLocalRuleSet && !forExport && !forTest && hasLocalRuleSets)
+        if (useLocalRuleSets) {
+            // Local-first for live configs: avoid bootstrapping through raw.githubusercontent on
+            // restricted networks and treat remote as a refresh/update channel.
+            ruleSetResource = localGeoDir.invariantPathString()
         }
-        // Remote rule-set bases for export and for any live VPN/proxy config (!forTest).
-        // Local geo/*.srs is optional: RU preset etc. must not depend on Route → Update first.
+        // Remote rule-set bases for export and as live fallback when local geo/*.srs is unavailable.
+        // RU presets should still work on first start before geo/ is materialized.
         // Profile URL tests (forTest) keep local geo/ to avoid GitHub fetches per probe.
         if (ruleSetResource == null && (forExport || !forTest)) {
             // "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -27,8 +28,9 @@ var (
 )
 
 const (
-	geositeRepo = "v2fly/domain-list-community"
-	geoipRepo   = "Dreamacro/maxmind-geoip"
+	geositeRepo      = "v2fly/domain-list-community"
+	geoipRepo        = "Dreamacro/maxmind-geoip"
+	runetFreedomBase = "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite"
 
 	siteName = "dlc.dat"
 	ipName   = "Country.mmdb"
@@ -56,6 +58,11 @@ const (
 	//      https://github.com/klauspost/compress/discussions/675
 	windowSize = 128 << 10 // 128KB
 )
+
+var runetFreedomGeositeFiles = []string{
+	"geosite-ru-blocked.srs",
+	"geosite-ru-blocked-all.srs",
+}
 
 func init() {
 	flag.Parse()
@@ -114,6 +121,16 @@ func main() {
 				log.Fatal(err)
 			}
 			_, err = tWriter.Write(buf.Bytes())
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		for _, fileName := range runetFreedomGeositeFiles {
+			runetRuleSet, err := fetchAbsoluteURL(fmt.Sprintf("%s/%s", runetFreedomBase, fileName))
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = writeTarEntry(tWriter, fileName, runetRuleSet)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -181,13 +198,33 @@ func main() {
 func fetch(repo, tag, name string) ([]byte, error) {
 	link := "https://github.com/" + repo + "/releases/download/" + tag + "/" + name
 
+	return fetchAbsoluteURL(link)
+}
+
+func fetchAbsoluteURL(link string) ([]byte, error) {
 	resp, err := http.Get(link)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("fetch %s returned status %d", link, resp.StatusCode)
+	}
 	return io.ReadAll(resp.Body)
+}
+
+func writeTarEntry(tWriter *tar.Writer, name string, content []byte) error {
+	err := tWriter.WriteHeader(&tar.Header{
+		Name: name,
+		Size: int64(len(content)),
+		Mode: int64(os.ModePerm),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = tWriter.Write(content)
+	return err
 }
 
 func newZstdWriter(writer io.Writer) (*zstd.Encoder, error) {
