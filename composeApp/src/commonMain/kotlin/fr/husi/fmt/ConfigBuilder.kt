@@ -30,6 +30,7 @@ import fr.husi.fmt.SingBoxOptions.NTPOptions
 import fr.husi.fmt.SingBoxOptions.NewDNSServerOptions_FakeIPDNSServerOptions
 import fr.husi.fmt.SingBoxOptions.NewDNSServerOptions_HostsDNSServerOptions
 import fr.husi.fmt.SingBoxOptions.NewDNSServerOptions_LocalDNSServerOptions
+import fr.husi.fmt.SingBoxOptions.NewDNSServerOptions_RemoteDNSServerOptions
 import fr.husi.fmt.SingBoxOptions.OptimisticDNSOptions
 import fr.husi.fmt.SingBoxOptions.Outbound
 import fr.husi.fmt.SingBoxOptions.Outbound_DirectOptions
@@ -126,6 +127,90 @@ fun buildConfig(
     forExport: Boolean = false,
     preferLocalRuleSet: Boolean = false,
 ): ConfigBuildResult {
+    fun extractHostCandidate(address: String): String? {
+        val trimmed = address.trim()
+        if (trimmed.isEmpty()) return null
+        val withoutScheme = if (trimmed.contains("://")) {
+            trimmed.substringAfter("://")
+        } else {
+            trimmed
+        }
+        val authority = withoutScheme
+            .substringBefore("/")
+            .substringBefore("?")
+            .substringBefore("#")
+            .trim()
+        if (authority.isEmpty()) return null
+
+        if (authority.startsWith("[")) {
+            val closingIndex = authority.indexOf(']')
+            if (closingIndex > 1) {
+                return authority.substring(1, closingIndex)
+            }
+        }
+
+        val colonCount = authority.count { it == ':' }
+        return if (colonCount == 1) {
+            authority.substringBefore(':').trim().takeIf { it.isNotEmpty() }
+        } else {
+            authority
+        }
+    }
+
+    fun extractPortCandidate(address: String): Int? {
+        val trimmed = address.trim()
+        if (trimmed.isEmpty()) return null
+        val withoutScheme = if (trimmed.contains("://")) {
+            trimmed.substringAfter("://")
+        } else {
+            trimmed
+        }
+        val authority = withoutScheme
+            .substringBefore("/")
+            .substringBefore("?")
+            .substringBefore("#")
+            .trim()
+        if (authority.isEmpty()) return null
+
+        if (authority.startsWith("[")) {
+            val closingIndex = authority.indexOf(']')
+            if (closingIndex > 0 && authority.length > closingIndex + 2 && authority[closingIndex + 1] == ':') {
+                return authority.substring(closingIndex + 2).toIntOrNull()
+            }
+            return null
+        }
+
+        return if (authority.count { it == ':' } == 1) {
+            authority.substringAfter(':').toIntOrNull()
+        } else {
+            null
+        }
+    }
+
+    fun buildDnsServerForTest(
+        link: String,
+        out: String?,
+        tag: String,
+        resolverTag: String,
+    ): SingBoxOptions.NewDNSServerOptions {
+        val host = extractHostCandidate(link) ?: "8.8.8.8"
+        val port = extractPortCandidate(link) ?: 53
+        return NewDNSServerOptions_RemoteDNSServerOptions().apply {
+            type = SingBoxOptions.DNS_TYPE_UDP
+            this.tag = tag
+            server = host
+            server_port = port
+            detour = out
+            domain_resolver = DomainResolveOptions().apply {
+                server = resolverTag
+            }
+        }
+    }
+
+    val useFallbackDnsServerBuilder = runCatching {
+        Libcore.newURL(SingBoxOptions.DNS_TYPE_UDP)
+    }.isFailure
+
     val repository = resolveRepository()
 
     if (proxy.type == TYPE_CONFIG) {
@@ -1163,45 +1248,55 @@ fun buildConfig(
         }
 
         remoteDns.forEach {
-            var address = it
-            if (address.contains("://")) {
-                address = address.substringAfter("://")
-            }
-            try {
-                Libcore.parseURL("https://$address").apply {
-                    if (!host.isIpAddress()) {
-                        domainListDNSDirectForce.add(host)
-                    }
-                }
-            } catch (_: Exception) {
+            val host = extractHostCandidate(it) ?: return@forEach
+            if (!host.isIpAddress()) {
+                domainListDNSDirectForce.add(host)
             }
         }
 
         // remote dns obj
         remoteDns.firstOrNull()?.let {
             dns!!.servers!!.add(
-                buildDNSServer(
-                    it,
-                    mainTag,
-                    TAG_DNS_REMOTE,
-                    DomainResolveOptions().apply {
-                        server = TAG_DNS_DIRECT
-                    },
-                ),
+                if (useFallbackDnsServerBuilder) {
+                    buildDnsServerForTest(
+                        it,
+                        mainTag,
+                        TAG_DNS_REMOTE,
+                        TAG_DNS_DIRECT,
+                    )
+                } else {
+                    buildDNSServer(
+                        it,
+                        mainTag,
+                        TAG_DNS_REMOTE,
+                        DomainResolveOptions().apply {
+                            server = TAG_DNS_DIRECT
+                        },
+                    )
+                },
             )
         } ?: error("missing remote DNS")
 
         // add directDNS objects here
         directDNS.firstOrNull()?.let {
             dns!!.servers!!.add(
-                buildDNSServer(
-                    it,
-                    null,
-                    TAG_DNS_DIRECT,
-                    DomainResolveOptions().apply {
-                        server = TAG_DNS_LOCAL
-                    },
-                ),
+                if (useFallbackDnsServerBuilder) {
+                    buildDnsServerForTest(
+                        it,
+                        null,
+                        TAG_DNS_DIRECT,
+                        TAG_DNS_LOCAL,
+                    )
+                } else {
+                    buildDNSServer(
+                        it,
+                        null,
+                        TAG_DNS_DIRECT,
+                        DomainResolveOptions().apply {
+                            server = TAG_DNS_LOCAL
+                        },
+                    )
+                },
             )
         } ?: error("missing direct DNS")
 

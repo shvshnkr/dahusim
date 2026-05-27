@@ -576,7 +576,7 @@ class ConfigBuilderTest : HusiKoinTest() {
 
         val routeRules = parseRouteRules(buildConfig(proxy))
         val routeRule = routeRules.firstOrNull {
-            it["domain"]?.jsonArray?.map { item -> item.jsonPrimitive.content } == listOf("example.org")
+            it["process_path"]?.jsonArray?.map { item -> item.jsonPrimitive.content } == listOf("com.example.app")
         }
         assertNotNull(routeRule)
         assertEquals(null, routeRule["package_name"])
