@@ -3,6 +3,7 @@ package fr.husi.ui.simple
 import androidx.compose.runtime.Composable
 import fr.husi.resources.Res
 import fr.husi.resources.simple_mode_activity_checking_network
+import fr.husi.resources.simple_mode_activity_connection_unstable
 import fr.husi.resources.simple_mode_activity_connecting_server
 import fr.husi.resources.simple_mode_activity_connection_error
 import fr.husi.resources.simple_mode_activity_finding_server
@@ -20,6 +21,7 @@ import fr.husi.resources.simple_mode_activity_testing_url
 import fr.husi.resources.simple_mode_activity_trying_next
 import fr.husi.resources.simple_mode_activity_verifying_internet
 import fr.husi.resources.simple_mode_activity_verifying_last
+import fr.husi.simplemode.ACTIVITY_CONNECTION_UNSTABLE_RECHECKING
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -46,6 +48,8 @@ internal fun displaySimpleModeActivity(raw: String): String {
             stringResource(Res.string.simple_mode_activity_permission_foreground)
         raw.startsWith("Network changed, reconnecting") ->
             stringResource(Res.string.simple_mode_activity_network_changed)
+        raw == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING ->
+            stringResource(Res.string.simple_mode_activity_connection_unstable)
         raw.startsWith("Server unstable, switching") ->
             stringResource(Res.string.simple_mode_activity_server_unstable)
         raw.startsWith("Server degraded, switching") ->

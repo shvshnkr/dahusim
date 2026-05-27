@@ -1,5 +1,7 @@
 package fr.husi.simplemode
 
+internal const val ACTIVITY_CONNECTION_UNSTABLE_RECHECKING = "Connection unstable, rechecking…"
+
 /** Pre-connect: subscriptions, probes, ranking — not an active VPN session yet. */
 internal fun isSimpleModePrepareActivity(text: String): Boolean {
     if (text.isBlank()) return false
@@ -25,6 +27,8 @@ internal fun isSimpleModeVpnProgressActivity(text: String): Boolean {
         text.contains("trying next", ignoreCase = true) ||
         text.contains("unreachable", ignoreCase = true) ||
         text.contains("degraded", ignoreCase = true) ||
+        text.contains("unstable", ignoreCase = true) ||
+        text.contains("rechecking", ignoreCase = true) ||
         text.contains("Connection error", ignoreCase = true)
 }
 

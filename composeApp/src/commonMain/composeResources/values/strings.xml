@@ -914,7 +914,9 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_activity_permission_vpn">Allow VPN when prompted…</string>
     <string name="simple_mode_activity_permission_foreground">Return to the app to allow VPN…</string>
     <string name="simple_mode_activity_network_changed">Network changed, reconnecting…</string>
+    <string name="simple_mode_activity_connection_unstable">Connection unstable, rechecking…</string>
     <string name="simple_mode_activity_server_unstable">Server unstable, switching…</string>
+    <string name="simple_mode_vpn_check_failed_reconnect">VPN is connected but the health check failed — tap Disconnect, then Connect again.</string>
     <string name="simple_mode_activity_server_degraded">Server degraded, switching…</string>
     <string name="simple_mode_activity_server_unreachable">Server unreachable, trying next…</string>
     <string name="simple_mode_activity_connection_error">Connection error, trying next…</string>

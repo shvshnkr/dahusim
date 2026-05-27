@@ -23,9 +23,9 @@ import kotlinx.coroutines.sync.withLock
  */
 internal object SimpleModeSessionHealth {
 
-    private const val CHECK_INTERVAL_MS = 30_000L
-    private const val CONSECUTIVE_FAIL_LIMIT = 2
     private const val ON_DEMAND_MIN_GAP_MS = 15_000L
+    private const val ON_DEMAND_UI_MIN_GAP_MS = 8_000L
+    private const val RECENT_FAIL_WINDOW_MS = 120_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val checkLock = Mutex()
@@ -35,6 +35,7 @@ internal object SimpleModeSessionHealth {
     private var consecutiveFails: Int = 0
     private var lastOnDemandAt: Long = 0L
     private var lastHealthError: String? = null
+    private var lastHealthFailAt: Long = 0L
 
     fun schedule(profileId: Long, outboundTag: String) {
         if (!DataStore.simpleMode || outboundTag.isBlank()) return
@@ -42,23 +43,47 @@ internal object SimpleModeSessionHealth {
         monitoredProfileId = profileId
         monitoredOutboundTag = outboundTag
         consecutiveFails = 0
+        lastHealthFailAt = 0L
         job = scope.launch {
-            delay(CHECK_INTERVAL_MS)
+            delay(SimpleModeSessionHealthPolicy.CHECK_INTERVAL_MS)
             while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
                 val keepRunning = runHealthCheck(profileId, outboundTag)
                 if (!keepRunning) break
-                delay(CHECK_INTERVAL_MS)
+                delay(
+                    SimpleModeSessionHealthPolicy.nextCheckDelayMs(
+                        consecutiveFails,
+                        DataStore.activeWhitelistRestrictedNetwork,
+                    ),
+                )
             }
         }
     }
 
     fun triggerQuickCheck(reason: String) {
-        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return
+        if (!DataStore.simpleMode) {
+            logQuickCheckSkipped(reason, "simple_mode_off")
+            return
+        }
+        if (!DataStore.serviceState.connected) {
+            logQuickCheckSkipped(reason, "not_connected")
+            return
+        }
         val profileId = monitoredProfileId
         val outboundTag = monitoredOutboundTag
-        if (profileId <= 0L || outboundTag.isBlank()) return
+        if (profileId <= 0L || outboundTag.isBlank()) {
+            logQuickCheckSkipped(reason, "no_monitored_session")
+            return
+        }
         val now = System.currentTimeMillis()
-        if (now - lastOnDemandAt < ON_DEMAND_MIN_GAP_MS) return
+        val minGap = if (reason == "ui_resume" || reason == "ui_attach") {
+            ON_DEMAND_UI_MIN_GAP_MS
+        } else {
+            ON_DEMAND_MIN_GAP_MS
+        }
+        if (now - lastOnDemandAt < minGap) {
+            logQuickCheckSkipped(reason, "debounce gapMs=${now - lastOnDemandAt}")
+            return
+        }
         lastOnDemandAt = now
         scope.launch {
             simpleModeLog(
@@ -69,6 +94,12 @@ internal object SimpleModeSessionHealth {
         }
     }
 
+    fun hasPendingDegradation(): Boolean {
+        if (consecutiveFails > 0) return true
+        val failAt = lastHealthFailAt
+        return failAt > 0L && System.currentTimeMillis() - failAt < RECENT_FAIL_WINDOW_MS
+    }
+
     fun cancel() {
         job?.cancel()
         job = null
@@ -77,6 +108,14 @@ internal object SimpleModeSessionHealth {
         consecutiveFails = 0
         lastOnDemandAt = 0L
         lastHealthError = null
+        lastHealthFailAt = 0L
+    }
+
+    private fun logQuickCheckSkipped(reason: String, skip: String) {
+        simpleModeLog(
+            "SimpleMode",
+            "H34 session_health_quick_check_skipped reason=$reason skip=$skip",
+        )
     }
 
     private suspend fun runHealthCheck(profileId: Long, outboundTag: String): Boolean = checkLock.withLock {
@@ -86,19 +125,28 @@ internal object SimpleModeSessionHealth {
         if (ok) {
             consecutiveFails = 0
             lastHealthError = null
+            if (DataStore.simpleModeActivity == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING) {
+                DataStore.simpleModeActivity = ""
+            }
             return@withLock true
         }
         consecutiveFails++
+        lastHealthFailAt = System.currentTimeMillis()
         simpleModeLog(
             "SimpleMode",
             "H34 session_health_fail profileId=$profileId streak=$consecutiveFails",
         )
-        val failLimit = if (DataStore.activeWhitelistRestrictedNetwork) 1 else CONSECUTIVE_FAIL_LIMIT
-        if (consecutiveFails >= failLimit) {
-            handleUnhealthySession(profileId)
-            return@withLock false
+        val failLimit = if (DataStore.activeWhitelistRestrictedNetwork) {
+            1
+        } else {
+            SimpleModeSessionHealthPolicy.CONSECUTIVE_FAIL_LIMIT_OPEN
         }
-        true
+        if (consecutiveFails < failLimit) {
+            DataStore.simpleModeActivity = ACTIVITY_CONNECTION_UNSTABLE_RECHECKING
+            return@withLock true
+        }
+        handleUnhealthySession(profileId)
+        return@withLock false
     }
 
     private suspend fun runUrlHealthCheck(profileId: Long, outboundTag: String): Boolean {

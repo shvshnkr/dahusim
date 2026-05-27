@@ -23,6 +23,7 @@ object UiActivityTracker {
     fun attach(activity: Activity) {
         activityRef = WeakReference(activity)
         simpleModeLog("SimpleMode", "H23 ui_activity_attach name=${activity.javaClass.simpleName}")
+        SimpleModeSessionHealth.triggerQuickCheck("ui_attach")
     }
 
     fun detach(activity: Activity) {
