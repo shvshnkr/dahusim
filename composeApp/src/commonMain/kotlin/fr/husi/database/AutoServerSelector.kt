@@ -788,14 +788,25 @@ object AutoServerSelector {
         DataStore.autoSelectFallbackQueue = rankedFinal.joinToString(",")
         DataStore.autoSelectFallbackIndex = 0
         sessionFallbackSteps.set(0)
-        val best = selectBestProfile(
-            rankedFinal = rankedFinal,
-            profilesById = connectPool.associateBy { it.id },
-            probeStates = probeStates,
-            wlUrlProbes = wlUrlProbes,
-            urlTestDelays = urlTestDelays,
-            quickProbePings = quickProbePings,
-        )
+        val profilesById = connectPool.associateBy { it.id }
+        val best = if (networkHandoff &&
+            selectedBefore > 0L &&
+            selectedBefore in rankedFinal &&
+            !isInFailureCooldown(selectedBefore) &&
+            AutoServerSelectorProbePolicy.isHandoffPreserveFresh()
+        ) {
+            simpleModeLog("SimpleMode", "H33 handoff_prefer_current profileId=$selectedBefore")
+            selectedBefore
+        } else {
+            selectBestProfile(
+                rankedFinal = rankedFinal,
+                profilesById = profilesById,
+                probeStates = probeStates,
+                wlUrlProbes = wlUrlProbes,
+                urlTestDelays = urlTestDelays,
+                quickProbePings = quickProbePings,
+            )
+        }
         setSimpleModeActivity("Ranking ${rankedFinal.size} servers…")
         if (selectedBefore != best) {
             Logs.d("AutoSelect: switch selected profile $selectedBefore -> $best")
@@ -847,17 +858,37 @@ object AutoServerSelector {
             )
             return PrepareForConnectResult.AllProbesDead
         }
-        if (AutoServerSelectorProbePolicy.openPrepareRejectWithoutUrl(
-                wlUrlProbes = wlUrlProbes,
-                shouldQuickProbe = shouldQuickProbe,
-                urlTestDelays = urlTestDelays,
-            )
-        ) {
+        val openPrepareDecision = AutoServerSelectorProbePolicy.decideOpenPrepare(
+            wlUrlProbes = wlUrlProbes,
+            shouldQuickProbe = shouldQuickProbe,
+            tcpAlive = quickProbeAlive,
+            urlOk = urlTestDelays.size,
+        )
+        if (!wlUrlProbes && shouldQuickProbe) {
+            val circuitState = if (openPrepareDecision.circuitOpen) "open" else "closed"
+            val ratioPercent = (openPrepareDecision.successRatio * 100).toInt()
             simpleModeLog(
                 "SimpleMode",
-                "H22 prepare_open_no_telegram_ok best=$best tcpAlive=$quickProbeAlive pool=${connectPool.size}",
+                "H22 prepare_decision=${openPrepareDecision.decision.name.lowercase()} " +
+                    "telegram_target_circuit=$circuitState ratio=${ratioPercent}% samples=${openPrepareDecision.sampleCount} " +
+                    "tcpAlive=$quickProbeAlive urlOk=${urlTestDelays.size} pool=${connectPool.size}",
             )
-            return PrepareForConnectResult.AllProbesDead
+        }
+        when (openPrepareDecision.decision) {
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD -> {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H22 prepare_open_hard_dead best=$best tcpAlive=$quickProbeAlive pool=${connectPool.size}",
+                )
+                return PrepareForConnectResult.AllProbesDead
+            }
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.DEGRADED -> {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H22 prepare_open_degraded_continue best=$best tcpAlive=$quickProbeAlive pool=${connectPool.size}",
+                )
+            }
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.OK -> Unit
         }
         return PrepareForConnectResult.Success(best)
     }
@@ -1010,6 +1041,7 @@ object AutoServerSelector {
         sessionFallbackSteps.set(0)
         DataStore.autoSelectLastKnownGood = profileId
         recentProbeFailures.remove(profileId)
+        AutoServerSelectorProbePolicy.clearDegradedProfile(profileId)
         if (recordUrlVerified) {
             AutoServerSelectorProbePolicy.recordPostConnectUrlVerified(profileId)
         }
@@ -1029,6 +1061,7 @@ object AutoServerSelector {
             return
         }
         recentProbeFailures[profileId] = System.currentTimeMillis()
+        AutoServerSelectorProbePolicy.recordDegradedProfile(profileId)
         simpleModeLog("SimpleMode", "H32 probe_failure_recorded profileId=$profileId")
         if (DataStore.probe2kPersistenceEnabled) {
             runBlocking { ProxyProbeStateStore.recordFailure(profileId) }
@@ -1041,6 +1074,9 @@ object AutoServerSelector {
     }
 
     private fun isInFailureCooldown(profileId: Long): Boolean {
+        if (AutoServerSelectorProbePolicy.isRecentlyDegraded(profileId)) {
+            return true
+        }
         val failedAt = recentProbeFailures[profileId] ?: return false
         if (System.currentTimeMillis() - failedAt >= PROFILE_FAILURE_COOLDOWN_MS) {
             recentProbeFailures.remove(profileId)

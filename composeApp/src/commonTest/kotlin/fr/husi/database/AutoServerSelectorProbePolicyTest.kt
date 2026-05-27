@@ -4,6 +4,7 @@ import fr.husi.fmt.trojan.TrojanBean
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.test.HusiKoinTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -14,6 +15,7 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
         DataStore.autoSelectLastFullProbeAt = 0L
         DataStore.autoSelectProxyIdSetHash = 0L
         DataStore.autoSelectLastProbeWhitelistOnly = false
+        DataStore.autoSelectLastHandoffPreserveOkAt = 0L
     }
 
     @Test
@@ -89,50 +91,72 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
     }
 
     @Test
-    fun openPrepareRejectWhenMessengerProbeOnAndNoUrlDelays() {
-        assertTrue(
-            AutoServerSelectorProbePolicy.openPrepareRejectWithoutUrl(
+    fun openPrepareHardDeadWhenNoTcpSurvivors() {
+        assertEquals(
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD,
+            AutoServerSelectorProbePolicy.decideOpenPrepare(
                 wlUrlProbes = false,
                 shouldQuickProbe = true,
-                urlTestDelays = emptyMap(),
+                tcpAlive = 0,
+                urlOk = 0,
                 openMessengerProbe = true,
-            ),
+            ).decision,
         )
     }
 
     @Test
-    fun openPrepareAcceptsWhenTelegramUrlProbeOk() {
-        assertFalse(
-            AutoServerSelectorProbePolicy.openPrepareRejectWithoutUrl(
+    fun openPrepareDegradedWhenTcpAliveButNoTelegramUrl() {
+        assertEquals(
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.DEGRADED,
+            AutoServerSelectorProbePolicy.decideOpenPrepare(
                 wlUrlProbes = false,
                 shouldQuickProbe = true,
-                urlTestDelays = mapOf(1L to 200),
+                tcpAlive = 3,
+                urlOk = 0,
                 openMessengerProbe = true,
-            ),
+            ).decision,
         )
     }
 
     @Test
-    fun openPrepareNoRejectWhenMessengerProbeOff() {
-        assertFalse(
-            AutoServerSelectorProbePolicy.openPrepareRejectWithoutUrl(
+    fun openPrepareOkWhenTelegramUrlProbeOk() {
+        assertEquals(
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.OK,
+            AutoServerSelectorProbePolicy.decideOpenPrepare(
                 wlUrlProbes = false,
                 shouldQuickProbe = true,
-                urlTestDelays = emptyMap(),
+                tcpAlive = 2,
+                urlOk = 1,
+                openMessengerProbe = true,
+            ).decision,
+        )
+    }
+
+    @Test
+    fun openPrepareOkWhenMessengerProbeOff() {
+        assertEquals(
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.OK,
+            AutoServerSelectorProbePolicy.decideOpenPrepare(
+                wlUrlProbes = false,
+                shouldQuickProbe = true,
+                tcpAlive = 5,
+                urlOk = 0,
                 openMessengerProbe = false,
-            ),
+            ).decision,
         )
     }
 
     @Test
-    fun openPrepareNoRejectOnWlPool() {
-        assertFalse(
-            AutoServerSelectorProbePolicy.openPrepareRejectWithoutUrl(
+    fun openPrepareOkOnWlPool() {
+        assertEquals(
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.OK,
+            AutoServerSelectorProbePolicy.decideOpenPrepare(
                 wlUrlProbes = true,
                 shouldQuickProbe = true,
-                urlTestDelays = emptyMap(),
+                tcpAlive = 4,
+                urlOk = 0,
                 openMessengerProbe = true,
-            ),
+            ).decision,
         )
     }
 
@@ -165,6 +189,20 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
                 networkHandoff = true,
             ),
         )
+    }
+
+    @Test
+    fun handoffPreserveFreshWithinWindow() {
+        val now = System.currentTimeMillis()
+        DataStore.autoSelectLastHandoffPreserveOkAt = now - 5_000L
+        assertTrue(AutoServerSelectorProbePolicy.isHandoffPreserveFresh(now))
+    }
+
+    @Test
+    fun handoffPreserveExpiresOutsideWindow() {
+        val now = System.currentTimeMillis()
+        DataStore.autoSelectLastHandoffPreserveOkAt = now - 25_000L
+        assertFalse(AutoServerSelectorProbePolicy.isHandoffPreserveFresh(now))
     }
 
     private fun trojanProxy(id: Long) = ProxyEntity().apply {

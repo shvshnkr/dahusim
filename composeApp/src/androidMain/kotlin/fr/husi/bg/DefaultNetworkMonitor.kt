@@ -25,11 +25,13 @@ object DefaultNetworkMonitor {
     private var previousInterfaceForHandoff: String? = null
     /** Set when default network is lost while VPN is up (same-iface Wi‑Fi reconnect, DHCP renew, etc.). */
     private var underlyingCarrierLostWhileConnected = false
+    private var underlyingCarrierLostAtMs = 0L
     private var lastConnectedState: Boolean = false
     private val access = Mutex()
     private var refCount = 0
     private val monitorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val interfaceCheckGeneration = AtomicInteger(0)
+    private var lastHandoffDispatchAt = 0L
 
     suspend fun start() {
         access.withLock {
@@ -153,13 +155,36 @@ object DefaultNetworkMonitor {
                     // #endregion
                 }
                 if (handoffReason != null) {
-                    simpleModeLog(
-                        "SimpleMode",
-                        "H-D2 network_handoff_triggered from=${previousInterfaceForHandoff ?: "none"} " +
-                            "to=$interfaceName reason=$handoffReason",
-                    )
-                    underlyingCarrierLostWhileConnected = false
-                    WhitelistNetworkRoutingState.onUnderlyingInterfaceHandoff(interfaceName)
+                    val now = System.currentTimeMillis()
+                    if (now - lastHandoffDispatchAt < 1_200L) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H-D2 network_handoff_coalesced reason=$handoffReason iface=${interfaceName ?: "unknown"}",
+                        )
+                    } else {
+                        lastHandoffDispatchAt = now
+                        val elapsedFromLossMs = if (underlyingCarrierLostAtMs > 0L) {
+                            (now - underlyingCarrierLostAtMs).coerceAtLeast(0L)
+                        } else {
+                            -1L
+                        }
+                        val interfaceRebound =
+                            handoffReason == UnderlyingNetworkHandoffPolicy.REASON_LINK_REBOUND
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H-D2 network_handoff_triggered from=${previousInterfaceForHandoff ?: "none"} " +
+                                "to=$interfaceName reason=$handoffReason lossMs=$elapsedFromLossMs " +
+                                "rebound=$interfaceRebound",
+                        )
+                        underlyingCarrierLostWhileConnected = false
+                        underlyingCarrierLostAtMs = 0L
+                        WhitelistNetworkRoutingState.onUnderlyingInterfaceHandoff(
+                            iface = interfaceName,
+                            handoffReason = handoffReason,
+                            elapsedFromLossMs = elapsedFromLossMs,
+                            interfaceRebound = interfaceRebound,
+                        )
+                    }
                 }
                 if (interfaceName != null) {
                     previousInterfaceForHandoff = interfaceName
@@ -190,9 +215,11 @@ object DefaultNetworkMonitor {
             // #endregion
             if (DataStore.serviceState.connected) {
                 underlyingCarrierLostWhileConnected = true
+                underlyingCarrierLostAtMs = System.currentTimeMillis()
             } else {
                 previousInterfaceForHandoff = null
                 underlyingCarrierLostWhileConnected = false
+                underlyingCarrierLostAtMs = 0L
             }
             lastInterfaceName = null
             lastInterfaceIndex = -1

@@ -253,6 +253,26 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun telegramLookupAndDialAbortRemainConclusive() {
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "lookup gb.nodes.rocketnetwork.ru: connection refused",
+                whitelistOnly = true,
+                phase = "post_connect",
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "dial tun0 (41): connect: software caused connection abort",
+                whitelistOnly = true,
+                phase = "session_periodic",
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+    }
+
+    @Test
     fun http429SyntheticOkAndInconclusiveOnOpenSessionPeriodic() {
         val err = "unexpected HTTP response status: 429"
         assertEquals(

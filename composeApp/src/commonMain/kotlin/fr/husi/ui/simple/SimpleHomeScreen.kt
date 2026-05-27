@@ -275,8 +275,12 @@ fun SimpleHomeScreen(
                 .padding(horizontal = 8.dp)
                 .fillMaxWidth()
                 .height(58.dp),
-            enabled = !permissionPending,
+            enabled = !permissionPending && status.state != ServiceState.Stopping,
             onClick = {
+                if (status.state == ServiceState.Stopping) {
+                    simpleModeLog("SimpleMode", "connect_block_reason=service_stopping_ui")
+                    return@Button
+                }
                 if (status.state.canStop) {
                     simpleModeLog("SimpleMode", "disconnect_clicked")
                     SimpleModeConnectCoordinator.cancel("disconnect")
@@ -351,10 +355,6 @@ fun SimpleHomeScreen(
             TextButton(
                 modifier = Modifier.padding(bottom = 8.dp),
                 onClick = {
-                    // Full UI is for inspection/manual control; do not abort adapt/TCP while VPN is up.
-                    if (!status.state.canStop && SimpleModeConnectCoordinator.isInFlight()) {
-                        SimpleModeConnectCoordinator.cancel("full_mode")
-                    }
                     DataStore.simpleMode = false
                     simpleModeLog(
                         "SimpleMode",

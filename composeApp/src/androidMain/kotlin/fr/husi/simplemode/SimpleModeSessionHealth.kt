@@ -34,6 +34,7 @@ internal object SimpleModeSessionHealth {
     private var monitoredOutboundTag: String = ""
     private var consecutiveFails: Int = 0
     private var lastOnDemandAt: Long = 0L
+    private var lastHealthError: String? = null
 
     fun schedule(profileId: Long, outboundTag: String) {
         if (!DataStore.simpleMode || outboundTag.isBlank()) return
@@ -75,6 +76,7 @@ internal object SimpleModeSessionHealth {
         monitoredOutboundTag = ""
         consecutiveFails = 0
         lastOnDemandAt = 0L
+        lastHealthError = null
     }
 
     private suspend fun runHealthCheck(profileId: Long, outboundTag: String): Boolean = checkLock.withLock {
@@ -83,6 +85,7 @@ internal object SimpleModeSessionHealth {
         val ok = runUrlHealthCheck(profileId, outboundTag)
         if (ok) {
             consecutiveFails = 0
+            lastHealthError = null
             return@withLock true
         }
         consecutiveFails++
@@ -123,6 +126,7 @@ internal object SimpleModeSessionHealth {
             urls = healthUrls,
             timeoutMs = timeoutMs,
         )
+        lastHealthError = tunnel.lastError
         return when (
             SimpleModeHealthRoute.classifyTunnelProbe(
                 latencyMs = tunnel.latencyMs,
@@ -140,11 +144,12 @@ internal object SimpleModeSessionHealth {
 
     private suspend fun handleUnhealthySession(profileId: Long) {
         if (!DataStore.serviceState.connected) return
-        AutoServerSelector.recordHealthProbeFailure(profileId, error = null)
+        AutoServerSelector.recordHealthProbeFailure(profileId, error = lastHealthError)
         DataStore.simpleModeActivity = "Server degraded, switching…"
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
         if (SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                 failedProfileId = profileId,
+                lastHealthError = lastHealthError,
                 messengerProbeInvolved = wlOnly,
             )) {
             return

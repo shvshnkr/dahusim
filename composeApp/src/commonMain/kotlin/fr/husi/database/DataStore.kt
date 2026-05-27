@@ -299,6 +299,9 @@ object DataStore {
     var autoSelectLastProbeWhitelistOnly by configurationStore.boolean(Key.AUTO_SELECT_LAST_PROBE_WHITELIST_ONLY) { false }
     var autoSelectLastKnownGoodUrlAt by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_AT) { 0L }
     var autoSelectLastKnownGoodUrlProfileId by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD_URL_PROFILE_ID) { 0L }
+    var autoSelectLastHandoffPreserveOkAt by configurationStore.long(Key.AUTO_SELECT_LAST_HANDOFF_PRESERVE_OK_AT) { 0L }
+    var autoSelectLastDegradedProfileId by configurationStore.long(Key.AUTO_SELECT_LAST_DEGRADED_PROFILE_ID) { 0L }
+    var autoSelectLastDegradedAt by configurationStore.long(Key.AUTO_SELECT_LAST_DEGRADED_AT) { 0L }
     var probe2kPersistenceEnabled by configurationStore.boolean(Key.PROBE_2K_PERSISTENCE_ENABLED) { true }
     var probe2kWarmRankingEnabled by configurationStore.boolean(Key.PROBE_2K_WARM_RANKING_ENABLED) { true }
     var probe2kBackgroundSchedulerEnabled by configurationStore.boolean(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED) { true }

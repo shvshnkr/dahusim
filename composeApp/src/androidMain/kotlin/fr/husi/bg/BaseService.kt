@@ -355,31 +355,41 @@ class BaseService {
             data.changeState(ServiceState.Stopping)
 
             runOnMainDispatcher {
-                data.connectingJob?.cancelAndJoin() // ensure stop connecting first
-                // we use a coroutineScope here to allow clean-up in parallel
-                coroutineScope {
-                    killProcesses()
-                    val data = data
-                    if (data.closeReceiverRegistered) {
-                        unregisterReceiver(data.receiver)
-                        data.closeReceiverRegistered = false
+                var stopErrorMessage: String? = null
+                try {
+                    data.connectingJob?.cancelAndJoin() // ensure stop connecting first
+                    // we use a coroutineScope here to allow clean-up in parallel
+                    coroutineScope {
+                        killProcesses()
+                        val data = data
+                        if (data.closeReceiverRegistered) {
+                            unregisterReceiver(data.receiver)
+                            data.closeReceiverRegistered = false
+                        }
                     }
-                }
-
-                // change the state
-                data.changeState(ServiceState.Stopped, msg)
-                SimpleModeConnectedMaintenance.cancel()
-                SimpleModeSessionHealth.cancel()
-                SimpleModeVpnCoordinator.cancelAdaptation()
-                WhitelistNetworkRoutingState.reset()
-                DataStore.simpleModeActivity = ""
-                if (!msg.isNullOrBlank()) {
-                    data.binder.notifyAlert(AlertType.COMMON, msg)
-                }
-                // stop the service if nothing has bound to it
-                if (restart) startRunner() else {
-                    afterStop?.invoke()
-                    stopSelf()
+                } catch (t: Throwable) {
+                    Logs.w(t)
+                    stopErrorMessage = t.readableMessage
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H22 stop_finalize_cleanup_error class=${t.javaClass.simpleName} error=${stopErrorMessage ?: "unknown"}",
+                    )
+                } finally {
+                    val finalMessage = msg ?: stopErrorMessage
+                    data.changeState(ServiceState.Stopped, finalMessage)
+                    SimpleModeConnectedMaintenance.cancel()
+                    SimpleModeSessionHealth.cancel()
+                    SimpleModeVpnCoordinator.cancelAdaptation()
+                    WhitelistNetworkRoutingState.reset()
+                    DataStore.simpleModeActivity = ""
+                    if (!finalMessage.isNullOrBlank()) {
+                        data.binder.notifyAlert(AlertType.COMMON, finalMessage)
+                    }
+                    // stop the service if nothing has bound to it
+                    if (restart) startRunner() else {
+                        afterStop?.invoke()
+                        stopSelf()
+                    }
                 }
             }
         }

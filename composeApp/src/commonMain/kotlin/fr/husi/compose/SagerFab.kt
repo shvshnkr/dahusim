@@ -13,7 +13,12 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onSizeChanged
@@ -21,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import fr.husi.bg.ServiceState
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
+import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.ui.StringOrRes
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
@@ -33,8 +39,19 @@ fun SagerFab(
     showSnackbar: (message: StringOrRes) -> Unit,
     onSizeChanged: ((Int) -> Unit)? = null,
 ) {
+    var permissionPending by remember { mutableStateOf(false) }
     val connector = rememberVpnServiceLauncher {
+        permissionPending = false
         showSnackbar(StringOrRes.Res(Res.string.vpn_permission_denied))
+    }
+    LaunchedEffect(state) {
+        when (state) {
+            ServiceState.Connected,
+            ServiceState.Stopped,
+            ServiceState.Idle,
+            -> permissionPending = false
+            else -> Unit
+        }
     }
 
     AnimatedVisibility(
@@ -48,6 +65,11 @@ fun SagerFab(
                 if (state.canStop) {
                     resolveRepository().stopService()
                 } else {
+                    if (!canStartFromFullFab(state = state, permissionPending = permissionPending)) {
+                        return@FloatingActionButton
+                    }
+                    SimpleModeConnectCoordinator.takeOverByFullUi("full_manual_connect")
+                    permissionPending = true
                     connector()
                 }
             },
@@ -82,4 +104,8 @@ fun SagerFab(
             }
         }
     }
+}
+
+internal fun canStartFromFullFab(state: ServiceState, permissionPending: Boolean): Boolean {
+    return state != ServiceState.Stopping && !permissionPending
 }

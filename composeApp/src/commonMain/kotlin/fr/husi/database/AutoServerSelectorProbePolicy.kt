@@ -10,6 +10,25 @@ internal object AutoServerSelectorProbePolicy {
     private const val FULL_PROBE_INTERVAL_MS = 18L * 60 * 60 * 1000
     private const val LAST_KNOWN_GOOD_URL_STALE_MS = 48L * 60 * 60 * 1000
     private const val PROXY_SET_CHANGE_GRACE_MS = 3L * 60 * 1000
+    private const val HANDOFF_PRESERVE_FRESH_MS = 20_000L
+    private const val DEGRADED_PROFILE_PENALTY_MS = 45L * 60 * 1000
+    private const val TELEGRAM_TARGET_WINDOW_SIZE = 24
+    private const val TELEGRAM_TARGET_MIN_SAMPLES = 8
+    private const val TELEGRAM_TARGET_FAIL_RATIO_THRESHOLD = 0.85
+    private const val TELEGRAM_TARGET_COOLDOWN_MS = 90_000L
+
+    enum class OpenPrepareDecision {
+        HARD_DEAD,
+        DEGRADED,
+        OK,
+    }
+
+    data class OpenPrepareDecisionOutcome(
+        val decision: OpenPrepareDecision,
+        val circuitOpen: Boolean,
+        val successRatio: Double,
+        val sampleCount: Int,
+    )
 
     fun useCompactReprobeForProxySetChange(
         proxies: List<ProxyEntity>,
@@ -43,13 +62,74 @@ internal object AutoServerSelectorProbePolicy {
             now - verifiedAt < LAST_KNOWN_GOOD_URL_STALE_MS
     }
 
-    fun openPrepareRejectWithoutUrl(
+    fun isHandoffPreserveFresh(nowMs: Long = System.currentTimeMillis()): Boolean {
+        val preservedAt = DataStore.autoSelectLastHandoffPreserveOkAt
+        return preservedAt > 0L && nowMs - preservedAt < HANDOFF_PRESERVE_FRESH_MS
+    }
+
+    fun recordHandoffPreserveSuccess(nowMs: Long = System.currentTimeMillis()) {
+        DataStore.autoSelectLastHandoffPreserveOkAt = nowMs
+    }
+
+    fun isRecentlyDegraded(profileId: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
+        if (profileId <= 0L) return false
+        if (DataStore.autoSelectLastDegradedProfileId != profileId) return false
+        val degradedAt = DataStore.autoSelectLastDegradedAt
+        return degradedAt > 0L && nowMs - degradedAt < DEGRADED_PROFILE_PENALTY_MS
+    }
+
+    fun recordDegradedProfile(profileId: Long, nowMs: Long = System.currentTimeMillis()) {
+        if (profileId <= 0L) return
+        DataStore.autoSelectLastDegradedProfileId = profileId
+        DataStore.autoSelectLastDegradedAt = nowMs
+    }
+
+    fun clearDegradedProfile(profileId: Long) {
+        if (profileId <= 0L) return
+        if (DataStore.autoSelectLastDegradedProfileId == profileId) {
+            DataStore.autoSelectLastDegradedProfileId = 0L
+            DataStore.autoSelectLastDegradedAt = 0L
+        }
+    }
+
+    @Synchronized
+    fun decideOpenPrepare(
         wlUrlProbes: Boolean,
         shouldQuickProbe: Boolean,
-        urlTestDelays: Map<Long, Int>,
+        tcpAlive: Int,
+        urlOk: Int,
         openMessengerProbe: Boolean = SimpleModeHealthRoute.messengerProbeRequired(false),
-    ): Boolean =
-        !wlUrlProbes && openMessengerProbe && shouldQuickProbe && urlTestDelays.isEmpty()
+    ): OpenPrepareDecisionOutcome {
+        if (wlUrlProbes || !openMessengerProbe || !shouldQuickProbe) {
+            return OpenPrepareDecisionOutcome(
+                decision = OpenPrepareDecision.OK,
+                circuitOpen = false,
+                successRatio = TelegramTargetCircuit.successRatio(),
+                sampleCount = TelegramTargetCircuit.sampleCount(),
+            )
+        }
+        if (tcpAlive <= 0) {
+            return OpenPrepareDecisionOutcome(
+                decision = OpenPrepareDecision.HARD_DEAD,
+                circuitOpen = TelegramTargetCircuit.isOpen(),
+                successRatio = TelegramTargetCircuit.successRatio(),
+                sampleCount = TelegramTargetCircuit.sampleCount(),
+            )
+        }
+        val success = urlOk > 0
+        TelegramTargetCircuit.record(success)
+        val circuitOpen = TelegramTargetCircuit.isOpen()
+        val decision = when {
+            success -> OpenPrepareDecision.OK
+            else -> OpenPrepareDecision.DEGRADED
+        }
+        return OpenPrepareDecisionOutcome(
+            decision = decision,
+            circuitOpen = circuitOpen,
+            successRatio = TelegramTargetCircuit.successRatio(),
+            sampleCount = TelegramTargetCircuit.sampleCount(),
+        )
+    }
 
     fun wlPrepareHasUrlConfirmation(
         profileId: Long,
@@ -112,5 +192,38 @@ internal object AutoServerSelectorProbePolicy {
         val now = System.currentTimeMillis()
         DataStore.autoSelectLastKnownGoodUrlAt = now
         DataStore.autoSelectLastKnownGoodUrlProfileId = profileId
+    }
+
+    private object TelegramTargetCircuit {
+        private val results = ArrayDeque<Boolean>()
+        private var openUntilMs: Long = 0L
+
+        fun record(success: Boolean) {
+            if (results.size >= TELEGRAM_TARGET_WINDOW_SIZE) {
+                results.removeFirst()
+            }
+            results.addLast(success)
+            val ratio = successRatio()
+            val enough = results.size >= TELEGRAM_TARGET_MIN_SAMPLES
+            if (enough && ratio <= (1.0 - TELEGRAM_TARGET_FAIL_RATIO_THRESHOLD)) {
+                openUntilMs = System.currentTimeMillis() + TELEGRAM_TARGET_COOLDOWN_MS
+            }
+        }
+
+        fun isOpen(nowMs: Long = System.currentTimeMillis()): Boolean {
+            if (openUntilMs <= nowMs) {
+                openUntilMs = 0L
+                return false
+            }
+            return true
+        }
+
+        fun successRatio(): Double {
+            if (results.isEmpty()) return 1.0
+            val successCount = results.count { it }
+            return successCount.toDouble() / results.size.toDouble()
+        }
+
+        fun sampleCount(): Int = results.size
     }
 }

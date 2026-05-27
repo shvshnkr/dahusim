@@ -6,9 +6,12 @@ import fr.husi.bg.ServiceRegistry
 import fr.husi.bg.ServiceState
 import fr.husi.bg.WhitelistNetworkRoutingState
 import fr.husi.database.AutoServerSelector
+import fr.husi.database.AutoServerSelectorProbePolicy
 import kotlinx.coroutines.CancellationException
 import fr.husi.database.DataStore
+import fr.husi.database.DirectProfileUrlProbe
 import fr.husi.database.PrepareForConnectResult
+import fr.husi.database.SagerDatabase
 import fr.husi.repository.resolveRepository
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
@@ -17,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -33,12 +37,31 @@ internal object SimpleModeVpnCoordinator {
     private const val ADAPT_DEBOUNCE_MS = 2_500L
     private const val ADAPT_PREPARE_TIMEOUT_MS = 30_000L
     private const val HANDOFF_PREPARE_TIMEOUT_MS = 45_000L
+    private const val HANDOFF_STABILIZE_MS = 700L
+    private const val HANDOFF_PRESERVE_TIMEOUT_MS = 3_200L
+    private const val HANDOFF_RECHECK_TIMEOUT_MS = 4_200L
+    private const val HANDOFF_RECHECK_BACKOFF_MS = 600L
+    private const val ALL_DEAD_RECOVERY_WINDOW_MS = 90_000L
+    private const val ALL_DEAD_MAX_RECOVERY_STEPS = 3
+    private const val ALL_DEAD_RETRY_BACKOFF_MS = 1_400L
+
+    private enum class HandoffState {
+        IDLE,
+        STABILIZING,
+        PRESERVE_CHECK,
+        RESELECT,
+        RELOAD,
+    }
 
     private val adaptScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val adaptMutex = Mutex()
     private val adaptGeneration = AtomicInteger(0)
     private var adaptJob: Job? = null
     private var lastAdaptAt = 0L
+    private var allDeadRecoveryCount = 0
+    private var lastAllDeadRecoveryAt = 0L
+    @Volatile
+    private var handoffState = HandoffState.IDLE
 
     fun cancelAdaptation() {
         adaptGeneration.incrementAndGet()
@@ -189,19 +212,91 @@ internal object SimpleModeVpnCoordinator {
         if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) return
         AutoServerSelector.cancelAdaptPrepare("adapt_locked")
         val previousId = DataStore.selectedProxy
-        applyReselectAndRestart(reason, reachability.whitelistOnly, previousId, adaptGen)
+        if (isNetworkHandoffReason(reason) &&
+            tryPreserveCurrentSessionAfterHandoff(
+                reason = reason,
+                whitelistOnly = reachability.whitelistOnly,
+                previousProfileId = previousId,
+                adaptGen = adaptGen,
+            )
+        ) {
+            handoffState = HandoffState.IDLE
+            return
+        }
+        handoffState = HandoffState.RESELECT
+        applyReselectAndRestart(
+            reason = reason,
+            whitelistOnly = reachability.whitelistOnly,
+            previousProfileId = previousId,
+            adaptGen = adaptGen,
+            handoffPreserveFailed = isNetworkHandoffReason(reason),
+        )
+        handoffState = HandoffState.IDLE
+    }
+
+    private suspend fun tryPreserveCurrentSessionAfterHandoff(
+        reason: String,
+        whitelistOnly: Boolean,
+        previousProfileId: Long,
+        adaptGen: Int,
+    ): Boolean {
+        if (previousProfileId <= 0L) return false
+        handoffState = HandoffState.STABILIZING
+        delay(HANDOFF_STABILIZE_MS)
+        if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) return false
+        handoffState = HandoffState.PRESERVE_CHECK
+        val profile = SagerDatabase.proxyDao.getById(previousProfileId) ?: return false
+        val firstProbe = withTimeoutOrNull(HANDOFF_PRESERVE_TIMEOUT_MS) {
+            DirectProfileUrlProbe.urlTestDelay(
+                profile = profile,
+                whitelistOnly = whitelistOnly,
+                tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+            )
+        }
+        if (firstProbe != null && firstProbe > 0) {
+            AutoServerSelectorProbePolicy.recordHandoffPreserveSuccess()
+            simpleModeLog(
+                "SimpleMode",
+                "H30 handoff_preserve_keep reason=$reason profileId=$previousProfileId latencyMs=$firstProbe",
+            )
+            DataStore.simpleModeActivity = ""
+            return true
+        }
+        simpleModeLog("SimpleMode", "H30 handoff_preserve_recheck reason=$reason profileId=$previousProfileId")
+        delay(HANDOFF_RECHECK_BACKOFF_MS)
+        if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) return false
+        val secondProbe = withTimeoutOrNull(HANDOFF_RECHECK_TIMEOUT_MS) {
+            DirectProfileUrlProbe.urlTestDelay(
+                profile = profile,
+                whitelistOnly = whitelistOnly,
+                tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
+            )
+        }
+        if (secondProbe != null && secondProbe > 0) {
+            AutoServerSelectorProbePolicy.recordHandoffPreserveSuccess()
+            simpleModeLog(
+                "SimpleMode",
+                "H30 handoff_preserve_keep_after_recheck reason=$reason profileId=$previousProfileId latencyMs=$secondProbe",
+            )
+            DataStore.simpleModeActivity = ""
+            return true
+        }
+        simpleModeLog("SimpleMode", "H30 handoff_preserve_reselect reason=$reason profileId=$previousProfileId")
+        return false
     }
 
     private fun isAdaptCurrent(adaptGen: Int): Boolean = adaptGen == adaptGeneration.get()
 
+    private fun isNetworkHandoffReason(reason: String): Boolean =
+        reason == "network_handoff" || reason.startsWith("network_handoff:")
+
     private fun bypassAdaptDebounce(reason: String): Boolean =
-        reason == "network_handoff" ||
+        isNetworkHandoffReason(reason) ||
             reason == "reachability_flip" ||
             reason == "session_health_exhausted"
 
     private fun requiresTunnelRebuild(reason: String): Boolean =
-        reason == "network_handoff" ||
-            reason == "reachability_flip" ||
+        reason == "reachability_flip" ||
             reason == "session_unhealthy" ||
             reason == "session_recover_fallback" ||
             reason == "session_health_exhausted"
@@ -211,12 +306,16 @@ internal object SimpleModeVpnCoordinator {
         whitelistOnly: Boolean,
         previousProfileId: Long,
         adaptGen: Int,
+        handoffPreserveFailed: Boolean = false,
     ): Boolean {
         if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) {
             simpleModeLog("SimpleMode", "H30 wl_adapt_superseded before_prepare gen=$adaptGen reason=$reason")
             return false
         }
-        val networkHandoff = reason == "network_handoff" || reason == "reachability_flip"
+        val networkHandoff = isNetworkHandoffReason(reason) || reason == "reachability_flip"
+        if (networkHandoff && handoffPreserveFailed) {
+            delay(HANDOFF_RECHECK_BACKOFF_MS)
+        }
         val prepareTimeoutMs = if (networkHandoff) {
             HANDOFF_PREPARE_TIMEOUT_MS
         } else {
@@ -264,17 +363,22 @@ internal object SimpleModeVpnCoordinator {
                 if (BackendState.status.value.state != ServiceState.Connected) {
                     return false
                 }
-                resolveRepository().stopService()
-                return true
+                return handleAllDeadRecovery(
+                    reason = reason,
+                    whitelistOnly = whitelistOnly,
+                    previousProfileId = previousProfileId,
+                    networkHandoff = networkHandoff,
+                )
             }
             is PrepareForConnectResult.Success -> {
+                resetAllDeadRecovery()
                 if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) {
                     simpleModeLog("SimpleMode", "H30 wl_adapt_superseded before_reload gen=$adaptGen reason=$reason")
                     return false
                 }
                 val newId = prep.profileId
                 val sameProfile = newId == previousProfileId
-                if (sameProfile && !requiresTunnelRebuild(reason)) {
+                if (sameProfile && !requiresTunnelRebuild(reason) && !handoffPreserveFailed) {
                     simpleModeLog(
                         "SimpleMode",
                         "H30 wl_adapt_unchanged reason=$reason profileId=$newId",
@@ -316,6 +420,7 @@ internal object SimpleModeVpnCoordinator {
                 if (!DataStore.serviceState.connected) {
                     return true
                 }
+                handoffState = HandoffState.RELOAD
                 requestTunnelReload(whitelistOnly, reason, newId)
                 return true
             }
@@ -348,5 +453,57 @@ internal object SimpleModeVpnCoordinator {
             "SimpleMode",
             "H30 tunnel_reload reason=$reason profileId=$profileId wl=$whitelistOnly",
         )
+    }
+
+    private fun resetAllDeadRecovery() {
+        allDeadRecoveryCount = 0
+        lastAllDeadRecoveryAt = 0L
+    }
+
+    private fun nextAllDeadRecoveryStep(): Int {
+        val now = System.currentTimeMillis()
+        if (now - lastAllDeadRecoveryAt > ALL_DEAD_RECOVERY_WINDOW_MS) {
+            allDeadRecoveryCount = 0
+        }
+        lastAllDeadRecoveryAt = now
+        allDeadRecoveryCount = (allDeadRecoveryCount + 1).coerceAtMost(ALL_DEAD_MAX_RECOVERY_STEPS)
+        return allDeadRecoveryCount
+    }
+
+    private fun scheduleAllDeadRetry(reason: String, step: Int) {
+        adaptScope.launch {
+            delay(ALL_DEAD_RETRY_BACKOFF_MS * step)
+            if (!DataStore.simpleMode || !DataStore.serviceState.connected) return@launch
+            scheduleAdaptation("${reason}_all_dead_retry")
+        }
+    }
+
+    private fun handleAllDeadRecovery(
+        reason: String,
+        whitelistOnly: Boolean,
+        previousProfileId: Long,
+        networkHandoff: Boolean,
+    ): Boolean {
+        val step = nextAllDeadRecoveryStep()
+        if (step >= ALL_DEAD_MAX_RECOVERY_STEPS) {
+            DataStore.simpleModeActivity = "No healthy servers detected, stopping VPN"
+            simpleModeLog(
+                "SimpleMode",
+                "H30 wl_adapt_all_dead_stop reason=$reason step=$step profileId=$previousProfileId",
+            )
+            resolveRepository().stopService()
+            resetAllDeadRecovery()
+            return true
+        }
+        val fallback = AutoServerSelector.tryMoveToFallback(previousProfileId)
+        val reloadProfileId = fallback ?: resolveProfileAfterPrepareTimeout(previousProfileId, networkHandoff)
+        DataStore.simpleModeActivity = "Network unstable, retrying server…"
+        simpleModeLog(
+            "SimpleMode",
+            "H30 wl_adapt_all_dead_recovery reason=$reason step=$step prev=$previousProfileId reload=$reloadProfileId",
+        )
+        requestTunnelReload(whitelistOnly, "${reason}_all_dead_step$step", reloadProfileId)
+        scheduleAllDeadRetry(reason, step)
+        return true
     }
 }

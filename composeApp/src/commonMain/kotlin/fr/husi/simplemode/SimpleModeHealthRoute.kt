@@ -181,6 +181,7 @@ internal object SimpleModeHealthRoute {
         probeUrl: String? = null,
     ): Boolean {
         if (error.isNullOrBlank()) return false
+        if (isMessengerDnsOrDialFailure(error, probeUrl)) return false
         // Messenger probe is a "must succeed" signal in simple-mode. When it times out, we
         // must treat it as a real degradation and allow server re-selection.
         // Otherwise the client can appear "connected" while Telegram traffic never comes.
@@ -209,6 +210,17 @@ internal object SimpleModeHealthRoute {
         return e.contains("method not allowed") ||
             e.contains("405") ||
             e.contains("operation not permitted")
+    }
+
+    private fun isMessengerDnsOrDialFailure(error: String?, probeUrl: String?): Boolean {
+        if (probeUrl != TUNNEL_HEALTH_TELEGRAM || error.isNullOrBlank()) return false
+        val e = error.lowercase()
+        return e.contains("lookup ") ||
+            e.contains("connection refused") ||
+            e.contains("software caused connection abort") ||
+            e.contains("dial tun") ||
+            e.contains("dial rmnet") ||
+            e.contains("dial wlan")
     }
 
     sealed class TunnelHealthOutcome {

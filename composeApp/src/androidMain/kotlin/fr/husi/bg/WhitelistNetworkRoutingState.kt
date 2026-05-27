@@ -57,15 +57,26 @@ internal object WhitelistNetworkRoutingState {
         fr.husi.routing.VpnExitProbe.clearCache()
     }
 
-    fun onUnderlyingInterfaceHandoff(iface: String?) {
+    fun onUnderlyingInterfaceHandoff(
+        iface: String?,
+        handoffReason: String? = null,
+        elapsedFromLossMs: Long = -1L,
+        interfaceRebound: Boolean = false,
+    ) {
         if (!DataStore.serviceState.connected) return
         simpleModeLog(
             "SimpleMode",
-            "H27 network_handoff iface=${iface ?: "unknown"}",
+            "H27 network_handoff iface=${iface ?: "unknown"} reason=${handoffReason ?: "unknown"} " +
+                "elapsedMs=$elapsedFromLossMs rebound=$interfaceRebound",
         )
         if (DataStore.simpleMode) {
             DataStore.simpleModeActivity = "Network changed, reconnecting…"
-            SimpleModeVpnCoordinator.scheduleAdaptation("network_handoff")
+            val reasonSuffix = buildString {
+                append(handoffReason ?: "unknown")
+                if (elapsedFromLossMs >= 0L) append("|lossMs=$elapsedFromLossMs")
+                if (interfaceRebound) append("|rebound=true")
+            }
+            SimpleModeVpnCoordinator.scheduleAdaptation("network_handoff:$reasonSuffix")
             return
         }
         ServiceRegistry.baseService?.data?.resetNetwork()

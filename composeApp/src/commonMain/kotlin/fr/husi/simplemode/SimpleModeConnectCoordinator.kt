@@ -44,9 +44,20 @@ object SimpleModeConnectCoordinator {
         connectJob = null
     }
 
+    fun takeOverByFullUi(reason: String = "full_manual_connect") {
+        if (!isInFlight()) return
+        simpleModeLog("SimpleMode", "handoff_takeover_by_full_ui reason=$reason")
+        cancel(reason)
+    }
+
     fun start(
         host: ConnectHost,
     ) {
+        if (BackendState.status.value.state == ServiceState.Stopping) {
+            DataStore.simpleModeActivity = "Stopping previous session…"
+            simpleModeLog("SimpleMode", "connect_block_reason=service_stopping")
+            return
+        }
         cancel("connect_supersede")
         DataStore.simpleModeAutoselectPoolMerged = false
         DataStore.simpleModeActivity = "Checking network…"

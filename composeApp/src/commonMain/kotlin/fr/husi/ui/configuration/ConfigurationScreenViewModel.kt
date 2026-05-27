@@ -35,6 +35,7 @@ import fr.husi.libcore.Client
 import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
+import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.utils.closeQuietly
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -428,6 +429,7 @@ class ConfigurationScreenViewModel : ViewModel() {
         }
         if (updated) {
             if (DataStore.serviceState.canStop && reloadAccess.tryLock()) {
+                SimpleModeConnectCoordinator.takeOverByFullUi("full_profile_select_connect")
                 resolveRepository().reloadService()
                 reloadAccess.unlock()
             }
@@ -435,6 +437,7 @@ class ConfigurationScreenViewModel : ViewModel() {
             if (DataStore.serviceState.started) {
                 resolveRepository().stopService()
             } else {
+                SimpleModeConnectCoordinator.takeOverByFullUi("full_profile_select_connect")
                 resolveRepository().startService()
             }
         }
