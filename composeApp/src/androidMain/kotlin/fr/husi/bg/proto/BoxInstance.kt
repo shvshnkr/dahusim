@@ -2,6 +2,8 @@ package fr.husi.bg.proto
 
 import fr.husi.bg.AbstractInstance
 import fr.husi.bg.GuardedProcessPool
+import fr.husi.bg.RuleSetBootstrapCallbacks
+import fr.husi.bg.connectWithRuleSetBootstrap
 import fr.husi.bg.initPlugins
 import fr.husi.bg.launchPlugins
 import fr.husi.RuleProvider
@@ -48,46 +50,42 @@ abstract class BoxInstance(
 
     open suspend fun init(isVPN: Boolean) {
         ensureMixedPortAvailable()
-        var localRuleSetRetry = false
-        while (true) {
-            try {
-                simpleModeLog(
-                    "SimpleMode",
-                    "H36 android_ruleset_bootstrap profileId=${profile.id} rulesProvider=${DataStore.rulesProvider} " +
-                        "preferLocal=$localRuleSetRetry localGeo=${hasLocalRuleSetFiles()} " +
-                        "route=singbox_remote_http provider=${rulesProviderLabel(DataStore.rulesProvider)}",
-                )
-                buildConfig(preferLocalRuleSet = localRuleSetRetry)
-                pluginConfigs.clear()
-                pluginConfigs.putAll(initPlugins(config, isVPN, cacheFiles))
-                loadConfig()
-                return
-            } catch (error: Throwable) {
-                if (isRuleSetBootstrapFailure(error)) {
-                    simpleModeLog(
-                        "SimpleMode",
-                        "H36 android_ruleset_bootstrap_failed preferLocal=$localRuleSetRetry " +
-                            "localGeo=${hasLocalRuleSetFiles()} err=${error.readableMessage}",
-                    )
-                }
-                if (!localRuleSetRetry && isRuleSetBootstrapFailure(error) && hasLocalRuleSetFiles()) {
-                    localRuleSetRetry = true
-                    simpleModeLog(
-                        "SimpleMode",
-                        "H36 android_ruleset_retry mode=local reason=remote_ruleset_bootstrap_failed " +
-                            "note=github_raw_unstable_on_mobile",
-                    )
-                    cleanupRetryArtifacts()
-                    continue
-                }
-                throw error
-            }
+        connectWithRuleSetBootstrap(
+            callbacks = ruleSetBootstrapCallbacks(platform = "android"),
+            onBeforeRetry = { cleanupRetryArtifacts() },
+        ) { preferLocal ->
+            buildConfig(preferLocalRuleSet = preferLocal)
+            pluginConfigs.clear()
+            pluginConfigs.putAll(initPlugins(config, isVPN, cacheFiles))
+            loadConfig()
         }
     }
 
-    private fun isRuleSetBootstrapFailure(error: Throwable): Boolean {
-        return error.readableMessage.contains("initialize rule-set", ignoreCase = true)
-    }
+    private fun ruleSetBootstrapCallbacks(platform: String) = RuleSetBootstrapCallbacks(
+        hasLocalRuleSetFiles = { hasLocalRuleSetFiles() },
+        onAttempt = { preferLocal ->
+            simpleModeLog(
+                "SimpleMode",
+                "H36 ${platform}_ruleset_bootstrap profileId=${profile.id} rulesProvider=${DataStore.rulesProvider} " +
+                    "preferLocal=$preferLocal localGeo=${hasLocalRuleSetFiles()} " +
+                    "route=singbox_remote_http provider=${rulesProviderLabel(DataStore.rulesProvider)}",
+            )
+        },
+        onBootstrapFailure = { preferLocal, error ->
+            simpleModeLog(
+                "SimpleMode",
+                "H36 ${platform}_ruleset_bootstrap_failed preferLocal=$preferLocal " +
+                    "localGeo=${hasLocalRuleSetFiles()} err=${error.readableMessage}",
+            )
+        },
+        onRetryWithLocal = {
+            simpleModeLog(
+                "SimpleMode",
+                "H36 ${platform}_ruleset_retry mode=local reason=remote_ruleset_bootstrap_failed " +
+                    "note=github_raw_unstable_on_mobile",
+            )
+        },
+    )
 
     private fun hasLocalRuleSetFiles(): Boolean {
         val geoDir = resolveRepository().externalAssetsDir.resolve("geo")

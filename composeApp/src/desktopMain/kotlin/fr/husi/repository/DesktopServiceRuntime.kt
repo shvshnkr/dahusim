@@ -4,7 +4,9 @@ import fr.husi.AlertType
 import fr.husi.Key
 import fr.husi.bg.BackendState
 import fr.husi.bg.GuardedProcessPool
+import fr.husi.bg.RuleSetBootstrapCallbacks
 import fr.husi.bg.ServiceState
+import fr.husi.bg.connectWithRuleSetBootstrap
 import fr.husi.bg.initPlugins
 import fr.husi.bg.launchPlugins
 import fr.husi.bg.proto.TrafficLooper
@@ -100,70 +102,51 @@ internal class DesktopServiceRuntime(
         BackendState.setConnected(false)
 
         var bindRetries = 0
-        var localRuleSetRetry = false
         while (true) {
             try {
                 ensureMixedPortAvailable()
-                simpleModeLog(
-                    "SimpleMode",
-                    "H36 desktop_ruleset_bootstrap profileId=${profile.id} rulesProvider=${DataStore.rulesProvider} " +
-                        "preferLocal=$localRuleSetRetry localGeo=${hasLocalRuleSetFiles()} " +
-                        "route=singbox_remote_http provider=${rulesProviderLabel(DataStore.rulesProvider)}",
-                )
-                val config = fr.husi.fmt.buildConfig(
-                    profile,
-                    preferLocalRuleSet = localRuleSetRetry,
-                )
-                cacheFiles.clear()
-                val pluginConfigs = initPlugins(
-                    config = config,
-                    isVPN = DataStore.serviceMode == Key.MODE_VPN,
-                    cacheFiles = cacheFiles,
-                )
-                val pool = GuardedProcessPool { throwable ->
-                    handleFatal(throwable)
+                connectWithRuleSetBootstrap(
+                    callbacks = desktopRuleSetBootstrapCallbacks(profile),
+                    onBeforeRetry = { cleanupLocked() },
+                ) { preferLocal ->
+                    val config = fr.husi.fmt.buildConfig(
+                        profile,
+                        preferLocalRuleSet = preferLocal,
+                    )
+                    cacheFiles.clear()
+                    val pluginConfigs = initPlugins(
+                        config = config,
+                        isVPN = DataStore.serviceMode == Key.MODE_VPN,
+                        cacheFiles = cacheFiles,
+                    )
+                    val pool = GuardedProcessPool { throwable ->
+                        handleFatal(throwable)
+                    }
+                    processes = pool
+                    launchPlugins(
+                        config = config,
+                        pluginConfigs = pluginConfigs,
+                        processes = pool,
+                        cacheFiles = cacheFiles,
+                    )
+
+                    service.newInstance(config.config)
+                    service.startInstance()
+
+                    trafficLooper = TrafficLooper(
+                        box = service,
+                        config = config,
+                        scope = scope,
+                    )
+                    trafficLooper?.start()
+
+                    DataStore.currentProfile = profile.id
+                    runningProfileName = profile.displayNameForService()
+                    changeState(ServiceState.Connected, runningProfileName)
+                    BackendState.setConnected(true)
                 }
-                processes = pool
-                launchPlugins(
-                    config = config,
-                    pluginConfigs = pluginConfigs,
-                    processes = pool,
-                    cacheFiles = cacheFiles,
-                )
-
-                service.newInstance(config.config)
-                service.startInstance()
-
-                trafficLooper = TrafficLooper(
-                    box = service,
-                    config = config,
-                    scope = scope,
-                )
-                trafficLooper?.start()
-
-                DataStore.currentProfile = profile.id
-                runningProfileName = profile.displayNameForService()
-                changeState(ServiceState.Connected, runningProfileName)
-                BackendState.setConnected(true)
                 return
             } catch (e: Throwable) {
-                if (isRuleSetBootstrapFailure(e)) {
-                    simpleModeLog(
-                        "SimpleMode",
-                        "H36 desktop_ruleset_bootstrap_failed preferLocal=$localRuleSetRetry " +
-                            "localGeo=${hasLocalRuleSetFiles()} err=${e.readableMessage}",
-                    )
-                }
-                if (!localRuleSetRetry && isRuleSetBootstrapFailure(e) && hasLocalRuleSetFiles()) {
-                    localRuleSetRetry = true
-                    simpleModeLog(
-                        "SimpleMode",
-                        "H36 desktop_ruleset_retry mode=local reason=remote_ruleset_bootstrap_failed " +
-                            "note=github_may_be_reachable_via_browser",
-                    )
-                    cleanupLocked()
-                    continue
-                }
                 if (bindRetries < 1 && isMixedPortBindFailure(e)) {
                     bindRetries++
                     val nextPort = DataStore.mixedPort + 1
@@ -189,10 +172,32 @@ internal class DesktopServiceRuntime(
         }
     }
 
-    private fun isRuleSetBootstrapFailure(error: Throwable): Boolean {
-        val text = error.readableMessage
-        return text.contains("initialize rule-set", ignoreCase = true)
-    }
+    private fun desktopRuleSetBootstrapCallbacks(profile: fr.husi.database.ProxyEntity) =
+        RuleSetBootstrapCallbacks(
+            hasLocalRuleSetFiles = { hasLocalRuleSetFiles() },
+            onAttempt = { preferLocal ->
+                simpleModeLog(
+                    "SimpleMode",
+                    "H36 desktop_ruleset_bootstrap profileId=${profile.id} rulesProvider=${DataStore.rulesProvider} " +
+                        "preferLocal=$preferLocal localGeo=${hasLocalRuleSetFiles()} " +
+                        "route=singbox_remote_http provider=${rulesProviderLabel(DataStore.rulesProvider)}",
+                )
+            },
+            onBootstrapFailure = { preferLocal, error ->
+                simpleModeLog(
+                    "SimpleMode",
+                    "H36 desktop_ruleset_bootstrap_failed preferLocal=$preferLocal " +
+                        "localGeo=${hasLocalRuleSetFiles()} err=${error.readableMessage}",
+                )
+            },
+            onRetryWithLocal = {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H36 desktop_ruleset_retry mode=local reason=remote_ruleset_bootstrap_failed " +
+                        "note=github_may_be_reachable_via_browser",
+                )
+            },
+        )
 
     private fun rulesProviderLabel(provider: Int): String = when (provider) {
         RuleProvider.OFFICIAL -> "official"

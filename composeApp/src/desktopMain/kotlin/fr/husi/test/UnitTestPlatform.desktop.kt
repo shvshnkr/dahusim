@@ -11,3 +11,7 @@ actual object UnitTestPlatform {
         runCatching { DesktopBackgroundCoordinator.stop() }
     }
 }
+
+actual fun isNetworkScenarioInjectionEnabled(): Boolean =
+    System.getProperty("husi.scenarioTest") == "true" ||
+        System.getProperty("husi.unitTest") == "true"

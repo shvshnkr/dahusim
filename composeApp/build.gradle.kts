@@ -495,10 +495,45 @@ val matrixTest by tasks.registering(Test::class) {
     testClassesDirs = desktopTest.get().testClassesDirs
     classpath = desktopTest.get().classpath
     useJUnitPlatform()
+    systemProperty("husi.unitTest", "true")
     filter {
         includeTestsMatching("*.NetworkSwitchMatrixTest")
         includeTestsMatching("*.PoolDegradationMatrixTest")
         includeTestsMatching("*.RecoveryMatrixTest")
         includeTestsMatching("*.InScanNetworkFlapMatrixTest")
+        includeTestsMatching("fr.husi.bg.UnderlyingNetworkHandoffPolicyTest")
+        includeTestsMatching("fr.husi.simplemode.SimpleModeSessionHealthPolicyTest")
+        includeTestsMatching("fr.husi.group.SubscriptionHttpFetchTest")
+        includeTestsMatching("fr.husi.group.WhitelistSubscriptionFetchTest")
+        includeTestsMatching("fr.husi.scenario.network.NetworkScenarioMatrixTest")
+    }
+}
+
+val networkScenarioTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Run network scenario matrix (uplink, handoff, ruleset bootstrap)"
+    val desktopTest = tasks.named<Test>("desktopTest")
+    dependsOn("desktopTestClasses")
+    testClassesDirs = desktopTest.get().testClassesDirs
+    classpath = desktopTest.get().classpath
+    useJUnitPlatform()
+    systemProperty("husi.unitTest", "true")
+    systemProperty("husi.scenarioTest", "true")
+    filter {
+        includeTestsMatching("fr.husi.scenario.network.*")
+    }
+}
+
+val integrationScenarioTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Run integration scenario matrix (catalog, route, connect glue)"
+    val desktopTest = tasks.named<Test>("desktopTest")
+    dependsOn("desktopTestClasses")
+    testClassesDirs = desktopTest.get().testClassesDirs
+    classpath = desktopTest.get().classpath
+    useJUnitPlatform()
+    systemProperty("husi.unitTest", "true")
+    filter {
+        includeTestsMatching("fr.husi.scenario.integration.*")
     }
 }

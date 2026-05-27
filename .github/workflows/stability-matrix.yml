@@ -155,6 +155,21 @@ jobs:
           - id: auto-route-assets
             name: "stability · auto route assets synthetic"
             test_class: "fr.husi.bg.RouteAssetAutoUpdateSyntheticTest"
+          - id: handoff-policy
+            name: "stability · underlying network handoff policy"
+            test_class: "fr.husi.bg.UnderlyingNetworkHandoffPolicyTest"
+          - id: session-health
+            name: "stability · simple mode session health policy"
+            test_class: "fr.husi.simplemode.SimpleModeSessionHealthPolicyTest"
+          - id: subscription-http-fetch
+            name: "stability · subscription http fetch"
+            test_class: "fr.husi.group.SubscriptionHttpFetchTest"
+          - id: whitelist-subscription-fetch
+            name: "stability · whitelist subscription fetch"
+            test_class: "fr.husi.group.WhitelistSubscriptionFetchTest"
+          - id: network-scenario
+            name: "stability · network scenario matrix"
+            test_class: "fr.husi.scenario.network.NetworkScenarioMatrixTest"
     steps:
       - uses: actions/checkout@v6
         with:
