@@ -19,8 +19,8 @@ class ProxyInstance(profile: ProxyEntity, var service: BaseService.Interface? = 
 
     var trafficLooper: TrafficLooper? = null
 
-    override fun buildConfig() {
-        super.buildConfig()
+    override fun buildConfig(preferLocalRuleSet: Boolean) {
+        super.buildConfig(preferLocalRuleSet)
         Logs.d(config.config)
         if (DataStore.isExpert) Logs.d("trafficMap: " + config.trafficMap.toString())
         val configJson = config.config
