@@ -578,6 +578,7 @@ class BaseService {
                     simpleModeLog("SimpleMode", "H9 connected_profile id=${profile.id}")
                     DataStore.simpleModeActivity = "Verifying internet access..."
                     var postConnectHealthy = true
+                    var postConnectRecordUrlVerified = true
                     var postConnectLatencyMs = 0
                     var postConnectLastError: String? = null
                     val baseTimeoutMs = DataStore.connectionTestTimeout
@@ -650,11 +651,20 @@ class BaseService {
                         )
                         if (postConnectProbe.ok) {
                             postConnectLatencyMs = postConnectProbe.latencyMs.coerceAtLeast(0)
-                            simpleModeLog(
-                                "SimpleMode",
-                                "H3 post_connect_url_test_success profileId=${profile.id} delayMs=${postConnectProbe.latencyMs} " +
-                                    "direct=false",
-                            )
+                            postConnectRecordUrlVerified = postConnectProbe.recordUrlVerified
+                            if (postConnectProbe.recordUrlVerified) {
+                                simpleModeLog(
+                                    "SimpleMode",
+                                    "H3 post_connect_url_test_success profileId=${profile.id} " +
+                                        "delayMs=${postConnectProbe.latencyMs} direct=false",
+                                )
+                            } else {
+                                simpleModeLog(
+                                    "SimpleMode",
+                                    "H10 post_connect_inconclusive_connected profileId=${profile.id} " +
+                                        "delayMs=${postConnectProbe.latencyMs} synthetic=true",
+                                )
+                            }
                             DataStore.simpleModeActivity = ""
                         } else {
                             simpleModeLog(
@@ -747,19 +757,27 @@ class BaseService {
                         }
                         return@runOnDefaultDispatcher
                     }
-                    AutoServerSelector.markConnected(profile.id)
-                    simpleModeLog("SimpleMode", "H10 post_connect_healthy_mark_connected profileId=${profile.id}")
-                    WhitelistNetworkRoutingState.markPostConnectHealthy()
-                    if (DataStore.simpleMode && outboundTag.isNotBlank()) {
-                        SimpleModeSessionHealth.schedule(profile.id, outboundTag)
-                    }
-                    SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
-                        profileId = profile.id,
-                        postConnectLatencyMs = postConnectLatencyMs,
-                        connectWhitelistOnly = reachability.whitelistOnly,
-                        googleReachable = reachability.googleReachable,
-                        whitelistSourceReachable = reachability.whitelistSourceReachable,
+                    AutoServerSelector.markConnected(
+                        profile.id,
+                        recordUrlVerified = postConnectRecordUrlVerified,
                     )
+                    if (postConnectRecordUrlVerified) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H10 post_connect_healthy_mark_connected profileId=${profile.id}",
+                        )
+                        WhitelistNetworkRoutingState.markPostConnectHealthy()
+                        if (DataStore.simpleMode && outboundTag.isNotBlank()) {
+                            SimpleModeSessionHealth.schedule(profile.id, outboundTag)
+                        }
+                        SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
+                            profileId = profile.id,
+                            postConnectLatencyMs = postConnectLatencyMs,
+                            connectWhitelistOnly = reachability.whitelistOnly,
+                            googleReachable = reachability.googleReachable,
+                            whitelistSourceReachable = reachability.whitelistSourceReachable,
+                        )
+                    }
 
                     if (reachability.whitelistOnly && outboundTag.isNotBlank()) {
                         val routingBefore = fr.husi.routing.WhitelistRuRouting

@@ -122,7 +122,11 @@ internal object DirectProfileUrlProbe {
         } catch (e: Exception) {
             val msg = e.readableMessage
             Logs.d("DirectProfileUrlProbe ${profile.displayName()} $testUrl: $msg")
-            SimpleModeHealthRoute.wlUrlProbeTreatAsOk(msg, whitelistOnly)?.let { out = it }
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk(
+                error = msg,
+                whitelistOnly = whitelistOnly,
+                probeUrl = testUrl,
+            )?.let { out = it }
         } finally {
             client?.closeQuietly()
             processes?.close(this@coroutineScope)

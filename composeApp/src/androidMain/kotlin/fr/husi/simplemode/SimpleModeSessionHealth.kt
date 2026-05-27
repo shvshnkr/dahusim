@@ -116,13 +116,26 @@ internal object SimpleModeSessionHealth {
             urls = healthUrls,
             timeoutMs = timeoutMs,
         )
-        return SimpleModeTunnelHealthCheck.check(
+        val tunnel = SimpleModeTunnelHealthCheck.probeTunnel(
             phase = "session_periodic",
             whitelistOnly = wlOnly,
             outboundTag = outboundTag,
             urls = healthUrls,
             timeoutMs = timeoutMs,
         )
+        return when (
+            SimpleModeHealthRoute.classifyTunnelProbe(
+                latencyMs = tunnel.latencyMs,
+                wasSyntheticSuccess = tunnel.wasSyntheticSuccess,
+                lastError = tunnel.lastError,
+            )
+        ) {
+            is SimpleModeHealthRoute.TunnelHealthOutcome.RealSuccess,
+            is SimpleModeHealthRoute.TunnelHealthOutcome.InconclusiveSynthetic,
+            -> true
+
+            is SimpleModeHealthRoute.TunnelHealthOutcome.HardFail -> false
+        }
     }
 
     private suspend fun handleUnhealthySession(profileId: Long) {

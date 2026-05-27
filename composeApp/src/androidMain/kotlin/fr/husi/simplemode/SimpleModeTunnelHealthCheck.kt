@@ -21,6 +21,9 @@ internal object SimpleModeTunnelHealthCheck {
     data class TunnelProbeOutcome(
         val latencyMs: Int,
         val lastError: String?,
+        val lastProbeUrl: String? = null,
+        val hadConclusiveFailure: Boolean = false,
+        val wasSyntheticSuccess: Boolean = false,
     )
 
     /** First successful URL latency; 1 on inconclusive WL pass; 0 if failed. */
@@ -55,6 +58,7 @@ internal object SimpleModeTunnelHealthCheck {
             tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
         )
         if (outcome.latencyMs > 0) return outcome
+        if (outcome.hadConclusiveFailure) return outcome
         val escalate = SimpleModeHealthRoute.shouldEscalateToConfirm(
             SimpleModeHealthRoute.ProbeEscalationContext(
                 phase = phase,
@@ -93,6 +97,7 @@ internal object SimpleModeTunnelHealthCheck {
         return try {
             var sawRealFailure = false
             var lastError: String? = null
+            var lastProbeUrl: String? = null
             for (url in urls) {
                 val attempt = runCatching {
                     client.urlTest(outboundTag, url, timeoutMs)
@@ -109,11 +114,22 @@ internal object SimpleModeTunnelHealthCheck {
                         delayMs = latency,
                         tier = tier,
                     )
-                    return TunnelProbeOutcome(latency, null)
+                    return TunnelProbeOutcome(
+                        latency,
+                        null,
+                        lastProbeUrl = url,
+                        hadConclusiveFailure = false,
+                        wasSyntheticSuccess = false,
+                    )
                 }
                 val errText = attempt.exceptionOrNull()?.message
                 lastError = errText
-                SimpleModeHealthRoute.wlUrlProbeTreatAsOk(errText, whitelistOnly)?.let { synthetic ->
+                lastProbeUrl = url
+                SimpleModeHealthRoute.wlUrlProbeTreatAsOk(
+                    error = errText,
+                    whitelistOnly = whitelistOnly,
+                    probeUrl = url,
+                )?.let { synthetic ->
                     val reason = if (SimpleModeHealthRoute.isHttpRateLimitOrTransientResponse(errText)) {
                         "http_rate_limit"
                     } else {
@@ -124,7 +140,13 @@ internal object SimpleModeTunnelHealthCheck {
                         whitelistOnly = whitelistOnly,
                         reason = reason,
                     )
-                    return TunnelProbeOutcome(synthetic, errText)
+                    return TunnelProbeOutcome(
+                        synthetic,
+                        errText,
+                        lastProbeUrl = url,
+                        hadConclusiveFailure = false,
+                        wasSyntheticSuccess = true,
+                    )
                 }
                 if (!SimpleModeHealthRoute.isProbeFailureInconclusive(
                         errText,
@@ -153,9 +175,15 @@ internal object SimpleModeTunnelHealthCheck {
                     whitelistOnly = true,
                     reason = "underlying_proxy_dial_only",
                 )
-                TunnelProbeOutcome(1, lastError)
+                TunnelProbeOutcome(
+                    1,
+                    lastError,
+                    lastProbeUrl = lastProbeUrl,
+                    hadConclusiveFailure = false,
+                    wasSyntheticSuccess = true,
+                )
             } else {
-                TunnelProbeOutcome(0, lastError)
+                TunnelProbeOutcome(0, lastError, lastProbeUrl = lastProbeUrl, hadConclusiveFailure = sawRealFailure)
             }
         } finally {
             runCatching { client.close() }

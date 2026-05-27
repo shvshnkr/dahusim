@@ -13,6 +13,7 @@ internal object SimpleModePostConnectHealth {
         val ok: Boolean,
         val latencyMs: Int,
         val lastError: String?,
+        val recordUrlVerified: Boolean = false,
     )
 
     suspend fun verify(
@@ -50,7 +51,12 @@ internal object SimpleModePostConnectHealth {
                     error = if (ok) null else "direct url test failed",
                 )
                 if (ok) {
-                    return Result(ok = true, latencyMs = delayMs!!.toInt(), lastError = null)
+                    return Result(
+                        ok = true,
+                        latencyMs = delayMs!!.toInt(),
+                        lastError = null,
+                        recordUrlVerified = true,
+                    )
                 }
                 lastError = "direct url test failed"
             } else {
@@ -61,8 +67,18 @@ internal object SimpleModePostConnectHealth {
                     urls = urls,
                     timeoutMs = postConnectTimeoutMs,
                 )
-                if (tunnel.latencyMs > 0) {
-                    return Result(ok = true, latencyMs = tunnel.latencyMs, lastError = null)
+                val outcome = SimpleModeHealthRoute.classifyTunnelProbe(
+                    latencyMs = tunnel.latencyMs,
+                    wasSyntheticSuccess = tunnel.wasSyntheticSuccess,
+                    lastError = tunnel.lastError,
+                )
+                if (outcome.isProbeOk) {
+                    return Result(
+                        ok = true,
+                        latencyMs = outcome.latencyMs,
+                        lastError = null,
+                        recordUrlVerified = outcome.recordUrlVerified,
+                    )
                 }
                 lastError = tunnel.lastError ?: "post-connect tunnel url test failed"
             }

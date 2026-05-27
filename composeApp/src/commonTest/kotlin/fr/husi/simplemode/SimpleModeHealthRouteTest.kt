@@ -292,6 +292,88 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun classifyTunnelProbeMapsThreeStates() {
+        val real = SimpleModeHealthRoute.classifyTunnelProbe(95, wasSyntheticSuccess = false)
+        assertTrue(real is SimpleModeHealthRoute.TunnelHealthOutcome.RealSuccess)
+        assertTrue(real.recordUrlVerified)
+
+        val synthetic = SimpleModeHealthRoute.classifyTunnelProbe(
+            SimpleModeHealthRoute.WL_URL_PROBE_SYNTHETIC_MS,
+            wasSyntheticSuccess = true,
+            lastError = "HTTP 405",
+        )
+        assertTrue(synthetic is SimpleModeHealthRoute.TunnelHealthOutcome.InconclusiveSynthetic)
+        assertFalse(synthetic.recordUrlVerified)
+
+        val hard = SimpleModeHealthRoute.classifyTunnelProbe(0, wasSyntheticSuccess = false, lastError = "refused")
+        assertTrue(hard is SimpleModeHealthRoute.TunnelHealthOutcome.HardFail)
+        assertFalse(hard.isProbeOk)
+    }
+
+    @Test
+    fun postConnectRecordUrlVerifiedFalseOnSyntheticSuccess() {
+        assertFalse(
+            SimpleModeHealthRoute.postConnectRecordUrlVerified(
+                tunnelLatencyMs = SimpleModeHealthRoute.WL_URL_PROBE_SYNTHETIC_MS,
+                wasSyntheticSuccess = true,
+            ),
+        )
+        assertFalse(
+            SimpleModeHealthRoute.postConnectRecordUrlVerified(
+                tunnelLatencyMs = 1,
+                wasSyntheticSuccess = true,
+            ),
+        )
+    }
+
+    @Test
+    fun postConnectRecordUrlVerifiedTrueOnRealUrlTestSuccess() {
+        assertTrue(
+            SimpleModeHealthRoute.postConnectRecordUrlVerified(
+                tunnelLatencyMs = 120,
+                wasSyntheticSuccess = false,
+            ),
+        )
+    }
+
+    @Test
+    fun postConnectRecordUrlVerifiedFalseWhenProbeFailed() {
+        assertFalse(
+            SimpleModeHealthRoute.postConnectRecordUrlVerified(
+                tunnelLatencyMs = 0,
+                wasSyntheticSuccess = false,
+            ),
+        )
+    }
+
+    @Test
+    fun proxyAuthFailed502IsNotSynthetic() {
+        val err = "connection: open connection to 1.2.3.4:443: authentication failed, status code: 502"
+        assertEquals(
+            null,
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk(
+                error = err,
+                whitelistOnly = false,
+            ),
+        )
+        assertFalse(
+            SimpleModeHealthRoute.isHttpRateLimitOrTransientResponse(err),
+        )
+    }
+
+    @Test
+    fun telegramProbeNeverSyntheticEvenOn503() {
+        assertEquals(
+            null,
+            SimpleModeHealthRoute.wlUrlProbeTreatAsOk(
+                error = "unexpected HTTP response status: 503",
+                whitelistOnly = false,
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+    }
+
+    @Test
     fun openRealFailuresNotSyntheticOrInconclusive() {
         assertEquals(
             null,

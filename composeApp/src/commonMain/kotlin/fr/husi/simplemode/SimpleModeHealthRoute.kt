@@ -159,9 +159,17 @@ internal object SimpleModeHealthRoute {
             else -> null
         }
 
+    private fun isProxyAuthenticationFailure(error: String?): Boolean {
+        if (error.isNullOrBlank()) return false
+        val e = error.lowercase()
+        return e.contains("authentication failed") ||
+            e.contains("auth failed")
+    }
+
     internal fun isHttpRateLimitOrTransientResponse(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
         val e = error.lowercase()
+        if (isProxyAuthenticationFailure(e)) return false
         if (e.contains("rate limit") || e.contains("too many requests")) return true
         return e.contains("429") || e.contains("502") || e.contains("503") || e.contains("504")
     }
@@ -203,8 +211,42 @@ internal object SimpleModeHealthRoute {
             e.contains("operation not permitted")
     }
 
-    fun wlUrlProbeTreatAsOk(error: String?, whitelistOnly: Boolean): Int? {
+    sealed class TunnelHealthOutcome {
+        abstract val latencyMs: Int
+
+        data class RealSuccess(override val latencyMs: Int) : TunnelHealthOutcome()
+
+        data class InconclusiveSynthetic(
+            override val latencyMs: Int,
+            val lastError: String? = null,
+        ) : TunnelHealthOutcome()
+
+        data class HardFail(val lastError: String? = null) : TunnelHealthOutcome() {
+            override val latencyMs: Int = 0
+        }
+
+        val isProbeOk: Boolean get() = latencyMs > 0
+
+        val recordUrlVerified: Boolean get() = this is RealSuccess
+    }
+
+    fun classifyTunnelProbe(
+        latencyMs: Int,
+        wasSyntheticSuccess: Boolean,
+        lastError: String? = null,
+    ): TunnelHealthOutcome = when {
+        latencyMs > 0 && !wasSyntheticSuccess -> TunnelHealthOutcome.RealSuccess(latencyMs)
+        latencyMs > 0 -> TunnelHealthOutcome.InconclusiveSynthetic(latencyMs, lastError)
+        else -> TunnelHealthOutcome.HardFail(lastError)
+    }
+
+    fun postConnectRecordUrlVerified(tunnelLatencyMs: Int, wasSyntheticSuccess: Boolean): Boolean =
+        classifyTunnelProbe(tunnelLatencyMs, wasSyntheticSuccess).recordUrlVerified
+
+    fun wlUrlProbeTreatAsOk(error: String?, whitelistOnly: Boolean, probeUrl: String? = null): Int? {
         if (error.isNullOrBlank()) return null
+        if (probeUrl == TUNNEL_HEALTH_TELEGRAM) return null
+        if (isProxyAuthenticationFailure(error)) return null
         if (isHttpRateLimitOrTransientResponse(error)) return WL_URL_PROBE_SYNTHETIC_MS
         if (!whitelistOnly) return null
         return if (isWlHttpProbeInconclusive(error)) WL_URL_PROBE_SYNTHETIC_MS else null
