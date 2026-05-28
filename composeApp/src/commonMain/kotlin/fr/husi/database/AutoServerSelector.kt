@@ -1051,6 +1051,17 @@ object AutoServerSelector {
         AutoServerSelectorSessionFallback.syncIndexForConnected(profileId)
     }
 
+    fun applyManualSwitch(profileId: Long) {
+        if (profileId <= 0L) return
+        val previousId = DataStore.selectedProxy
+        DataStore.selectedProxy = profileId
+        AutoServerSelectorSessionFallback.syncIndexForConnected(profileId)
+        simpleModeLog(
+            "SimpleMode",
+            "H37 manual_warm_switch from=$previousId to=$profileId",
+        )
+    }
+
     fun markConnected(profileId: Long, recordUrlVerified: Boolean = true) {
         sessionFallbackSteps.set(0)
         DataStore.autoSelectLastKnownGood = profileId

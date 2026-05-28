@@ -2,7 +2,6 @@ package fr.husi.simplemode
 
 import fr.husi.database.AutoServerSelectorSessionFallback
 import fr.husi.database.DataStore
-import fr.husi.database.DirectProfileUrlProbe
 import fr.husi.database.Probe2kDefaults
 import fr.husi.database.ProxyProbeStateStore
 import fr.husi.database.SagerDatabase
@@ -17,7 +16,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -95,18 +93,16 @@ object WarmReserveMaintainer {
             "H37 warm_reserve_cycle_start trigger=$reason target=$target reserveIds=$reserveIds " +
                 "freshAlive=$freshAlive deficit=$deficit wlOnly=$wlOnly queueSize=${queue.size}",
         )
-        for (id in reserveIds) {
-            if (!DataStore.serviceState.connected) return
-            val proxy = SagerDatabase.proxyDao.getById(id) ?: continue
-            val ms = withContext(Dispatchers.IO) {
-                DirectProfileUrlProbe.urlTestDelay(proxy, whitelistOnly = wlOnly)
-            }
-            if (ms != null) {
-                ProxyProbeStateStore.recordUrlSuccess(id, ms)
-                simpleModeLog("SimpleMode", "H37 warm_reserve_verify id=$id ok=true ms=$ms")
-            } else {
-                ProxyProbeStateStore.recordFailure(id, errorClass = "warm_reserve_verify_fail")
-                simpleModeLog("SimpleMode", "H37 warm_reserve_verify id=$id ok=false")
+        if (reserveIds.isNotEmpty() && DataStore.serviceState.connected) {
+            val verifyResults = WarmReserveLiveProbe.probeUrlDelaysParallel(
+                profileIds = reserveIds,
+                whitelistOnly = wlOnly,
+            )
+            verifyResults.forEach { (id, ms) ->
+                simpleModeLog(
+                    "SimpleMode",
+                    "H37 warm_reserve_verify id=$id ok=${ms != null}${ms?.let { " ms=$it" } ?: ""}",
+                )
             }
             probeStates = ProxyProbeStateStore.loadMap(queue)
         }
@@ -129,20 +125,20 @@ object WarmReserveMaintainer {
                     probeStates = probeStates,
                     limit = deficit,
                 )
+                val replenishResults = if (candidates.isNotEmpty() && DataStore.serviceState.connected) {
+                    WarmReserveLiveProbe.probeUrlDelaysParallel(
+                        profileIds = candidates,
+                        whitelistOnly = wlOnly,
+                    )
+                } else {
+                    emptyMap()
+                }
                 var promoted = 0
-                for (id in candidates) {
-                    if (!DataStore.serviceState.connected) break
-                    val proxy = SagerDatabase.proxyDao.getById(id) ?: continue
-                    val ms = withContext(Dispatchers.IO) {
-                        DirectProfileUrlProbe.urlTestDelay(proxy, whitelistOnly = wlOnly)
-                    }
+                replenishResults.forEach { (id, ms) ->
                     if (ms != null) {
-                        ProxyProbeStateStore.recordUrlSuccess(id, ms)
                         promoted++
                         simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=true ms=$ms")
-                        if (promoted >= deficit) break
                     } else {
-                        ProxyProbeStateStore.recordFailure(id, errorClass = "warm_reserve_replenish_fail")
                         simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=false")
                     }
                 }

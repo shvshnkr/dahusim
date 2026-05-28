@@ -11,6 +11,7 @@ internal fun isSimpleModePrepareActivity(text: String): Boolean {
         text.startsWith("Verifying last") ||
         text.startsWith("Testing ") ||
         text.startsWith("Ranking ") ||
+        text.startsWith("Comparing backups") ||
         text.startsWith("Updating") ||
         text.startsWith("Allow VPN") ||
         text.startsWith("Return to app")

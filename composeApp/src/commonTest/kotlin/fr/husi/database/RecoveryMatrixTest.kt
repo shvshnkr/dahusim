@@ -53,6 +53,15 @@ class RecoveryMatrixTest : HusiKoinTest() {
     }
 
     @Test
+    fun manualSwitchSyncsFallbackIndex() {
+        DataStore.autoSelectFallbackQueue = "10,20,30"
+        DataStore.autoSelectFallbackIndex = 0
+        AutoServerSelector.applyManualSwitch(30L)
+        assertEquals(30L, DataStore.selectedProxy)
+        assertEquals(2, DataStore.autoSelectFallbackIndex)
+    }
+
+    @Test
     fun degradedProfilePenaltyWindowMatrix() {
         val now = System.currentTimeMillis()
         AutoServerSelectorProbePolicy.recordDegradedProfile(3325L, nowMs = now)

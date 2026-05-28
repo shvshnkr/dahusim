@@ -326,6 +326,7 @@ object DataStore {
         Probe2kDefaults.WARM_RESERVE_COUNT_DEFAULT
     }
     var probe2kWarmReserveStatus by configurationStore.string(Key.PROBE_2K_WARM_RESERVE_STATUS) { "" }
+    var switchUseFullProfilePicker by configurationStore.boolean(Key.SWITCH_USE_FULL_PROFILE_PICKER) { false }
     var simpleModeLastBackgroundSubRefreshAt by configurationStore.long(Key.SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT) { 0L }
     /** On WL uplink: skip live-tunnel urlTest (debug only; default keeps BS tunnel health). */
     var simpleModeWlSkipTunnelHealthCheck by configurationStore.boolean(Key.SIMPLE_MODE_WL_SKIP_TUNNEL_HEALTH_CHECK) { false }

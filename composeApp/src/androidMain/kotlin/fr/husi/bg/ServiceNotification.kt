@@ -20,6 +20,7 @@ import fr.husi.ktx.runOnMainDispatcher
 import fr.husi.lib.R
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.repository.resolveRepository
+import fr.husi.ui.SwitchActivity
 import fr.husi.resources.Res
 import fr.husi.resources.action_switch
 import fr.husi.resources.forward_success
@@ -28,7 +29,6 @@ import fr.husi.resources.speed
 import fr.husi.resources.speed_detail
 import fr.husi.resources.stop
 import fr.husi.resources.traffic
-import fr.husi.ui.SwitchActivity
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -191,9 +191,13 @@ class ServiceNotification(
                 0,
                 runBlocking { resolveRepository().getString(Res.string.action_switch) },
                 PendingIntent.getActivity(
-                    service, 0, Intent(service, SwitchActivity::class.java), flags,
+                    service,
+                    0,
+                    Intent(service, SwitchActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    flags,
                 ),
-            ).setShowsUserInterface(false).build()
+            ).setShowsUserInterface(true).build()
             it.addAction(switchAction)
 
             val resetUpstreamAction = NotificationCompat.Action.Builder(

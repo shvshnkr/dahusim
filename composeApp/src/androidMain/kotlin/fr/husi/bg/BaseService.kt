@@ -146,6 +146,14 @@ class BaseService {
                     }
                 }
 
+                Action.SWITCH_SERVER -> onMainDispatcher {
+                    collapseStatusBar(ctx)
+                    ctx.startActivity(
+                        Intent(ctx, fr.husi.ui.SwitchActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+
                 Intent.ACTION_USER_PRESENT -> runOnDefaultDispatcher {
                     SimpleModeSessionHealth.triggerQuickCheck("user_present")
                 }
@@ -477,6 +485,7 @@ class BaseService {
                     addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
                     addAction(Intent.ACTION_USER_PRESENT)
                     addAction(Action.RESET_UPSTREAM_CONNECTIONS)
+                    addAction(Action.SWITCH_SERVER)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     registerReceiver(

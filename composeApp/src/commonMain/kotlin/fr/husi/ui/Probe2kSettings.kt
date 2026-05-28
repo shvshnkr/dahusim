@@ -33,6 +33,8 @@ import fr.husi.resources.probe_2k_run_background_now
 import fr.husi.resources.probe_2k_settings
 import fr.husi.resources.probe_2k_warm_reserve_count
 import fr.husi.resources.probe_2k_warm_reserve_status
+import fr.husi.resources.switch_use_full_picker
+import fr.husi.resources.switch_use_full_picker_summary
 import fr.husi.resources.probe_2k_warm_reserve_summary
 import fr.husi.resources.probe_2k_warm_ranking_enabled
 import fr.husi.resources.probe_2k_warm_ranking_summary
@@ -95,6 +97,18 @@ internal fun LazyListScope.probe2kSettings(
                 }
                 DataStore.probe2kWarmReserveCount = next
             },
+        )
+    }
+    item(Key.SWITCH_USE_FULL_PROFILE_PICKER, PreferenceType.SWITCH) {
+        val useFullPicker by DataStore.configurationStore
+            .booleanFlow(Key.SWITCH_USE_FULL_PROFILE_PICKER, false)
+            .collectAsStateWithLifecycle(false)
+        SwitchPreference(
+            value = useFullPicker,
+            onValueChange = { DataStore.switchUseFullProfilePicker = it },
+            title = { Text(stringResource(Res.string.switch_use_full_picker)) },
+            summary = { Text(stringResource(Res.string.switch_use_full_picker_summary)) },
+            icon = { Icon(vectorResource(Res.drawable.security), null) },
         )
     }
     item(Key.PROBE_2K_WARM_RANKING_ENABLED, PreferenceType.SWITCH) {

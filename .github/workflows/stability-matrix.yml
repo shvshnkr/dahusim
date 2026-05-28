@@ -148,6 +148,12 @@ jobs:
           - id: session-health
             name: "stability · simple mode session health policy"
             test_class: "fr.husi.simplemode.SimpleModeSessionHealthPolicyTest"
+          - id: warm-reserve-switch
+            name: "stability · warm reserve switch policy"
+            test_class: "fr.husi.simplemode.WarmReserveSwitchPolicyTest"
+          - id: warm-reserve-quality
+            name: "stability · warm reserve quality policy"
+            test_class: "fr.husi.simplemode.WarmReserveQualityPolicyTest"
           - id: subscription-http-fetch
             name: "stability · subscription http fetch"
             test_class: "fr.husi.group.SubscriptionHttpFetchTest"
