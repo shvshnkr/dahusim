@@ -203,17 +203,11 @@ jobs:
           done
           [ "$count" -ge 1 ]
           SHORT_SHA=$(git rev-parse --short HEAD)
-          {
-            echo "## Pre-release: dahusim $VER"
-            echo
-            echo "**versionName:** \`$VER\` · **versionCode:** \`$VER_CODE\` · **commit:** \`$SHORT_SHA\` · **CI:** #${{ github.run_number }}"
-            echo
-            echo "**Как скачать:** внизу страницы блок **Assets** — по одному APK на архитектуру (**arm64-v8a**, **armeabi-v7a**, **x86_64**, **x86**). Имена вида \`dahusim_<версия>_play_debug_<abi>.apk\`."
-            echo
-            echo "**Этот pre-release — только Android APK.** Сборки **Linux / Windows desktop** (zip, deb, …) публикуются **другими** workflows; для desktop на ПК нужен **Java 21+**, см. README."
-            echo
-            echo "В этой ветке в описаниях **«КВН»** используется **вместо** слова «VPN» (шутливая подмена, не гарантия «услуги»). Возможен **автовыбор** публичных/открытых серверов энтузиастов — риск и закон на вас, см. README."
-          } > release_body.md
+          chmod +x buildScript/ci/render_release_body.sh buildScript/ci/changelog_lib.sh
+          export HEAD_SHA="$GITHUB_SHA" RUN_ID="${{ github.run_id }}"
+          export GH_TOKEN="${{ secrets.GH_RELEASE_TOKEN || github.token }}"
+          export GITHUB_REPOSITORY="${{ github.repository }}"
+          ./buildScript/ci/render_release_body.sh android "$VER" "$VER_CODE" "$SHORT_SHA" "${{ github.run_id }}" "${{ github.run_number }}"
 
       - uses: softprops/action-gh-release@v3
         with:

@@ -156,27 +156,12 @@ jobs:
           set -euo pipefail
           VER="${{ steps.assets.outputs.version_name }}"
           VER_CODE="${{ steps.assets.outputs.version_code }}"
-          TAG="linux-desktop-linux-amd64-${{ github.run_id }}"
-          {
-            echo "## Linux desktop · **linux/amd64**"
-            echo
-            echo "**Платформа:** \`linux/amd64\` (сборка DESKTOP_TARGET=linux/amd64)."
-            echo
-            echo "**Среда выполнения:** uber JAR и нативный лаунчер — **Java 21+** (CI: Temurin 21–26, workflow \`jdk-matrix-test.yml\`)."
-            echo "В **deb** в \`Depends\` перечислены \`javaNN-runtime\` / \`openjdk-NN-jre\` для N=21…26 (достаточно одного); rpm/pacman — \`>= 21\`."
-            echo
-            echo "**versionName:** \`${VER}\` · **versionCode:** \`${VER_CODE}\` · **commit:** \`$(git rev-parse --short HEAD)\` · **тег:** \`${TAG}\` · **CI:** #${{ github.run_number }}"
-            echo
-            echo "**Где скачать:** репозиторий → вкладка **Releases** (не артефакты Actions) → этот пре-релиз → внизу **Assets**."
-            echo
-            echo "[Все релизы репозитория](${REPO_URL}/releases)"
-            echo
-            echo "Отдельный тестовый канал (не смешивается с Android APK pre-release workflow \`build.yml\`)."
-            echo
-            echo "**Форматы в Assets:** deb, rpm, pacman (.pkg.tar.zst), uber JAR."
-            echo
-            echo "**Примечание:** uber JAR крупный из‑за JNI и вложенных нативных библиотек; контекст у upstream: [husi#9](https://codeberg.org/xchacha20-poly1305/husi/issues/9)."
-          } > release_body.md
+          SHORT_SHA="$(git rev-parse --short HEAD)"
+          chmod +x buildScript/ci/render_release_body.sh buildScript/ci/changelog_lib.sh
+          export HEAD_SHA="$GITHUB_SHA" RUN_ID="${{ github.run_id }}"
+          export GH_TOKEN="${{ secrets.GH_RELEASE_TOKEN || github.token }}"
+          export GITHUB_REPOSITORY="${{ github.repository }}"
+          ./buildScript/ci/render_release_body.sh linux "$VER" "$VER_CODE" "$SHORT_SHA" "${{ github.run_id }}" "${{ github.run_number }}" "$REPO_URL"
 
       - uses: softprops/action-gh-release@v3
         id: gh_release

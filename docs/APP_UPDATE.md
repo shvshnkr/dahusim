@@ -8,13 +8,38 @@ The app checks this manifest when **Settings → App updates → Check for app u
 
 ## Release flow
 
-1. Push to `main` → **All platforms (auto pre-release)** builds rolling/desktop pre-releases.
-2. Test artifacts manually.
-3. **Actions → Promote app update channel**:
+1. Update [`docs/changelog/CHANGELOG.ru.md`](../docs/changelog/CHANGELOG.ru.md) section **`[Unreleased]`** (user-facing RU; no `VERSION_NAME` bump required for text to appear).
+2. Push to `main` → **All platforms (auto pre-release)** builds rolling/desktop pre-releases (body includes **Что нового** from `[Unreleased]` or git since last promote).
+3. Test artifacts manually.
+4. **Promote app update channel** (UI or CLI below):
    - `run_id` — from successful all-platforms run (or empty = latest success).
+   - `use_changelog` — default **true**: same merge as pre-release → `app-update.json` field `notes`.
    - `offer_update` — `false` freezes the channel without deleting rolling releases.
    - `publish` — `false` prints manifest preview only (dry-run).
-4. Users on builds with matching Android signing cert receive the in-app prompt.
+5. After promote, optionally run `changelog seal` (local) to archive `[Unreleased]` into **История promote**.
+6. Users on builds with matching Android signing cert receive the in-app prompt.
+
+## Changelog (RU)
+
+- **Working section:** `## [Unreleased]` in [`docs/changelog/CHANGELOG.ru.md`](../docs/changelog/CHANGELOG.ru.md).
+- **Promote boundary:** `sourceCommit` / `sourceRunId` in published `app-update.json` (clients ignore; CI uses for `git log` fallback).
+- If `[Unreleased]` is empty, notes fall back to **commits since last channel `sourceCommit`** (subjects as bullets, RU heading).
+
+## Local CLI (agent / maintainer)
+
+From repo root (Git Bash on Windows: `bash buildScript/ci/gh-workflow.sh …` or `.\buildScript\ci\gh-workflow.ps1 …`):
+
+| Command | Purpose |
+|---------|---------|
+| `gh-workflow.sh build [--wait]` | Trigger **All platforms** |
+| `gh-workflow.sh status [--run-id]` | Inspect runs |
+| `gh-workflow.sh promote [--run-id] [--dry-run] [--from-changelog]` | **Promote app update channel** |
+| `gh-workflow.sh changelog verify` | OK if `[Unreleased]` has bullets or new commits since promote |
+| `gh-workflow.sh changelog draft` / `draft-en` | Git range since last promote (RU / EN subjects) |
+| `gh-workflow.sh changelog refresh` | Insert git draft under `[Unreleased]` |
+| `gh-workflow.sh changelog seal [--run-id]` | Move `[Unreleased]` → **История promote** (local commit) |
+
+Requires `gh` auth to `github` remote (`shvshnkr/dahusim`).
 
 ## Desktop (Linux/Windows) behavior
 

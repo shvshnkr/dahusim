@@ -26,6 +26,9 @@ on:
       - "run"
       - "Makefile"
       - ".github/CRONET_GO_VERSION"
+      - "docs/changelog/**"
+      - "buildScript/ci/changelog_lib.sh"
+      - "buildScript/ci/render_release_body.sh"
   workflow_dispatch:
     inputs:
       android:

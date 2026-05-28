@@ -37,6 +37,11 @@ on:
         description: "Optional notes (empty = auto-generated)"
         required: false
         type: string
+      use_changelog:
+        description: "Merge notes from docs/changelog/CHANGELOG.ru.md [Unreleased] + git since last promote"
+        required: true
+        default: true
+        type: boolean
       publish:
         description: "Upload app-update.json to app-update-channel (false = dry-run summary only)"
         required: true
@@ -68,6 +73,7 @@ jobs:
       INPUT_MANDATORY: ${{ inputs.mandatory }}
       INPUT_MIN_VERSION_CODE: ${{ inputs.min_version_code }}
       INPUT_RELEASE_NOTES: ${{ inputs.release_notes }}
+      INPUT_USE_CHANGELOG: ${{ inputs.use_changelog }}
       INPUT_PUBLISH: ${{ inputs.publish }}
     steps:
       - uses: actions/checkout@v6
@@ -151,9 +157,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          chmod +x buildScript/ci/changelog_lib.sh
+          # shellcheck source=changelog_lib.sh
+          source buildScript/ci/changelog_lib.sh
+
+          export HEAD_SHA="${{ steps.resolve.outputs.head_sha }}"
+          export RUN_ID="${{ steps.resolve.outputs.run_id }}"
+          export VERSION_NAME="${{ steps.version.outputs.version_name }}"
+          export VERSION_CODE="${{ steps.version.outputs.version_code }}"
+          export GH_TOKEN
+          export GITHUB_REPOSITORY="${{ github.repository }}"
+
+          use_changelog() {
+            case "${INPUT_USE_CHANGELOG:-true}" in
+              true|True|TRUE|1|yes|on) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
 
           if [ -n "${INPUT_RELEASE_NOTES:-}" ]; then
             printf "%s\n" "${INPUT_RELEASE_NOTES}" > release_notes.md
+          elif use_changelog; then
+            merge_release_notes > release_notes.md
+            if ! changelog_section_has_bullets "$(changelog_unreleased_body "$HEAD_SHA")"; then
+              count="$(git -C "$REPO_ROOT" rev-list --count "$(resolve_promote_since_ref "$HEAD_SHA")..$HEAD_SHA" 2>/dev/null || echo 0)"
+              if [ "${count:-0}" -eq 0 ]; then
+                echo "::warning::[Unreleased] empty and no commits since last promote; notes may be stub-only."
+              fi
+            fi
           else
             {
               echo "Promoted from all-platforms run \`${{ steps.resolve.outputs.run_id }}\`."
@@ -217,6 +248,8 @@ jobs:
           export HAS_LINUX="${{ steps.srcmeta.outputs.has_linux }}"
           export HAS_WINDOWS="${{ steps.srcmeta.outputs.has_windows }}"
           export NOTES_FILE="release_notes.md"
+          export SOURCE_COMMIT="${{ steps.resolve.outputs.head_sha }}"
+          export SOURCE_RUN_ID="${{ steps.resolve.outputs.run_id }}"
           export GH_TOKEN
 
           python - <<'PY'
@@ -299,6 +332,12 @@ jobs:
               "versionCode": int(os.getenv("VERSION_CODE")),
               "notes": notes,
           }
+          source_commit = os.getenv("SOURCE_COMMIT", "").strip()
+          source_run_id = os.getenv("SOURCE_RUN_ID", "").strip()
+          if source_commit:
+              manifest["sourceCommit"] = source_commit
+          if source_run_id:
+              manifest["sourceRunId"] = source_run_id
 
           signing = {}
 

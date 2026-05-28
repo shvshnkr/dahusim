@@ -12,6 +12,8 @@ data class AppUpdateManifest(
     val minVersionCode: Int = 0,
     val versionName: String = "",
     val versionCode: Int = 0,
+    val sourceCommit: String? = null,
+    val sourceRunId: String? = null,
     val notes: String = "",
     val signing: AppUpdateSigning? = null,
     val android: AppUpdateAndroid? = null,
