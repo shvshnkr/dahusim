@@ -6,6 +6,7 @@ import android.app.ActivityManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.RemoteException;
 import android.os.SystemClock;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.UiDevice;
@@ -64,12 +65,20 @@ public final class InstrumentedTestSupport {
     }
 
     public static void lockScreen() {
-        device().sleep();
+        try {
+            device().sleep();
+        } catch (RemoteException exception) {
+            throw new AssertionError("lockScreen failed", exception);
+        }
     }
 
     public static void unlockScreen() {
-        device().wakeUp();
-        device().pressKeyCode(android.view.KeyEvent.KEYCODE_MENU);
+        try {
+            device().wakeUp();
+            device().pressKeyCode(android.view.KeyEvent.KEYCODE_MENU);
+        } catch (RemoteException exception) {
+            throw new AssertionError("unlockScreen failed", exception);
+        }
     }
 
     public static void forceStopTargetApp() throws IOException {

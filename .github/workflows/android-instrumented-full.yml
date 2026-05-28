@@ -72,7 +72,7 @@ jobs:
       matrix:
         include:
           - api-level: 30
-            profile: Nexus 6
+            profile: pixel_5
           - api-level: 35
             profile: pixel_7
     steps:
@@ -110,7 +110,7 @@ jobs:
           arch: x86_64
           profile: ${{ matrix.profile }}
           emulator-boot-timeout: 900
-          disable-animations: false
+          disable-animations: true
           script: |
             ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=fr.husi --no-daemon
         env:
