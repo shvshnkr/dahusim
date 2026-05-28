@@ -141,9 +141,7 @@ jobs:
           emulator-boot-timeout: 900
           disable-animations: ${{ matrix.disable-animations }}
           script: |
-            ./gradlew :androidApp:connectedPlayDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.package=fr.husi \
-              --no-daemon
+            ./gradlew :androidApp:connectedPlayDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=fr.husi --no-daemon
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
