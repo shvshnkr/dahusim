@@ -34,6 +34,7 @@ import fr.husi.compose.rememberVpnServiceLauncher
 import fr.husi.database.DataStore
 import fr.husi.database.Probe2kProgress
 import fr.husi.ktx.exitApplication
+import fr.husi.platform.PlatformInfo
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.Res
 import fr.husi.resources.simple_mode_connect
@@ -60,7 +61,9 @@ import fr.husi.ui.SimpleModeAllServersDeadChoice
 import fr.husi.ui.StringOrRes
 import fr.husi.utils.canShareSimpleModeLogs
 import fr.husi.simplemode.SimpleModeConnectCoordinator
+import fr.husi.simplemode.SimpleModeVpnSessionMarker
 import fr.husi.simplemode.releaseSimpleModeVpnSession
+import fr.husi.ui.rememberShouldRequestBatteryOptimizations
 import fr.husi.simplemode.isSimpleModePrepareActivity
 import fr.husi.simplemode.isSimpleModeProgressActivity
 import fr.husi.simplemode.isSimpleModeVpnProgressActivity
@@ -90,8 +93,23 @@ fun SimpleHomeScreen(
         .intFlow(Key.PROBE_2K_SCAN_CHECKED, 0)
         .collectAsStateWithLifecycle(0)
     var whitelistOnly by remember { mutableStateOf(DataStore.activeWhitelistRestrictedNetwork) }
+    var showUncleanStopNotice by remember { mutableStateOf(false) }
+    val shouldRequestBatteryForLog = rememberShouldRequestBatteryOptimizations()
     LaunchedEffect(activityText, status.state) {
         whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
+    }
+    LaunchedEffect(status.state, shouldRequestBatteryForLog) {
+        when (status.state) {
+            ServiceState.Stopped,
+            ServiceState.Idle,
+            -> {
+                showUncleanStopNotice = PlatformInfo.isAndroid &&
+                    SimpleModeVpnSessionMarker.evaluateUncleanStop(
+                        batteryRestrictedForLog = shouldRequestBatteryForLog,
+                    )
+            }
+            else -> showUncleanStopNotice = false
+        }
     }
     val connector = rememberVpnServiceLauncher {
         permissionPending = false
@@ -285,8 +303,11 @@ fun SimpleHomeScreen(
                     simpleModeLog("SimpleMode", "disconnect_clicked")
                     releaseSimpleModeVpnSession("simple_disconnect")
                     resolveRepository().stopService()
+                    showUncleanStopNotice = false
                     return@Button
                 }
+                SimpleModeVpnSessionMarker.clearOnConnectAttempt()
+                showUncleanStopNotice = false
                 if (permissionPending) {
                     simpleModeLog("SimpleMode", "connect_ignored_permission_pending")
                     return@Button
@@ -327,6 +348,10 @@ fun SimpleHomeScreen(
                 text = stringResource(Res.string.simple_mode_permission_pending),
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+
+        if (showUncleanStopNotice && !status.state.canStop) {
+            SimpleModeUncleanStopNotice(modifier = Modifier.padding(top = 12.dp))
         }
 
         Column(

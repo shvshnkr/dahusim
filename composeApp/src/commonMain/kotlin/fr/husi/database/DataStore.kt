@@ -329,6 +329,8 @@ object DataStore {
     var simpleModeTelegramProbe by configurationStore.boolean(Key.SIMPLE_MODE_TELEGRAM_PROBE) { true }
     var autoConnectPausedUntilGoogle by configurationStore.boolean(Key.AUTO_CONNECT_PAUSED_UNTIL_GOOGLE) { false }
     var simpleModeActivity by configurationStore.string(Key.SIMPLE_MODE_ACTIVITY) { "" }
+    var simpleModeVpnSessionExpected by configurationStore.boolean(Key.SIMPLE_MODE_VPN_SESSION_EXPECTED) { false }
+    var simpleModeVpnLastHeartbeatMs by configurationStore.long(Key.SIMPLE_MODE_VPN_LAST_HEARTBEAT_MS) { 0L }
     var subscriptionUpdateParallelismForeground by configurationStore.int(Key.SUBSCRIPTION_UPDATE_PARALLELISM_FOREGROUND) {
         3
     }

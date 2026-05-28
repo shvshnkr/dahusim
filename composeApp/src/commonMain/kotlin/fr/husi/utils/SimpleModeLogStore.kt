@@ -7,6 +7,7 @@ import fr.husi.database.DataStore
 import fr.husi.ktx.Logs
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeConnectCoordinator
+import fr.husi.simplemode.SimpleModeVpnSessionMarker
 import fr.husi.simplemode.isSimpleModePrepareActivity
 import java.io.File
 import java.text.SimpleDateFormat
@@ -106,6 +107,7 @@ internal object SimpleModeLogStore {
         if (lastSessionBuildCode == currentBuildCode) return
         val previousCode = readPersistedBuildCode()
         if (previousCode != null && previousCode != currentBuildCode) {
+            SimpleModeVpnSessionMarker.markGracefulStop("session_upgrade")
             val upgrade = "${lineStamp.format(Date())} [SimpleMode] H0 session_upgrade " +
                 "previousCode=$previousCode currentCode=$currentBuildCode " +
                 "build=${BuildConfig.VERSION_NAME}\n"

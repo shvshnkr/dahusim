@@ -7,6 +7,7 @@ import fr.husi.database.DataStore
  * Call only on explicit simple disconnect or full UI connect — not when opening full UI.
  */
 fun releaseSimpleModeVpnSession(reason: String) {
+    SimpleModeVpnSessionMarker.markGracefulStop(reason)
     DataStore.simpleMode = false
     SimpleModeConnectCoordinator.cancel(reason)
     cancelSimpleModeNetworkAdaptation()

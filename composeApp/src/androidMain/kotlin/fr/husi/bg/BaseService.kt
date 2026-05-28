@@ -42,6 +42,7 @@ import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.simplemode.SimpleModePostConnectHealth
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.simplemode.SimpleModeSessionHealth
+import fr.husi.simplemode.SimpleModeVpnSessionMarker
 import fr.husi.simplemode.SimpleModeTunnelRestart
 import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.resources.*
@@ -382,6 +383,7 @@ class BaseService {
                     SimpleModeVpnCoordinator.cancelAdaptation()
                     WhitelistNetworkRoutingState.reset()
                     DataStore.simpleModeActivity = ""
+                    SimpleModeVpnSessionMarker.markGracefulStop("service_stopped")
                     if (!finalMessage.isNullOrBlank()) {
                         data.binder.notifyAlert(AlertType.COMMON, finalMessage)
                     }
@@ -705,6 +707,7 @@ class BaseService {
                                     "H10 post_connect_inconclusive_connected profileId=${profile.id}",
                                 )
                                 if (outboundTag.isNotBlank()) {
+                                    SimpleModeVpnSessionMarker.markActive()
                                     SimpleModeSessionHealth.schedule(profile.id, outboundTag)
                                 }
                                 SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
@@ -778,6 +781,7 @@ class BaseService {
                         )
                         WhitelistNetworkRoutingState.markPostConnectHealthy()
                         if (DataStore.simpleMode && outboundTag.isNotBlank()) {
+                            SimpleModeVpnSessionMarker.markActive()
                             SimpleModeSessionHealth.schedule(profile.id, outboundTag)
                         }
                         SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(

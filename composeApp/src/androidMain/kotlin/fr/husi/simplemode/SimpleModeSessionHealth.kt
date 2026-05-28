@@ -146,6 +146,7 @@ internal object SimpleModeSessionHealth {
         if (ok) {
             consecutiveFails = 0
             lastHealthError = null
+            SimpleModeVpnSessionMarker.touchHeartbeat()
             if (DataStore.simpleModeActivity == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING) {
                 DataStore.simpleModeActivity = ""
             }
