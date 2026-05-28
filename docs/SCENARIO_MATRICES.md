@@ -30,6 +30,7 @@ See [BS_CS_NETWORK.md](./BS_CS_NETWORK.md) for uplink vs tunnel probe targets.
 | `wl_flip_open_to_wl` | WL mode change | `wl_to_open` full probe reason |
 | `reconnect_handoff` | After connect handoff | `useCompactReprobe=false` |
 | `ruleset_remote_fail_local_ok` | H36 | Second pass `preferLocalRuleSet=true` |
+| `ruleset_partial_local_fallback` | Rule-set resolve | Partial local `geo/*.srs` keeps local hits and falls back to remote for missing tags |
 | `sub_fetch_wl_direct` | WL, VPN off | Yandex mirror for GitHub raw |
 | `sub_fetch_wl_vpn` | WL, VPN on | No mirror |
 

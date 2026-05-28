@@ -789,6 +789,60 @@ class ConfigBuilderTest : HusiKoinTest() {
         }
     }
 
+    @Test
+    fun `buildConfig uses mixed local and remote rule sets when local geo is partial`() = runBlocking {
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "main",
+            host = "1.1.1.1",
+            port = 1080,
+        )
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU blocked split",
+                domains = "set+dns:geosite-ru-blocked",
+                ip = "set+dns:geoip-ru-blocked",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        geoDir.mkdirs()
+        val localGeosite = geoDir.resolve("geosite-ru-blocked.srs")
+        val missingGeoip = geoDir.resolve("geoip-ru-blocked.srs")
+        localGeosite.writeText("test")
+        missingGeoip.delete()
+        try {
+            val result = buildConfig(proxy)
+            val routeRuleSets = parseRouteRuleSets(result)
+
+            val geositeRuleSet = routeRuleSets.firstOrNull {
+                it["tag"]?.jsonPrimitive?.content == "geosite-ru-blocked"
+            }
+            assertNotNull(geositeRuleSet)
+            assertTrue(
+                geositeRuleSet["path"]?.jsonPrimitive?.content?.endsWith("/geo/geosite-ru-blocked.srs") == true,
+            )
+            assertEquals(null, geositeRuleSet["url"])
+
+            val geoipRuleSet = routeRuleSets.firstOrNull {
+                it["tag"]?.jsonPrimitive?.content == "geoip-ru-blocked"
+            }
+            assertNotNull(geoipRuleSet)
+            assertEquals(null, geoipRuleSet["path"])
+            assertEquals(
+                "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru-blocked.srs",
+                geoipRuleSet["url"]?.jsonPrimitive?.content,
+            )
+        } finally {
+            localGeosite.delete()
+        }
+    }
+
     private fun routeRuGeositeOutbound(result: ConfigBuildResult): String? {
         val routes = Json.parseToJsonElement(result.config).jsonObject["route"]
             ?.jsonObject?.get("rules")?.jsonArray ?: return null

@@ -4,16 +4,26 @@ import fr.husi.bg.UnderlyingNetworkHandoffPolicy
 import fr.husi.database.AutoServerSelectorProbePolicy
 import fr.husi.database.ConnectPoolPolicy
 import fr.husi.database.DataStore
+import fr.husi.database.ProfileManager
+import fr.husi.database.RuleEntity
+import fr.husi.fmt.buildConfig
 import fr.husi.fmt.trojan.TrojanBean
 import fr.husi.group.SubscriptionHttpFetch
 import fr.husi.group.WhitelistSubscriptionFetch
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.database.ProxyEntity
+import fr.husi.database.ProxyGroup
+import fr.husi.database.SagerDatabase
+import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.simplemode.SimpleModeNetworkState
 import fr.husi.simplemode.probeSimpleModeNetwork
 import fr.husi.test.HusiKoinTest
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -216,6 +226,68 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
             AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD,
             degraded.decision,
         )
+    }
+
+    @Test
+    fun rulesetPartialLocalFallbackMatrix() = runBlocking {
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = ProxyEntity(groupId = group.id, userOrder = 1).apply {
+            type = ProxyEntity.TYPE_TROJAN
+            trojanBean = TrojanBean().apply {
+                name = "matrix-main"
+                serverAddress = "example.com"
+                serverPort = 443
+            }.applyDefaultValues()
+        }
+        proxy.id = SagerDatabase.proxyDao.addProxy(proxy)
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU blocked split",
+                domains = "set+dns:geosite-ru-blocked",
+                ip = "set+dns:geoip-ru-blocked",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        geoDir.mkdirs()
+        val localGeosite = geoDir.resolve("geosite-ru-blocked.srs")
+        val missingGeoip = geoDir.resolve("geoip-ru-blocked.srs")
+        localGeosite.writeText("test")
+        missingGeoip.delete()
+
+        try {
+            val routeRuleSets = Json.parseToJsonElement(buildConfig(proxy).config)
+                .jsonObject["route"]!!
+                .jsonObject["rule_set"]!!
+                .jsonArray
+                .map { it.jsonObject }
+
+            val geositeRuleSet = routeRuleSets.firstOrNull {
+                it["tag"]?.jsonPrimitive?.content == "geosite-ru-blocked"
+            }
+            assertNotNull(geositeRuleSet, "ruleset_partial_local_fallback geosite")
+            assertTrue(
+                geositeRuleSet["path"]?.jsonPrimitive?.content?.endsWith("/geo/geosite-ru-blocked.srs") == true,
+                "ruleset_partial_local_fallback geosite local path",
+            )
+            assertNull(geositeRuleSet["url"], "ruleset_partial_local_fallback geosite no remote url")
+
+            val geoipRuleSet = routeRuleSets.firstOrNull {
+                it["tag"]?.jsonPrimitive?.content == "geoip-ru-blocked"
+            }
+            assertNotNull(geoipRuleSet, "ruleset_partial_local_fallback geoip")
+            assertNull(geoipRuleSet["path"], "ruleset_partial_local_fallback geoip no local path")
+            assertEquals(
+                "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru-blocked.srs",
+                geoipRuleSet["url"]?.jsonPrimitive?.content,
+                "ruleset_partial_local_fallback geoip remote fallback",
+            )
+        } finally {
+            localGeosite.delete()
+        }
     }
 
     private fun assertOpenHealthRoute() {

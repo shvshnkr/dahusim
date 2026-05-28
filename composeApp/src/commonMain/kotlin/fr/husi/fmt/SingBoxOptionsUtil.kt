@@ -16,10 +16,12 @@ import fr.husi.fmt.SingBoxOptions.RuleSet_Remote
 import fr.husi.fmt.SingBoxOptions.Rule_Default
 import fr.husi.ktx.JSONMap
 import fr.husi.ktx.blankAsNull
+import fr.husi.ktx.invariantPathString
 import fr.husi.ktx.parseBoolean
 import fr.husi.ktx.queryParameterNotBlank
 import fr.husi.ktx.toJSONMap
 import fr.husi.libcore.Libcore
+import java.io.File
 
 /** Fallback when merge/custom leaves tags but bases are missing (must match sing-geosite / sing-geoip layout). */
 private const val DEFAULT_RULESET_GEOSITE_BASE =
@@ -350,16 +352,16 @@ fun MyOptions.buildRuleSets(
     for (set in route!!.rule_set!!) names.add(set.tag!!)
     val list = ArrayList<RuleSet>(names.size)
 
-    val preferRemote = !ipURL.isNullOrBlank() || !domainURL.isNullOrBlank()
-    val useLocalOnly = !preferRemote && localPath != null
+    val localDir = localPath?.let(::File)
     for (name in names.sorted()) {
-        if (useLocalOnly) {
+        val localRuleSetFile = localDir?.resolve("$name.srs")
+        if (localRuleSetFile?.isFile == true) {
             list.add(
                 RuleSet_Local().apply {
                     tag = name
                     type = SingBoxOptions.RULE_SET_TYPE_LOCAL
                     format = SingBoxOptions.RULE_SET_FORMAT_BINARY
-                    path = "$localPath/$name.srs"
+                    path = localRuleSetFile.invariantPathString()
                 },
             )
         } else {
@@ -397,9 +399,7 @@ fun JSONMap.refreshRuleSetsAfterCustomMerge(
     localPath: String?,
 ) {
     if (forTest) return
-    val preferRemote = !ipURL.isNullOrBlank() || !domainURL.isNullOrBlank()
-    val useLocalOnly = !preferRemote && localPath != null
-    if (!useLocalOnly && !preferRemote) return
+    if (localPath == null && ipURL.isNullOrBlank() && domainURL.isNullOrBlank()) return
 
     val names = hashSetOf<String>()
     (this["dns"] as? Map<*, *>)?.get("rules")?.let { collectSet(names, it as? List<*>) }
@@ -422,15 +422,17 @@ fun JSONMap.refreshRuleSetsAfterCustomMerge(
         routeMutable["rules"] = mutableListOf<Any?>()
     }
 
+    val localDir = localPath?.let(::File)
     val list = ArrayList<Map<String, Any?>>(names.size)
     for (name in names.sorted()) {
-        if (useLocalOnly) {
+        val localRuleSetFile = localDir?.resolve("$name.srs")
+        if (localRuleSetFile?.isFile == true) {
             list.add(
                 linkedMapOf(
                     "tag" to name,
                     "type" to SingBoxOptions.RULE_SET_TYPE_LOCAL,
                     "format" to SingBoxOptions.RULE_SET_FORMAT_BINARY,
-                    "path" to "$localPath/$name.srs",
+                    "path" to localRuleSetFile.invariantPathString(),
                 ),
             )
         } else {
