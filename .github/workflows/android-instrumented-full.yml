@@ -88,9 +88,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - api-level: 30
-            profile: pixel_5
-            disable-animations: false
           - api-level: 35
             profile: pixel_7
             disable-animations: true
@@ -113,7 +110,7 @@ jobs:
 
       - uses: ./.github/actions/setup-dahusim-gradle
         with:
-          cache-write: ${{ matrix.api-level == 30 }}
+          cache-write: true
 
       - name: Geo / Gradle init assets
         run: ./run init action gradle
@@ -122,6 +119,17 @@ jobs:
         run: |
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
           echo "sdk.dir=${SDK}" > local.properties
+
+      - name: Prebuild instrumented APKs
+        run: |
+          ./gradlew :composeApp:exportLibraryDefinitions \
+            :androidApp:assemblePlayDebug \
+            :androidApp:assemblePlayDebugAndroidTest \
+            --no-daemon
+        env:
+          BUILD_PLUGIN: none
+          ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
+          GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
 
       - name: Run connectedPlayDebugAndroidTest
         uses: reactivecircus/android-emulator-runner@v2
@@ -133,7 +141,9 @@ jobs:
           emulator-boot-timeout: 900
           disable-animations: ${{ matrix.disable-animations }}
           script: |
-            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=fr.husi --no-daemon
+            ./gradlew :androidApp:connectedPlayDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.package=fr.husi \
+              --no-daemon
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
