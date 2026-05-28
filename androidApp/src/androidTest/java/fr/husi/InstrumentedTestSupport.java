@@ -52,6 +52,10 @@ public final class InstrumentedTestSupport {
         waitUntil(InstrumentedTestSupport::isProcessRunning, "process did not start");
     }
 
+    public static void waitForProcessStopped() {
+        waitUntil(() -> !isProcessRunning(), "process did not stop");
+    }
+
     public static void waitForMainActivityResumed() {
         waitUntil(InstrumentedTestSupport::isMainActivityResumed, "MainActivity did not resume");
     }
