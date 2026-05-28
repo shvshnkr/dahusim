@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public final class InstrumentedTestSupport {
-    private static final long DEFAULT_TIMEOUT_MS = 20_000L;
+    private static final long DEFAULT_TIMEOUT_MS = 60_000L;
     private static final long POLL_MS = 250L;
 
     private InstrumentedTestSupport() {

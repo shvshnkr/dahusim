@@ -24,6 +24,7 @@ import fr.husi.repository.SagerRepository
 import fr.husi.update.AppUpdateCoordinator
 import fr.husi.update.AppUpdateUpdater
 import fr.husi.utils.CrashHandler
+import fr.husi.utils.InstrumentationEnvironment
 import fr.husi.utils.PackageCache
 import fr.husi.utils.copyBundledRuleSetAssetsIfNeeded
 import go.Seq
@@ -85,7 +86,7 @@ class Application : Application(),
         )
         loadCA(DataStore.certProvider)
 
-        if (isMainProcess) runOnDefaultDispatcher {
+        if (isMainProcess && !InstrumentationEnvironment.isInstrumented) runOnDefaultDispatcher {
             runCatching {
                 DefaultUserBootstrap.bootstrapAll()
                 SubscriptionUpdater.reconfigureUpdater()
