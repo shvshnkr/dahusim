@@ -1,0 +1,34 @@
+name: Cache cronet toolchain (linux/amd64)
+description: Restore or populate Chromium toolchain under cronet-go (skip download on cache hit).
+inputs:
+  cronet-version:
+    description: Pinned cronet-go ref (from .github/CRONET_GO_VERSION)
+    required: true
+outputs:
+  cache-hit:
+    description: actions/cache restore hit
+    value: ${{ steps.cache.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v5
+      id: cache
+      with:
+        path: |
+          cronet-go/naiveproxy/src/third_party/llvm-build/
+          cronet-go/naiveproxy/src/gn/out/
+          cronet-go/naiveproxy/src/chrome/build/pgo_profiles/
+          cronet-go/naiveproxy/src/out/sysroot-build/
+        key: cronet-toolchain-linux-amd64-${{ inputs.cronet-version }}
+        restore-keys: |
+          cronet-toolchain-linux-amd64-
+
+    - name: Download Chromium toolchain
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -xeuo pipefail
+        rm -f "$GITHUB_WORKSPACE/cronet-go/naiveproxy/src/build/linux/sysroot_scripts/keyring.gpg"
+        cd "$GITHUB_WORKSPACE/cronet-go"
+        GPG_TTY=/dev/null ./naiveproxy/src/build/linux/sysroot_scripts/generate_keyring.sh
+        go run ./cmd/build-naive --target=linux/amd64 download-toolchain

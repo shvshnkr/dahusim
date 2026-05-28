@@ -63,6 +63,9 @@ jobs:
         with:
           path: composeApp/libs/libcore.aar
           key: libcore-android-${{ steps.corekey.outputs.scripts }}-${{ steps.corekey.outputs.libcore }}
+          restore-keys: |
+            libcore-android-${{ steps.corekey.outputs.scripts }}-
+            libcore-android-
 
       - name: Build libcore.aar
         if: steps.cache.outputs.cache-hit != 'true'
@@ -104,7 +107,7 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: ./.github/actions/setup-dahusim-gradle
 
       - name: Geo / Gradle init assets
         run: ./run init action gradle

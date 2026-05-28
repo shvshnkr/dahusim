@@ -50,7 +50,24 @@ jobs:
           add-to-path: true
           local-cache: false
 
+      - name: Libcore cache key
+        id: corekey
+        run: |
+          find buildScript libcore -maxdepth 1 -name '*.sh' -print0 | sort -z | xargs -0 cat | sha1sum | awk '{print "scripts="$1}' >> "$GITHUB_OUTPUT"
+          git ls-files libcore | xargs cat | sha1sum | awk '{print "libcore="$1}' >> "$GITHUB_OUTPUT"
+
+      - name: Cache libcore.aar
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: composeApp/libs/libcore.aar
+          key: libcore-android-${{ steps.corekey.outputs.scripts }}-${{ steps.corekey.outputs.libcore }}
+          restore-keys: |
+            libcore-android-${{ steps.corekey.outputs.scripts }}-
+            libcore-android-
+
       - name: Build libcore.aar
+        if: steps.cache.outputs.cache-hit != 'true'
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
@@ -94,7 +111,9 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: ./.github/actions/setup-dahusim-gradle
+        with:
+          cache-write: ${{ matrix.api-level == 30 }}
 
       - name: Geo / Gradle init assets
         run: ./run init action gradle

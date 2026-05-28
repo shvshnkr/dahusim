@@ -69,7 +69,7 @@ jobs:
         run: |
           test -f composeApp/libs/libcore-desktop-windows-amd64.jar
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: ./.github/actions/setup-dahusim-gradle
 
       - name: Geo / Gradle init assets
         run: ./run init action gradle

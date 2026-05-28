@@ -99,7 +99,7 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: ./.github/actions/setup-dahusim-gradle
 
       - name: Geo / Gradle init assets
         run: ./run init action gradle
