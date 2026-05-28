@@ -920,6 +920,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_activity_connection_unstable">Connection unstable, rechecking…</string>
     <string name="simple_mode_activity_server_unstable">Server unstable, switching…</string>
     <string name="simple_mode_vpn_check_failed_reconnect">VPN is connected but the health check failed — tap Disconnect, then Connect again.</string>
+    <string name="simple_mode_unclean_stop_battery_restricted">The connection dropped in the background — you did not disconnect manually. Battery optimization is a common cause: use the button below to allow unrestricted background use, or tap Connect.</string>
+    <string name="simple_mode_unclean_stop_battery_already_off">The connection dropped in the background. Battery optimization is already disabled for this app. It may have been closed from Recents, power-saving mode, vendor background limits, or stopped by the system. Tap Connect to turn the VPN back on.</string>
     <string name="simple_mode_activity_server_degraded">Server degraded, switching…</string>
     <string name="simple_mode_activity_server_unreachable">Server unreachable, trying next…</string>
     <string name="simple_mode_activity_connection_error">Connection error, trying next…</string>

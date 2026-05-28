@@ -38,7 +38,7 @@ usage() {
 Usage: gh-workflow.sh <command> [options]
 
 Commands:
-  build [--android|--linux|--windows] [--wait]
+  build [--android|--linux|--windows] [--wait]   # manual pre-release (after CI matrices; not auto on test/CI-only pushes)
   status [--run-id ID]
   promote [--run-id ID] [--dry-run] [--mandatory] [--min-version-code N]
           [--notes TEXT | --notes-file PATH | --from-changelog]

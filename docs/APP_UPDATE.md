@@ -9,7 +9,7 @@ The app checks this manifest when **Settings → App updates → Check for app u
 ## Release flow
 
 1. Update [`docs/changelog/CHANGELOG.ru.md`](../docs/changelog/CHANGELOG.ru.md) section **`[Unreleased]`** (user-facing RU; no `VERSION_NAME` bump required for text to appear).
-2. Push to `main` → **All platforms (auto pre-release)** builds rolling/desktop pre-releases (body includes **Что нового** from `[Unreleased]` or git since last promote).
+2. Push to `main` with **shippable app/runtime** changes → **All platforms (auto pre-release)** builds rolling/desktop pre-releases (body includes **Что нового** from `[Unreleased]` or git since last promote). Commits that touch only CI, workflows, tests, changelog text, or `husi.properties` without app sources do **not** auto-build; run `gh-workflow.sh build` (or **Run workflow** on all-platforms) after matrices pass.
 3. Test artifacts manually.
 4. **Promote app update channel** (UI or CLI below):
    - `run_id` — from successful all-platforms run (or empty = latest success).

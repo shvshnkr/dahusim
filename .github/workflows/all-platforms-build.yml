@@ -1,7 +1,7 @@
 name: All platforms (auto pre-release)
 
-# After pushes that touch app/runtime code: Android APK + Linux + Windows desktop pre-releases.
-# Skips docs-only and workflow-only commits (positive path list). Manual: workflow_dispatch.
+# After pushes that touch shippable app/runtime code: Android APK + Linux + Windows pre-releases.
+# CI/workflows/tests/changelog/VERSION_CODE-only commits do not auto-build (use workflow_dispatch or gh-workflow.sh build).
 on:
   push:
     branches: [main]
@@ -15,20 +15,17 @@ on:
       - "settings.gradle.kts"
       - "build.gradle.kts"
       - "repositories.gradle.kts"
-      - "buildScript/**"
+      - "buildScript/lib/**"
+      - "buildScript/init/**"
       - "libcore/**"
       - "launcher/**"
       - "release/linux/**"
       - "release/windows/**"
       - "release/desktop/**"
-      - "husi.properties"
       - "plugin/**"
       - "run"
       - "Makefile"
       - ".github/CRONET_GO_VERSION"
-      - "docs/changelog/**"
-      - "buildScript/ci/changelog_lib.sh"
-      - "buildScript/ci/render_release_body.sh"
   workflow_dispatch:
     inputs:
       android:
@@ -63,6 +60,7 @@ jobs:
       run_linux: ${{ steps.resolve.outputs.run_linux }}
       run_windows: ${{ steps.resolve.outputs.run_windows }}
       trigger: ${{ steps.resolve.outputs.trigger }}
+      skip_reason: ${{ steps.resolve.outputs.skip_reason }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -74,9 +72,41 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
+            shippable:
+              - "androidApp/**"
+              - "!androidApp/**/androidTest/**"
+              - "composeApp/**"
+              - "!composeApp/**/androidTest/**"
+              - "!composeApp/**/commonTest/**"
+              - "!composeApp/**/desktopTest/**"
+              - "!composeApp/**/jvmTest/**"
+              - "library/**"
+              - "!library/**/androidTest/**"
+              - "!library/**/commonTest/**"
+              - "!library/**/desktopTest/**"
+              - "!library/**/jvmTest/**"
+              - "libcore/**"
+              - "buildSrc/**"
+              - "buildScript/lib/**"
+              - "buildScript/init/**"
+              - "gradle/**"
+              - "gradle.properties"
+              - "settings.gradle.kts"
+              - "build.gradle.kts"
+              - "repositories.gradle.kts"
+              - "plugin/**"
+              - "launcher/**"
+              - "release/**"
+              - "run"
+              - "Makefile"
+              - ".github/CRONET_GO_VERSION"
             shared:
               - "composeApp/src/commonMain/**"
               - "library/**"
+              - "!library/**/androidTest/**"
+              - "!library/**/commonTest/**"
+              - "!library/**/desktopTest/**"
+              - "!library/**/jvmTest/**"
               - "libcore/**"
               - "buildSrc/**"
               - "buildScript/lib/**"
@@ -87,13 +117,13 @@ jobs:
               - "build.gradle.kts"
               - "repositories.gradle.kts"
               - "composeApp/build.gradle.kts"
-              - "husi.properties"
               - "plugin/**"
               - "run"
               - "Makefile"
               - ".github/CRONET_GO_VERSION"
             android:
               - "androidApp/**"
+              - "!androidApp/**/androidTest/**"
               - "composeApp/src/androidMain/**"
             desktop:
               - "composeApp/src/desktopMain/**"
@@ -101,12 +131,8 @@ jobs:
               - "release/desktop/**"
             linux:
               - "release/linux/**"
-              - "buildScript/ci/smoke_linux_desktop_packages.sh"
             windows:
               - "release/windows/**"
-              - "buildScript/temurin21-pinned.urls"
-              - "buildScript/ci/prepare_windows_jdk_jni_include.sh"
-              - "buildScript/ci/verify_temurin21_urls.sh"
 
       - name: Resolve platform selection
         id: resolve
@@ -116,6 +142,7 @@ jobs:
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "trigger=manual" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=" >> "$GITHUB_OUTPUT"
             echo "run_android=${{ inputs.android }}" >> "$GITHUB_OUTPUT"
             echo "run_linux=${{ inputs.linux_desktop }}" >> "$GITHUB_OUTPUT"
             echo "run_windows=${{ inputs.windows_desktop }}" >> "$GITHUB_OUTPUT"
@@ -123,6 +150,17 @@ jobs:
           fi
 
           echo "trigger=push" >> "$GITHUB_OUTPUT"
+
+          shippable="${{ steps.filter.outputs.shippable }}"
+          if [ "$shippable" != "true" ]; then
+            echo "skip_reason=no-shippable-app-changes" >> "$GITHUB_OUTPUT"
+            echo "run_android=false" >> "$GITHUB_OUTPUT"
+            echo "run_linux=false" >> "$GITHUB_OUTPUT"
+            echo "run_windows=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "skip_reason=" >> "$GITHUB_OUTPUT"
 
           shared="${{ steps.filter.outputs.shared }}"
           android="${{ steps.filter.outputs.android }}"
@@ -182,6 +220,9 @@ jobs:
             echo "## All-platforms selection"
             echo
             echo "- trigger: \`${{ needs.changes.outputs.trigger }}\`"
+            if [ -n "${{ needs.changes.outputs.skip_reason }}" ]; then
+              echo "- skip_reason: \`${{ needs.changes.outputs.skip_reason }}\` (no pre-releases; use **Run workflow** or \`gh-workflow.sh build\` after tests)"
+            fi
             echo "- run_id: \`${{ github.run_id }}\`"
             echo "- run_android: \`${{ needs.changes.outputs.run_android }}\`"
             echo "- run_linux: \`${{ needs.changes.outputs.run_linux }}\`"
