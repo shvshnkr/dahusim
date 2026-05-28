@@ -27,6 +27,7 @@ import fr.husi.bg.ServiceState
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
 import fr.husi.simplemode.SimpleModeConnectCoordinator
+import fr.husi.simplemode.releaseSimpleModeVpnSession
 import fr.husi.ui.StringOrRes
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
@@ -68,6 +69,7 @@ fun SagerFab(
                     if (!canStartFromFullFab(state = state, permissionPending = permissionPending)) {
                         return@FloatingActionButton
                     }
+                    releaseSimpleModeVpnSession("full_manual_connect")
                     SimpleModeConnectCoordinator.takeOverByFullUi("full_manual_connect")
                     permissionPending = true
                     connector()

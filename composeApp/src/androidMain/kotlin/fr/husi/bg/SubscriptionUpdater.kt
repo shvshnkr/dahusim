@@ -21,6 +21,7 @@ import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
 import fr.husi.database.ProbeScheduler
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
+import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.runBlocking
@@ -113,6 +114,10 @@ actual object SubscriptionUpdater {
             // #region agent log
             simpleModeLog("SimpleMode", "H12 subscription_notification_cancelled")
             // #endregion
+
+            if (DataStore.simpleMode && outcome.transportFailuresWhileVpnConnected > 0) {
+                SimpleModeVpnCoordinator.scheduleAdaptation("sub_transport_recover")
+            }
 
             if (outcome.shouldRequestUpstreamReset) {
                 // #region agent log

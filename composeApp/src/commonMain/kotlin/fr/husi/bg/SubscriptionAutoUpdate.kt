@@ -1,6 +1,8 @@
 package fr.husi.bg
 
 import fr.husi.database.DataStore
+import fr.husi.simplemode.probeSimpleModeNetwork
+import fr.husi.utils.simpleModeLog
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubUpdateState
@@ -304,43 +306,68 @@ object SubscriptionAutoUpdateRunner {
     }
 
     private suspend fun runSingleUpdate(profile: ProxyGroup): SingleUpdateSummary {
-        return runCatching {
-            when (val r = GroupUpdater.executeUpdate(profile, false)) {
-                is GroupUpdateResult.Success -> {
-                    SingleUpdateSummary(
-                        success = true,
-                        staleTransportFailure = false,
-                        groupId = profile.id,
-                        attempted = true,
-                    )
-                }
-                is GroupUpdateResult.Failure -> {
-                    SingleUpdateSummary(
-                        success = false,
-                        staleTransportFailure = DataStore.serviceState.connected &&
-                            subscriptionMessageLooksLikeStaleTransport(r.message),
-                        groupId = profile.id,
-                        attempted = true,
-                    )
-                }
-                else -> {
-                    SingleUpdateSummary(
-                        success = false,
-                        staleTransportFailure = false,
-                        groupId = profile.id,
-                        attempted = false,
-                    )
-                }
+        val first = runSingleUpdateOnce(profile, bypassVpn = false)
+        if (first.staleTransportFailure && DataStore.serviceState.connected) {
+            val uplink = probeSimpleModeNetwork()
+            if (uplink.hasAnyInternet) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H19 subscription_fetch_bypass_tunnel group=${profile.displayName()} " +
+                        "wlOnly=${uplink.whitelistOnly}",
+                )
+                return runSingleUpdateOnce(profile, bypassVpn = true)
             }
-        }.getOrElse { e ->
-            Logs.w("auto update: update failed for ${profile.displayName()}", e)
-            SingleUpdateSummary(
-                success = false,
-                staleTransportFailure = DataStore.serviceState.connected &&
-                    subscriptionMessageLooksLikeStaleTransport(e.readableMessage),
-                groupId = profile.id,
-                attempted = true,
-            )
+        }
+        return first
+    }
+
+    private suspend fun runSingleUpdateOnce(
+        profile: ProxyGroup,
+        bypassVpn: Boolean,
+    ): SingleUpdateSummary {
+        val previousBypass = SubscriptionUpdateFetchOverrides.bypassVpn
+        SubscriptionUpdateFetchOverrides.bypassVpn = bypassVpn
+        return try {
+            runCatching {
+                when (val r = GroupUpdater.executeUpdate(profile, false)) {
+                    is GroupUpdateResult.Success -> {
+                        SingleUpdateSummary(
+                            success = true,
+                            staleTransportFailure = false,
+                            groupId = profile.id,
+                            attempted = true,
+                        )
+                    }
+                    is GroupUpdateResult.Failure -> {
+                        SingleUpdateSummary(
+                            success = false,
+                            staleTransportFailure = DataStore.serviceState.connected &&
+                                subscriptionMessageLooksLikeStaleTransport(r.message),
+                            groupId = profile.id,
+                            attempted = true,
+                        )
+                    }
+                    else -> {
+                        SingleUpdateSummary(
+                            success = false,
+                            staleTransportFailure = false,
+                            groupId = profile.id,
+                            attempted = false,
+                        )
+                    }
+                }
+            }.getOrElse { e ->
+                Logs.w("auto update: update failed for ${profile.displayName()}", e)
+                SingleUpdateSummary(
+                    success = false,
+                    staleTransportFailure = DataStore.serviceState.connected &&
+                        subscriptionMessageLooksLikeStaleTransport(e.readableMessage),
+                    groupId = profile.id,
+                    attempted = true,
+                )
+            }
+        } finally {
+            SubscriptionUpdateFetchOverrides.bypassVpn = previousBypass
         }
     }
 }

@@ -43,7 +43,6 @@ import fr.husi.resources.simple_mode_preparing
 import fr.husi.resources.simple_mode_description
 import fr.husi.resources.simple_mode_disconnect
 import fr.husi.resources.simple_mode_full_ui
-import fr.husi.resources.simple_mode_vpn_check_failed_reconnect
 import fr.husi.resources.simple_mode_logs
 import fr.husi.resources.simple_mode_no_internet_pause
 import fr.husi.resources.simple_mode_no_profile
@@ -61,8 +60,7 @@ import fr.husi.ui.SimpleModeAllServersDeadChoice
 import fr.husi.ui.StringOrRes
 import fr.husi.utils.canShareSimpleModeLogs
 import fr.husi.simplemode.SimpleModeConnectCoordinator
-import fr.husi.simplemode.cancelSimpleModeNetworkAdaptation
-import fr.husi.simplemode.hasPendingSessionHealthDegradation
+import fr.husi.simplemode.releaseSimpleModeVpnSession
 import fr.husi.simplemode.isSimpleModePrepareActivity
 import fr.husi.simplemode.isSimpleModeProgressActivity
 import fr.husi.simplemode.isSimpleModeVpnProgressActivity
@@ -285,8 +283,7 @@ fun SimpleHomeScreen(
                 }
                 if (status.state.canStop) {
                     simpleModeLog("SimpleMode", "disconnect_clicked")
-                    SimpleModeConnectCoordinator.cancel("disconnect")
-                    cancelSimpleModeNetworkAdaptation()
+                    releaseSimpleModeVpnSession("simple_disconnect")
                     resolveRepository().stopService()
                     return@Button
                 }
@@ -357,19 +354,12 @@ fun SimpleHomeScreen(
             TextButton(
                 modifier = Modifier.padding(bottom = 8.dp),
                 onClick = {
-                    val degradedTunnel = hasPendingSessionHealthDegradation()
-                    DataStore.simpleMode = false
                     simpleModeLog(
                         "SimpleMode",
                         "switch_to_full_mode_clicked state=${status.state.name} " +
                             "connectInFlight=${SimpleModeConnectCoordinator.isInFlight()} " +
-                            "healthDegraded=$degradedTunnel",
+                            "simpleOwned=${DataStore.simpleMode}",
                     )
-                    if (degradedTunnel && status.state == ServiceState.Connected) {
-                        mainViewModel.showSnackbar(
-                            StringOrRes.Res(Res.string.simple_mode_vpn_check_failed_reconnect),
-                        )
-                    }
                     onOpenFullMode()
                 },
             ) {

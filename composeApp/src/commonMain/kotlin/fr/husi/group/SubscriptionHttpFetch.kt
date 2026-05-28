@@ -1,5 +1,6 @@
 package fr.husi.group
 
+import fr.husi.bg.SubscriptionUpdateFetchOverrides
 import fr.husi.database.DataStore
 import fr.husi.ktx.Logs
 import fr.husi.libcore.Libcore
@@ -57,7 +58,11 @@ object SubscriptionHttpFetch {
         }
         val whitelistRestricted = request.whitelistRestricted
             ?: DataStore.activeWhitelistRestrictedNetwork
-        val vpnConnected = request.vpnConnected ?: DataStore.serviceState.connected
+        val vpnConnected = when {
+            SubscriptionUpdateFetchOverrides.bypassVpn -> false
+            request.vpnConnected != null -> request.vpnConnected
+            else -> DataStore.serviceState.connected
+        }
         val fetchLink = WhitelistSubscriptionFetch.resolveFetchLink(
             link = request.canonicalLink,
             whitelistRestricted = whitelistRestricted,

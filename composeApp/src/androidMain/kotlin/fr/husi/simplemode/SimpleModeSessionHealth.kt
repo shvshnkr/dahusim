@@ -68,11 +68,18 @@ internal object SimpleModeSessionHealth {
             logQuickCheckSkipped(reason, "not_connected")
             return
         }
-        val profileId = monitoredProfileId
-        val outboundTag = monitoredOutboundTag
+        var profileId = monitoredProfileId
+        var outboundTag = monitoredOutboundTag
         if (profileId <= 0L || outboundTag.isBlank()) {
-            logQuickCheckSkipped(reason, "no_monitored_session")
-            return
+            if (reason == "ui_attach" || reason == "ui_resume") {
+                ensureMonitoring(reason)
+                profileId = monitoredProfileId
+                outboundTag = monitoredOutboundTag
+            }
+            if (profileId <= 0L || outboundTag.isBlank()) {
+                logQuickCheckSkipped(reason, "no_monitored_session")
+                return
+            }
         }
         val now = System.currentTimeMillis()
         val minGap = if (reason == "ui_resume" || reason == "ui_attach") {
@@ -109,6 +116,20 @@ internal object SimpleModeSessionHealth {
         lastOnDemandAt = 0L
         lastHealthError = null
         lastHealthFailAt = 0L
+    }
+
+    private fun ensureMonitoring(reason: String) {
+        if (job?.isActive == true && monitoredProfileId > 0L && monitoredOutboundTag.isNotBlank()) {
+            return
+        }
+        val profileId = DataStore.selectedProxy
+        val outboundTag = ServiceRegistry.baseService?.data?.proxy?.config?.mainTag.orEmpty()
+        if (profileId <= 0L || outboundTag.isBlank()) return
+        simpleModeLog(
+            "SimpleMode",
+            "H34 session_health_reschedule reason=$reason profileId=$profileId",
+        )
+        schedule(profileId, outboundTag)
     }
 
     private fun logQuickCheckSkipped(reason: String, skip: String) {

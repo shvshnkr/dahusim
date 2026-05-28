@@ -2,6 +2,7 @@ package fr.husi.bg
 
 import android.net.Network
 import fr.husi.database.DataStore
+import fr.husi.simplemode.SimpleModeSessionHealth
 import fr.husi.libcore.InterfaceUpdateListener
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.utils.simpleModeDebugEvent
@@ -167,6 +168,11 @@ object DefaultNetworkMonitor {
                             (now - underlyingCarrierLostAtMs).coerceAtLeast(0L)
                         } else {
                             -1L
+                        }
+                        if (DataStore.simpleMode && DataStore.serviceState.connected && elapsedFromLossMs >= 10_000L) {
+                            SimpleModeSessionHealth.triggerQuickCheck(
+                                "net_available_after_loss gapMs=$elapsedFromLossMs",
+                            )
                         }
                         val interfaceRebound =
                             handoffReason == UnderlyingNetworkHandoffPolicy.REASON_LINK_REBOUND

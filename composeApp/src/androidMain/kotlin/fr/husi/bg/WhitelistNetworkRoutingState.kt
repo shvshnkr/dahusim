@@ -79,13 +79,22 @@ internal object WhitelistNetworkRoutingState {
             SimpleModeVpnCoordinator.scheduleAdaptation("network_handoff:$reasonSuffix")
             return
         }
+        val staleHandoff = handoffReason == UnderlyingNetworkHandoffPolicy.REASON_CARRIER_RESTORE &&
+            elapsedFromLossMs >= 5_000L
         ServiceRegistry.baseService?.data?.resetNetwork()
         runOnDefaultDispatcher {
             if (!DataStore.serviceState.connected) return@runOnDefaultDispatcher
             applyReachability(
                 NetworkReachabilityProbe.probe(),
-                requestReloadOnChange = true,
+                requestReloadOnChange = !staleHandoff,
             )
+            if (staleHandoff) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H27b handoff_stale_tunnel reason=$handoffReason lossMs=$elapsedFromLossMs",
+                )
+                requestReloadIfConnected("handoff_stale_tunnel")
+            }
         }
     }
 
