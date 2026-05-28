@@ -73,8 +73,10 @@ jobs:
         include:
           - api-level: 30
             profile: pixel_5
+            disable-animations: false
           - api-level: 35
             profile: pixel_7
+            disable-animations: true
     steps:
       - uses: actions/checkout@v6
         with:
@@ -110,7 +112,7 @@ jobs:
           arch: x86_64
           profile: ${{ matrix.profile }}
           emulator-boot-timeout: 900
-          disable-animations: true
+          disable-animations: ${{ matrix.disable-animations }}
           script: |
             ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=fr.husi --no-daemon
         env:
