@@ -309,7 +309,11 @@ object SubscriptionAutoUpdateRunner {
         val first = runSingleUpdateOnce(profile, bypassVpn = false)
         if (first.staleTransportFailure && DataStore.serviceState.connected) {
             val uplink = probeSimpleModeNetwork()
-            if (uplink.hasAnyInternet) {
+            if (SubscriptionAutoUpdateTransportPolicy.shouldRetryWithBypass(
+                    staleTransportFailure = first.staleTransportFailure,
+                    vpnConnected = DataStore.serviceState.connected,
+                    hasAnyInternet = uplink.hasAnyInternet,
+                )) {
                 simpleModeLog(
                     "SimpleMode",
                     "H19 subscription_fetch_bypass_tunnel group=${profile.displayName()} " +
@@ -342,7 +346,7 @@ object SubscriptionAutoUpdateRunner {
                         SingleUpdateSummary(
                             success = false,
                             staleTransportFailure = DataStore.serviceState.connected &&
-                                subscriptionMessageLooksLikeStaleTransport(r.message),
+                                SubscriptionAutoUpdateTransportPolicy.messageLooksLikeStaleTransport(r.message),
                             groupId = profile.id,
                             attempted = true,
                         )
@@ -361,7 +365,7 @@ object SubscriptionAutoUpdateRunner {
                 SingleUpdateSummary(
                     success = false,
                     staleTransportFailure = DataStore.serviceState.connected &&
-                        subscriptionMessageLooksLikeStaleTransport(e.readableMessage),
+                        SubscriptionAutoUpdateTransportPolicy.messageLooksLikeStaleTransport(e.readableMessage),
                     groupId = profile.id,
                     attempted = true,
                 )
@@ -380,7 +384,7 @@ internal fun classifySubscriptionUpdateError(message: String): String {
     ) {
         return SubscriptionUpdateErrorClass.HTTP_PERMANENT
     }
-    if (subscriptionMessageLooksLikeStaleTransport(message)) {
+    if (SubscriptionAutoUpdateTransportPolicy.messageLooksLikeStaleTransport(message)) {
         return SubscriptionUpdateErrorClass.TRANSPORT
     }
     if (m.contains("500") || m.contains("502") || m.contains("503") || m.contains("504") ||
@@ -389,20 +393,6 @@ internal fun classifySubscriptionUpdateError(message: String): String {
         return SubscriptionUpdateErrorClass.HTTP_TRANSIENT
     }
     return SubscriptionUpdateErrorClass.OTHER
-}
-
-private fun subscriptionMessageLooksLikeStaleTransport(message: String): Boolean {
-    val m = message.lowercase()
-    if (m.isBlank()) return false
-    return m.contains("eof") ||
-        m.contains("deadline exceeded") ||
-        m.contains("client.timeout exceeded") ||
-        m.contains("broken pipe") ||
-        m.contains("connection reset") ||
-        m.contains("i/o timeout") ||
-        m.contains("connection timed out") ||
-        m.contains("tls handshake timeout") ||
-        m.contains("unexpected eof")
 }
 
 private suspend fun autoUpdateCandidates(

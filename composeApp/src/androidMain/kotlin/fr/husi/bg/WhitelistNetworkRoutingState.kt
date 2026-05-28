@@ -79,14 +79,17 @@ internal object WhitelistNetworkRoutingState {
             SimpleModeVpnCoordinator.scheduleAdaptation("network_handoff:$reasonSuffix")
             return
         }
-        val staleHandoff = handoffReason == UnderlyingNetworkHandoffPolicy.REASON_CARRIER_RESTORE &&
-            elapsedFromLossMs >= 5_000L
+        val staleHandoff = WhitelistNetworkHandoffPolicy.isStaleHandoffTunnelReload(
+            handoffReason,
+            elapsedFromLossMs,
+        )
         ServiceRegistry.baseService?.data?.resetNetwork()
         runOnDefaultDispatcher {
             if (!DataStore.serviceState.connected) return@runOnDefaultDispatcher
             applyReachability(
                 NetworkReachabilityProbe.probe(),
-                requestReloadOnChange = !staleHandoff,
+                requestReloadOnChange = WhitelistNetworkHandoffPolicy
+                    .shouldRequestReloadOnReachabilityFlip(staleHandoff),
             )
             if (staleHandoff) {
                 simpleModeLog(
@@ -101,7 +104,12 @@ internal object WhitelistNetworkRoutingState {
     fun requestReloadIfConnected(reason: String) {
         if (!DataStore.serviceState.connected) return
         val now = System.currentTimeMillis()
-        if (reason == "exit_country_ru_routing" && now < suppressExitRuRoutingReloadUntil) {
+        if (WhitelistNetworkHandoffPolicy.shouldSuppressExitRuRoutingReload(
+                reason,
+                now,
+                suppressExitRuRoutingReloadUntil,
+            )
+        ) {
             simpleModeLog(
                 "SimpleMode",
                 "H26 wl_network_reload_skipped reason=$reason healthySuppressMs=${suppressExitRuRoutingReloadUntil - now}",

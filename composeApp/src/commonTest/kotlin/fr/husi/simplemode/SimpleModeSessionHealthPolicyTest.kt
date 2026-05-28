@@ -2,6 +2,7 @@ package fr.husi.simplemode
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SimpleModeSessionHealthPolicyTest {
@@ -33,6 +34,25 @@ class SimpleModeSessionHealthPolicyTest {
         assertEquals(
             SimpleModeSessionHealthPolicy.CHECK_INTERVAL_MS,
             SimpleModeSessionHealthPolicy.nextCheckDelayMs(1, true),
+        )
+    }
+
+    @Test
+    fun uiAttachReschedulesWhenSessionMissing() {
+        assertTrue(SimpleModeSessionHealthPolicy.shouldRescheduleMonitoringWhenSessionMissing("ui_attach"))
+        assertTrue(SimpleModeSessionHealthPolicy.shouldRescheduleMonitoringWhenSessionMissing("ui_resume"))
+        assertFalse(SimpleModeSessionHealthPolicy.shouldRescheduleMonitoringWhenSessionMissing("lte_handoff"))
+    }
+
+    @Test
+    fun onDemandUiUsesShorterDebounce() {
+        assertEquals(
+            SimpleModeSessionHealthPolicy.ON_DEMAND_UI_MIN_GAP_MS,
+            SimpleModeSessionHealthPolicy.onDemandMinGapMs("ui_attach"),
+        )
+        assertEquals(
+            SimpleModeSessionHealthPolicy.ON_DEMAND_MIN_GAP_MS,
+            SimpleModeSessionHealthPolicy.onDemandMinGapMs("network_handoff"),
         )
     }
 }

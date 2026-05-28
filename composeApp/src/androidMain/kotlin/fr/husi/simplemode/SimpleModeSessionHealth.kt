@@ -23,10 +23,6 @@ import kotlinx.coroutines.sync.withLock
  */
 internal object SimpleModeSessionHealth {
 
-    private const val ON_DEMAND_MIN_GAP_MS = 15_000L
-    private const val ON_DEMAND_UI_MIN_GAP_MS = 8_000L
-    private const val RECENT_FAIL_WINDOW_MS = 120_000L
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val checkLock = Mutex()
     private var job: Job? = null
@@ -71,7 +67,7 @@ internal object SimpleModeSessionHealth {
         var profileId = monitoredProfileId
         var outboundTag = monitoredOutboundTag
         if (profileId <= 0L || outboundTag.isBlank()) {
-            if (reason == "ui_attach" || reason == "ui_resume") {
+            if (SimpleModeSessionHealthPolicy.shouldRescheduleMonitoringWhenSessionMissing(reason)) {
                 ensureMonitoring(reason)
                 profileId = monitoredProfileId
                 outboundTag = monitoredOutboundTag
@@ -82,11 +78,7 @@ internal object SimpleModeSessionHealth {
             }
         }
         val now = System.currentTimeMillis()
-        val minGap = if (reason == "ui_resume" || reason == "ui_attach") {
-            ON_DEMAND_UI_MIN_GAP_MS
-        } else {
-            ON_DEMAND_MIN_GAP_MS
-        }
+        val minGap = SimpleModeSessionHealthPolicy.onDemandMinGapMs(reason)
         if (now - lastOnDemandAt < minGap) {
             logQuickCheckSkipped(reason, "debounce gapMs=${now - lastOnDemandAt}")
             return
@@ -104,7 +96,8 @@ internal object SimpleModeSessionHealth {
     fun hasPendingDegradation(): Boolean {
         if (consecutiveFails > 0) return true
         val failAt = lastHealthFailAt
-        return failAt > 0L && System.currentTimeMillis() - failAt < RECENT_FAIL_WINDOW_MS
+        return failAt > 0L &&
+            System.currentTimeMillis() - failAt < SimpleModeSessionHealthPolicy.RECENT_FAIL_WINDOW_MS
     }
 
     fun cancel() {

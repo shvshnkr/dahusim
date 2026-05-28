@@ -32,7 +32,9 @@ object WarmReserveMaintainer {
     private var lastReplenishAt: Long = 0L
 
     fun schedule(connectedProfileId: Long) {
-        if (!WarmReservePool.isFeatureEnabled() || connectedProfileId <= 0L) return
+        if (!WarmReserveMaintainerPolicy.canSchedule(WarmReservePool.isFeatureEnabled(), connectedProfileId)) {
+            return
+        }
         cancel()
         monitoredProfileId = connectedProfileId
         simpleModeLog(
@@ -63,7 +65,9 @@ object WarmReserveMaintainer {
     }
 
     suspend fun runOnceReplenishIfDue(connectedProfileId: Long): Boolean {
-        if (!WarmReservePool.isFeatureEnabled() || connectedProfileId <= 0L) return false
+        if (!WarmReserveMaintainerPolicy.canSchedule(WarmReservePool.isFeatureEnabled(), connectedProfileId)) {
+            return false
+        }
         return withTimeoutOrNull(Probe2kDefaults.WARM_RESERVE_PRE_FALLBACK_BUDGET_MS) {
             cycleLock.withLock {
                 runCycle(connectedProfileId, reason = "pre_fallback")
@@ -111,7 +115,7 @@ object WarmReserveMaintainer {
         deficit = WarmReservePool.deficit(reserveIds, probeStates)
         if (deficit > 0) {
             val now = System.currentTimeMillis()
-            if (reason != "pre_fallback" && now - lastReplenishAt < Probe2kDefaults.WARM_RESERVE_REPLENISH_DEBOUNCE_MS) {
+            if (WarmReserveMaintainerPolicy.shouldSkipReplenish(reason, now, lastReplenishAt)) {
                 simpleModeLog(
                     "SimpleMode",
                     "H37 warm_reserve_replenish_skip reason=debounce deficit=$deficit",
