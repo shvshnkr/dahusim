@@ -13,6 +13,7 @@ internal object AutoServerSelectorSessionFallback {
         val skippedJail: Int,
         val skippedDead: Int,
         val skippedCooldown: Int,
+        val skippedNotFresh: Int = 0,
     )
 
     fun parseQueue(raw: String): List<Long> =
@@ -39,11 +40,14 @@ internal object AutoServerSelectorSessionFallback {
         startIndex: Int,
         probeStates: Map<Long, ProxyProbeState>,
         inRecentFailureCooldown: (Long) -> Boolean,
+        requireFreshUrlVerified: Boolean = false,
+        nowMs: Long = System.currentTimeMillis(),
     ): FallbackWalkResult? {
         if (queue.isEmpty() || startIndex >= queue.size) return null
         var skippedJail = 0
         var skippedDead = 0
         var skippedCooldown = 0
+        var skippedNotFresh = 0
         var nextIndex = startIndex
         while (nextIndex < queue.size) {
             val candidate = queue[nextIndex]
@@ -61,6 +65,11 @@ internal object AutoServerSelectorSessionFallback {
                     skippedCooldown++
                     nextIndex++
                 }
+                requireFreshUrlVerified &&
+                    !ProxyProbeStateStore.isFreshUrlVerified(state, nowMs) -> {
+                    skippedNotFresh++
+                    nextIndex++
+                }
                 else -> {
                     return FallbackWalkResult(
                         nextId = candidate,
@@ -68,6 +77,7 @@ internal object AutoServerSelectorSessionFallback {
                         skippedJail = skippedJail,
                         skippedDead = skippedDead,
                         skippedCooldown = skippedCooldown,
+                        skippedNotFresh = skippedNotFresh,
                     )
                 }
             }

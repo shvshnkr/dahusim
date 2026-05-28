@@ -972,12 +972,25 @@ object AutoServerSelector {
 
         val currentIndex = queue.indexOf(currentId).takeIf { it >= 0 } ?: DataStore.autoSelectFallbackIndex
         val startIndex = currentIndex + 1
+        val strictFreshFallback = WarmReservePool.isFeatureEnabled()
+        val nowMs = System.currentTimeMillis()
         val walk = AutoServerSelectorSessionFallback.findNextFallbackCandidate(
             queue = queue,
             startIndex = startIndex,
             probeStates = probeStates,
             inRecentFailureCooldown = ::isInFailureCooldown,
+            requireFreshUrlVerified = strictFreshFallback,
+            nowMs = nowMs,
         )
+        if (walk == null && strictFreshFallback) {
+            val queueFresh = WarmReservePool.countFreshUrlAlive(queue, probeStates, nowMs)
+            if (queueFresh <= 1) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H37 warm_reserve_single_alive_no_fallback currentId=$currentId queueFresh=$queueFresh",
+                )
+            }
+        }
         if (walk == null) {
             // #region agent log
             simpleModeDebugEvent(
@@ -1024,7 +1037,8 @@ object AutoServerSelector {
             "SimpleMode",
             "H1 fallback_moved currentId=$currentId nextId=${walk.nextId} nextIndex=${walk.nextIndex} " +
                 "size=${queue.size} sessionStep=${sessionFallbackSteps.get()} " +
-                "skip=jail:${walk.skippedJail} dead:${walk.skippedDead} cooldown:${walk.skippedCooldown}",
+                "skip=jail:${walk.skippedJail} dead:${walk.skippedDead} cooldown:${walk.skippedCooldown} " +
+                "notFresh:${walk.skippedNotFresh}",
         )
         return walk.nextId
     }

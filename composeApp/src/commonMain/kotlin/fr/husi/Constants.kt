@@ -162,6 +162,8 @@ object Key {
     const val PROBE_2K_POOL_DEAD = "probe2kPoolDead"
     const val PROBE_2K_POOL_CEMETERY = "probe2kPoolCemetery"
     const val PROBE_2K_POOL_UNKNOWN = "probe2kPoolUnknown"
+    const val PROBE_2K_WARM_RESERVE_COUNT = "probe2kWarmReserveCount"
+    const val PROBE_2K_WARM_RESERVE_STATUS = "probe2kWarmReserveStatus"
     const val SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT = "simpleModeLastBackgroundSubRefreshAt"
     const val SIMPLE_MODE_WL_SKIP_TUNNEL_HEALTH_CHECK = "simpleModeWlSkipTunnelHealthCheck"
     const val SIMPLE_MODE_TELEGRAM_PROBE = "simpleModeTelegramProbe"

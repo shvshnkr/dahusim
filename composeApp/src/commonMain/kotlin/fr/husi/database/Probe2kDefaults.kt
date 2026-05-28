@@ -23,6 +23,10 @@ object Probe2kDefaults {
     const val DEAD_BACKOFF_MS = 5L * 60L * 1000L
     const val CEMETERY_BACKOFF_MS = 2L * 60L * 60L * 1000L
     const val BACKGROUND_MIN_INTERVAL_MS = 5L * 60L * 1000L
+    const val WARM_RESERVE_COUNT_DEFAULT = 2
+    const val WARM_RESERVE_CYCLE_MS = 90L * 1000L
+    const val WARM_RESERVE_REPLENISH_DEBOUNCE_MS = 45L * 1000L
+    const val WARM_RESERVE_PRE_FALLBACK_BUDGET_MS = 8_000L
     const val BUILTIN_FALLBACK_MAX_FRACTION = 0.28
     const val EWMA_ALPHA = 0.35
 

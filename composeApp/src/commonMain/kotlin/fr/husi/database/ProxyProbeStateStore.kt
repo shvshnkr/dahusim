@@ -138,6 +138,13 @@ object ProxyProbeStateStore {
         return tcpFresh || urlFresh
     }
 
+    /** URL-verified within freshness window; used for session fallback and warm reserve. */
+    fun isFreshUrlVerified(state: ProxyProbeState?, nowMs: Long = System.currentTimeMillis()): Boolean {
+        if (state == null) return false
+        if (state.state == ProbeState.DEAD || state.state == ProbeState.CEMETERY) return false
+        return state.lastUrlMs > 0 && nowMs - state.lastOkAt <= Probe2kDefaults.ALIVE_URL_FRESH_MS
+    }
+
     fun probeStateRank(state: ProxyProbeState?): Int = when (state?.state) {
         ProbeState.ALIVE -> 0
         ProbeState.CANDIDATE -> 1

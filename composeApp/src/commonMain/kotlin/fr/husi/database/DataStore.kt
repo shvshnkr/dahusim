@@ -322,6 +322,10 @@ object DataStore {
     var probe2kPoolDead by configurationStore.int(Key.PROBE_2K_POOL_DEAD) { 0 }
     var probe2kPoolCemetery by configurationStore.int(Key.PROBE_2K_POOL_CEMETERY) { 0 }
     var probe2kPoolUnknown by configurationStore.int(Key.PROBE_2K_POOL_UNKNOWN) { 0 }
+    var probe2kWarmReserveCount by configurationStore.int(Key.PROBE_2K_WARM_RESERVE_COUNT) {
+        Probe2kDefaults.WARM_RESERVE_COUNT_DEFAULT
+    }
+    var probe2kWarmReserveStatus by configurationStore.string(Key.PROBE_2K_WARM_RESERVE_STATUS) { "" }
     var simpleModeLastBackgroundSubRefreshAt by configurationStore.long(Key.SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT) { 0L }
     /** On WL uplink: skip live-tunnel urlTest (debug only; default keeps BS tunnel health). */
     var simpleModeWlSkipTunnelHealthCheck by configurationStore.boolean(Key.SIMPLE_MODE_WL_SKIP_TUNNEL_HEALTH_CHECK) { false }

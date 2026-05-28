@@ -823,8 +823,6 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_activity_server_degraded">Сервер ухудшился, переключение…</string>
     <string name="simple_mode_activity_server_unreachable">Сервер недоступен, следующий…</string>
     <string name="simple_mode_activity_connection_error">Ошибка соединения, следующий…</string>
-    <string name="simple_mode_unclean_stop_battery_restricted">Соединение оборвалось в фоне — вы VPN не отключали. Частая причина — оптимизация батареи: нажмите кнопку ниже, чтобы разрешить работу без ограничений, или «Подключить».</string>
-    <string name="simple_mode_unclean_stop_battery_already_off">Соединение оборвалось в фоне. Для приложения оптимизация батареи уже отключена. Возможные причины: закрытие из «Недавних», режим экономии, ограничение фона в настройках производителя или остановка системой. Нажмите «Подключить», чтобы снова включить VPN.</string>
     <string name="simple_mode_activity_trying_next">Пробуем следующий сервер…</string>
     <string name="simple_mode_activity_ranking">Ранжирование %1$d серверов…</string>
     <string name="simple_mode_activity_testing_tcp">Проверка TCP %1$d/%2$d</string>
@@ -867,4 +865,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="probe_2k_last_reason">Последний выбор: %1$s</string>
     <string name="probe_2k_activity_scan">Сканирование серверов %1$d/%2$d…</string>
     <string name="probe_2k_pool_line">Пул: %1$d живых · %2$d кандидатов · %3$d jail · %4$d неизвестно</string>
+    <string name="probe_2k_warm_reserve_count">Тёплый резерв для переключения</string>
+    <string name="probe_2k_warm_reserve_summary">Экспериментально: URL-проверка запасных серверов при включённом VPN (1–4). Больше число — больше нагрузка на батарею.</string>
+    <string name="probe_2k_warm_reserve_status">Резерв: %1$s</string>
 </resources>

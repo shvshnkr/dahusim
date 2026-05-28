@@ -224,6 +224,7 @@ internal object SimpleModeSessionHealth {
             )) {
             return
         }
+        WarmReserveMaintainer.runOnceReplenishIfDue(profileId)
         val next = AutoServerSelector.tryMoveToFallback(profileId)
         if (next != null) {
             simpleModeLog(

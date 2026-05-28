@@ -31,6 +31,9 @@ import fr.husi.resources.probe_2k_power_normal
 import fr.husi.resources.probe_2k_power_preset
 import fr.husi.resources.probe_2k_run_background_now
 import fr.husi.resources.probe_2k_settings
+import fr.husi.resources.probe_2k_warm_reserve_count
+import fr.husi.resources.probe_2k_warm_reserve_status
+import fr.husi.resources.probe_2k_warm_reserve_summary
 import fr.husi.resources.probe_2k_warm_ranking_enabled
 import fr.husi.resources.probe_2k_warm_ranking_summary
 import fr.husi.resources.security
@@ -56,6 +59,42 @@ internal fun LazyListScope.probe2kSettings(
             title = { Text(stringResource(Res.string.probe_2k_persistence_enabled)) },
             summary = { Text(stringResource(Res.string.probe_2k_persistence_summary)) },
             icon = { Icon(vectorResource(Res.drawable.security), null) },
+        )
+    }
+    item(Key.PROBE_2K_WARM_RESERVE_COUNT, PreferenceType.TEXT_FIELD) {
+        val count by DataStore.configurationStore
+            .intFlow(Key.PROBE_2K_WARM_RESERVE_COUNT, Probe2kDefaults.WARM_RESERVE_COUNT_DEFAULT)
+            .collectAsStateWithLifecycle(Probe2kDefaults.WARM_RESERVE_COUNT_DEFAULT)
+        val status by DataStore.configurationStore
+            .stringFlow(Key.PROBE_2K_WARM_RESERVE_STATUS, "")
+            .collectAsStateWithLifecycle("")
+        Preference(
+            title = { Text(stringResource(Res.string.probe_2k_warm_reserve_count)) },
+            summary = {
+                Text(
+                    buildString {
+                        append("$count · ")
+                        append(stringResource(Res.string.probe_2k_warm_reserve_summary))
+                        append("\n")
+                        append(
+                            stringResource(
+                                Res.string.probe_2k_warm_reserve_status,
+                                status.ifBlank { "—" },
+                            ),
+                        )
+                    },
+                )
+            },
+            icon = { Icon(vectorResource(Res.drawable.security), null) },
+            onClick = {
+                val next = when (count) {
+                    1 -> 2
+                    2 -> 3
+                    3 -> 4
+                    else -> 1
+                }
+                DataStore.probe2kWarmReserveCount = next
+            },
         )
     }
     item(Key.PROBE_2K_WARM_RANKING_ENABLED, PreferenceType.SWITCH) {

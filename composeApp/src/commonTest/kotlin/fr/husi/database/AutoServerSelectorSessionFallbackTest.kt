@@ -45,6 +45,37 @@ class AutoServerSelectorSessionFallbackTest {
     }
 
     @Test
+    fun findNextSkipsNotFreshUrlWhenRequired() {
+        val queue = listOf(1L, 2L, 3L)
+        val now = 50_000L
+        val states = mapOf(
+            2L to ProxyProbeState(
+                profileId = 2L,
+                state = ProbeState.CANDIDATE,
+                lastTcpMs = 100,
+                lastCheckedAt = now,
+            ),
+            3L to ProxyProbeState(
+                profileId = 3L,
+                state = ProbeState.ALIVE,
+                lastUrlMs = 80,
+                lastOkAt = now,
+            ),
+        )
+        val walk = AutoServerSelectorSessionFallback.findNextFallbackCandidate(
+            queue = queue,
+            startIndex = 1,
+            probeStates = states,
+            inRecentFailureCooldown = { false },
+            requireFreshUrlVerified = true,
+            nowMs = now,
+        )
+        requireNotNull(walk)
+        assertEquals(3L, walk.nextId)
+        assertEquals(1, walk.skippedNotFresh)
+    }
+
+    @Test
     fun findNextReturnsNullWhenOnlyDeadRemain() {
         val queue = listOf(1L, 2L)
         val states = mapOf(

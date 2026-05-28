@@ -98,6 +98,9 @@
     <string name="probe_2k_last_reason">Last selection: %1$s</string>
     <string name="probe_2k_activity_scan">Scanning servers %1$d/%2$d…</string>
     <string name="probe_2k_pool_line">Pool: %1$d alive · %2$d candidate · %3$d jail · %4$d unknown</string>
+    <string name="probe_2k_warm_reserve_count">Warm fallback reserve</string>
+    <string name="probe_2k_warm_reserve_summary">Experimental: URL-checks backup servers while VPN is on (1–4). More checks use more battery.</string>
+    <string name="probe_2k_warm_reserve_status">Reserve status: %1$s</string>
     <!-- themes -->
     <string name="theme">Theme</string>
     <string name="themes_amber">Pine Tears</string>
@@ -917,8 +920,6 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_activity_connection_unstable">Connection unstable, rechecking…</string>
     <string name="simple_mode_activity_server_unstable">Server unstable, switching…</string>
     <string name="simple_mode_vpn_check_failed_reconnect">VPN is connected but the health check failed — tap Disconnect, then Connect again.</string>
-    <string name="simple_mode_unclean_stop_battery_restricted">The connection dropped in the background — you did not disconnect manually. Battery optimization is a common cause: use the button below to allow unrestricted background use, or tap Connect.</string>
-    <string name="simple_mode_unclean_stop_battery_already_off">The connection dropped in the background. Battery optimization is already disabled for this app. It may have been closed from Recents, power-saving mode, vendor background limits, or stopped by the system. Tap Connect to turn the VPN back on.</string>
     <string name="simple_mode_activity_server_degraded">Server degraded, switching…</string>
     <string name="simple_mode_activity_server_unreachable">Server unreachable, trying next…</string>
     <string name="simple_mode_activity_connection_error">Connection error, trying next…</string>
