@@ -70,7 +70,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api-level: [30, 35]
+        include:
+          - api-level: 30
+            profile: Nexus 6
+          - api-level: 35
+            profile: pixel_7
     steps:
       - uses: actions/checkout@v6
         with:
@@ -104,11 +108,11 @@ jobs:
           api-level: ${{ matrix.api-level }}
           target: google_apis
           arch: x86_64
-          profile: pixel_7
+          profile: ${{ matrix.profile }}
           emulator-boot-timeout: 900
           disable-animations: false
           script: |
-            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest --tests "fr.husi.InstrumentedSmokeTest" --tests "fr.husi.DeviceLifecycleInstrumentedTest" --tests "fr.husi.AppRecoveryInstrumentedTest" --no-daemon
+            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=fr.husi --no-daemon
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
