@@ -85,6 +85,11 @@ public final class InstrumentedTestSupport {
         executeShellCommand("am force-stop " + targetPackage());
     }
 
+    public static void killTargetApp() throws IOException {
+        device().waitForIdle(5_000);
+        executeShellCommand("am kill " + targetPackage());
+    }
+
     public static void launchExternalAppForSwitch() {
         Context context = targetContext();
         Intent settingsIntent = new Intent(android.provider.Settings.ACTION_SETTINGS);
