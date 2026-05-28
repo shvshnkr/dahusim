@@ -106,9 +106,9 @@ jobs:
           arch: x86_64
           profile: pixel_7
           emulator-boot-timeout: 900
-          disable-animations: true
+          disable-animations: false
           script: |
-            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest --tests "fr.husi.DeviceLifecycleInstrumentedTest" --tests "fr.husi.AppRecoveryInstrumentedTest" --no-daemon
+            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest --tests "fr.husi.InstrumentedSmokeTest" --tests "fr.husi.DeviceLifecycleInstrumentedTest" --tests "fr.husi.AppRecoveryInstrumentedTest" --no-daemon
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
