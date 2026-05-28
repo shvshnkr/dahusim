@@ -133,7 +133,7 @@ class SingBoxOptionsUtilKtTest {
     }
 
     @Test
-    fun `buildRuleSets should create RouteOptions and build local rule sets if route is null and rules exist`() {
+    fun `buildRuleSets should create RouteOptions and fall back to remote rule sets when local files are missing`() {
         options.route = null
         options.dns = MyDNSOptions().apply {
             rules = mutableListOf(
@@ -152,15 +152,21 @@ class SingBoxOptionsUtilKtTest {
         val ruleSets = options.requireRuleSets()
         ruleSets.assertTags(expectedTags)
 
-        val geositeFacebookRule = ruleSets.requireLocal("geosite-facebook")
-        assertEquals(RULE_SET_TYPE_LOCAL, geositeFacebookRule.type)
+        val geositeFacebookRule = ruleSets.requireRemote("geosite-facebook")
+        assertEquals(RULE_SET_TYPE_REMOTE, geositeFacebookRule.type)
         assertEquals(RULE_SET_FORMAT_BINARY, geositeFacebookRule.format)
-        assertEquals("$localPath/geosite-facebook.srs", geositeFacebookRule.path)
+        assertEquals(
+            "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-facebook.srs",
+            geositeFacebookRule.url
+        )
 
-        val geoipUsRule = ruleSets.requireLocal("geoip-us")
-        assertEquals(RULE_SET_TYPE_LOCAL, geoipUsRule.type)
+        val geoipUsRule = ruleSets.requireRemote("geoip-us")
+        assertEquals(RULE_SET_TYPE_REMOTE, geoipUsRule.type)
         assertEquals(RULE_SET_FORMAT_BINARY, geoipUsRule.format)
-        assertEquals("$localPath/geoip-us.srs", geoipUsRule.path)
+        assertEquals(
+            "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-us.srs",
+            geoipUsRule.url
+        )
     }
 
     @Test
@@ -399,7 +405,7 @@ class SingBoxOptionsUtilKtTest {
     }
 
     @Test
-    fun `buildRuleSets should append file name to local path as provided`() {
+    fun `buildRuleSets should fall back to default remote geosite when local file is missing`() {
         options.route = null
         options.dns = MyDNSOptions().apply {
             rules = mutableListOf(
@@ -413,8 +419,11 @@ class SingBoxOptionsUtilKtTest {
             localPath = """C:\Users\demo\.config\husi\external\geo""",
         )
 
-        val ruleSet = options.requireRuleSets().requireLocal("geosite-facebook")
+        val ruleSet = options.requireRuleSets().requireRemote("geosite-facebook")
         assertEquals(RULE_SET_FORMAT_BINARY, ruleSet.format)
-        assertEquals("""C:\Users\demo\.config\husi\external\geo/geosite-facebook.srs""", ruleSet.path)
+        assertEquals(
+            "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-facebook.srs",
+            ruleSet.url
+        )
     }
 }
