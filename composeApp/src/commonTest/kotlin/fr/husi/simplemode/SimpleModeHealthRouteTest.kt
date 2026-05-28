@@ -168,6 +168,34 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun openPostConnectEscalatesToConfirmAfterPrimaryFailure() {
+        assertTrue(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "post_connect",
+                    whitelistOnly = false,
+                    primaryProbeFailed = true,
+                    lastProbeError = "Head \"https://web.telegram.org\": EOF",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun openSessionPeriodicStillDoesNotEscalateToConfirm() {
+        assertFalse(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "session_periodic",
+                    whitelistOnly = false,
+                    primaryProbeFailed = true,
+                    lastProbeError = "Head \"https://web.telegram.org\": EOF",
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun tunnelHealthOnWlByDefault() {
         assertFalse(SimpleModeHealthRoute.skipTunnelHealthCheck(whitelistOnly = true, wlSkipTunnelHealthCheck = false))
     }

@@ -71,6 +71,16 @@ class RuleSetBootstrapScenarioTest {
     }
 
     @Test
+    fun isRuleSetBootstrapFailureDetectsParseMissingLocalSrsMessage() {
+        val error = IllegalStateException(
+            "create service: initialize router: parse rule-set[1]: open " +
+                "/storage/emulated/0/Android/data/fr.husi/files/geo/geoip-ru-blocked.srs: " +
+                "no such file or directory",
+        )
+        assertTrue(isRuleSetBootstrapFailure(error))
+    }
+
+    @Test
     fun fakeBuildLoadSequenceMatchesProductionShape() = runBlocking {
         var loaded = false
         connectWithRuleSetBootstrap(

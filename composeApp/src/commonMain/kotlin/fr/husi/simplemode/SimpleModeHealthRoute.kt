@@ -86,7 +86,10 @@ internal object SimpleModeHealthRoute {
         probeUrlPlan(phase = "prepare", whitelistOnly = whitelistOnly, tier = ProbeTier.PRIMARY)
 
     fun shouldEscalateToConfirm(ctx: ProbeEscalationContext): Boolean {
-        if (!ctx.whitelistOnly && ctx.phase != "prepare") return false
+        if (!ctx.whitelistOnly && ctx.phase != "prepare" && ctx.phase != "post_connect") return false
+        if (!ctx.whitelistOnly && ctx.phase == "post_connect" && ctx.primaryProbeFailed) {
+            return true
+        }
         if (ctx.phase == "prepare") {
             if (ctx.urlOk == 0 && ctx.tcpAlive > 0) return true
             if (ctx.topDelays.size >= 2) {

@@ -2,8 +2,12 @@ package fr.husi.bg
 
 import fr.husi.ktx.readableMessage
 
-fun isRuleSetBootstrapFailure(error: Throwable): Boolean =
-    error.readableMessage.contains("initialize rule-set", ignoreCase = true)
+fun isRuleSetBootstrapFailure(error: Throwable): Boolean {
+    val message = error.readableMessage
+    if (message.contains("initialize rule-set", ignoreCase = true)) return true
+    if (message.contains("parse rule-set", ignoreCase = true)) return true
+    return message.contains(".srs: no such file or directory", ignoreCase = true)
+}
 
 data class RuleSetBootstrapCallbacks(
     val hasLocalRuleSetFiles: () -> Boolean,

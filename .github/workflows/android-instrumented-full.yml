@@ -108,10 +108,7 @@ jobs:
           emulator-boot-timeout: 900
           disable-animations: true
           script: |
-            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest \
-              --tests "fr.husi.DeviceLifecycleInstrumentedTest" \
-              --tests "fr.husi.AppRecoveryInstrumentedTest" \
-              --no-daemon
+            ./gradlew :composeApp:exportLibraryDefinitions :androidApp:connectedPlayDebugAndroidTest --tests "fr.husi.DeviceLifecycleInstrumentedTest" --tests "fr.husi.AppRecoveryInstrumentedTest" --no-daemon
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
