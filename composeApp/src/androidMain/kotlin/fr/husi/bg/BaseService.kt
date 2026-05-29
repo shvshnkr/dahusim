@@ -395,7 +395,6 @@ class BaseService {
                     SimpleModeVpnCoordinator.cancelAdaptation()
                     WhitelistNetworkRoutingState.reset()
                     DataStore.simpleModeActivity = ""
-                    SimpleModeVpnSessionMarker.markGracefulStop("service_stopped")
                     if (!finalMessage.isNullOrBlank()) {
                         data.binder.notifyAlert(AlertType.COMMON, finalMessage)
                     }
@@ -779,6 +778,7 @@ class BaseService {
                             DataStore.simpleModeActivity = ""
                             if (DataStore.simpleMode) {
                                 BackendState.emitAlert(AlertType.SIMPLE_MODE_ALL_SERVERS_DEAD, "")
+                                SimpleModeVpnSessionMarker.markGracefulStop("all_servers_dead")
                             }
                             stopRunner(false)
                         }
@@ -871,6 +871,7 @@ class BaseService {
                         )
                         if (DataStore.simpleMode) {
                             BackendState.emitAlert(AlertType.SIMPLE_MODE_ALL_SERVERS_DEAD, "")
+                            SimpleModeVpnSessionMarker.markGracefulStop("unknown_host_exhausted")
                             stopRunner(false)
                         } else {
                             stopRunner(
@@ -945,6 +946,7 @@ class BaseService {
                         )
                         if (DataStore.simpleMode) {
                             BackendState.emitAlert(AlertType.SIMPLE_MODE_ALL_SERVERS_DEAD, "")
+                            SimpleModeVpnSessionMarker.markGracefulStop("connect_exhausted")
                             stopRunner(false)
                         } else {
                             stopRunner(

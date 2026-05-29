@@ -24,7 +24,7 @@ internal object WarmReserveLiveProbe {
     ): Map<Long, Int?> {
         val uniqueIds = profileIds.distinct().filter { it > 0L }
         if (uniqueIds.isEmpty()) return emptyMap()
-        val results = ConcurrentHashMap<Long, Int?>()
+        val results = ConcurrentHashMap<Long, Int>()
         val total = uniqueIds.size
         val doneCounter = AtomicInteger(0)
         val semaphore = Semaphore(Probe2kDefaults.WARM_SWITCH_LIVE_PARALLELISM)
@@ -43,10 +43,10 @@ internal object WarmReserveLiveProbe {
                             }
                             if (ms != null) {
                                 ProxyProbeStateStore.recordUrlSuccess(id, ms)
+                                results[id] = ms
                             } else if (proxy != null) {
                                 ProxyProbeStateStore.recordFailure(id, errorClass = "warm_live_probe_fail")
                             }
-                            results[id] = ms
                         }
                         onProgress(doneCounter.incrementAndGet(), total, id, results[id])
                     }

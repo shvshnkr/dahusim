@@ -103,10 +103,12 @@ fun SimpleHomeScreen(
             ServiceState.Stopped,
             ServiceState.Idle,
             -> {
-                showUncleanStopNotice = PlatformInfo.isAndroid &&
-                    SimpleModeVpnSessionMarker.evaluateUncleanStop(
-                        batteryRestrictedForLog = shouldRequestBatteryForLog,
-                    )
+                if (!showUncleanStopNotice) {
+                    showUncleanStopNotice = PlatformInfo.isAndroid &&
+                        SimpleModeVpnSessionMarker.evaluateUncleanStop(
+                            batteryRestrictedForLog = shouldRequestBatteryForLog,
+                        )
+                }
             }
             else -> showUncleanStopNotice = false
         }

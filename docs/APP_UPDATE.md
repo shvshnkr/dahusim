@@ -38,6 +38,7 @@ From repo root (Git Bash on Windows: `bash buildScript/ci/gh-workflow.sh …` or
 | `gh-workflow.sh changelog draft` / `draft-en` | Git range since last promote (RU / EN subjects) |
 | `gh-workflow.sh changelog refresh` | Insert git draft under `[Unreleased]` |
 | `gh-workflow.sh changelog seal [--run-id]` | Move `[Unreleased]` → **История promote** (local commit) |
+| `gh-workflow.sh prune-prereleases [--dry-run] [--keep-run-id ID]` | Удалить лишние CI pre-release (трио android/linux/windows), оставить один `run_id` |
 
 Requires `gh` auth to `github` remote (`shvshnkr/dahusim`).
 

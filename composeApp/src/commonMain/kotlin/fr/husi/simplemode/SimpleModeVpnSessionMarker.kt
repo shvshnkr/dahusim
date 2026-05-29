@@ -58,7 +58,8 @@ object SimpleModeVpnSessionMarker {
             UncleanStopEvaluation.ShowNotice -> {
                 simpleModeLog(
                     "SimpleMode",
-                    "H41 unclean_stop_detected batteryRestricted=$batteryRestrictedForLog",
+                    "H41 unclean_stop_detected batteryRestricted=$batteryRestrictedForLog " +
+                        "lastHeartbeatMs=$lastHeartbeatMs ageMs=${nowMs - lastHeartbeatMs}",
                 )
                 true
             }

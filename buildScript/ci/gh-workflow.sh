@@ -47,13 +47,20 @@ Commands:
   changelog refresh
   changelog verify
   changelog seal [--run-id ID]
+  prune-prereleases [--keep-run-id ID] [--dry-run] [--limit N]
 
 Examples:
   gh-workflow.sh build --wait
   gh-workflow.sh changelog verify
   gh-workflow.sh promote --from-changelog --dry-run
   gh-workflow.sh promote --run-id 26577000000
+  gh-workflow.sh prune-prereleases
+  gh-workflow.sh prune-prereleases --keep-run-id 26617034812 --dry-run
 EOF
+}
+
+cmd_prune_prereleases() {
+  exec "$SCRIPT_DIR/prune-prereleases.sh" "$@"
 }
 
 cmd_build() {
@@ -171,6 +178,7 @@ main() {
     build) cmd_build "$@" ;;
     status) cmd_status "$@" ;;
     promote) cmd_promote "$@" ;;
+    prune-prereleases) cmd_prune_prereleases "$@" ;;
     changelog)
       local sub="${1:-}"
       shift || true
