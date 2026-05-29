@@ -39,6 +39,7 @@ sealed class NavRoutes : NavKey {
                         subclass(DahusimSubscriptions::class, DahusimSubscriptions.serializer())
                         subclass(DahusimAutoselect::class, DahusimAutoselect.serializer())
                         subclass(DahusimDiagnostics::class, DahusimDiagnostics.serializer())
+                        subclass(DahusimUserAgents::class, DahusimUserAgents.serializer())
                         subclass(Libraries::class, Libraries.serializer())
                         subclass(ProfileEditor::class, ProfileEditor.serializer())
                         subclass(ConnectionsDetail::class, ConnectionsDetail.serializer())
@@ -135,6 +136,9 @@ sealed class NavRoutes : NavKey {
 
     @Serializable
     data object DahusimDiagnostics : NavRoutes()
+
+    @Serializable
+    data object DahusimUserAgents : NavRoutes()
 
     @Serializable
     data object Libraries : NavRoutes()

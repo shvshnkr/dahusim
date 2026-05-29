@@ -69,6 +69,22 @@ class Navigator(
         }
     }
 
+    fun navigateToSimpleMode() {
+        while (backStack.size > 1) {
+            backStack.removeLastOrNull()
+        }
+        if (backStack.lastOrNull() != NavRoutes.Simple) {
+            backStack.clear()
+            backStack.add(NavRoutes.Simple)
+        }
+    }
+
+    fun leaveSimpleMode(route: NavRoutes = NavRoutes.Library) {
+        val target = route.resolveDeprecatedNavTarget()
+        backStack.clear()
+        backStack.add(target)
+    }
+
     fun navigateUp(fallback: () -> Unit) {
         if (!popBackStack()) {
             fallback()
@@ -100,6 +116,7 @@ internal fun NavRoutes.bottomNavTab(): NavRoutes? = when (this) {
     NavRoutes.DahusimSubscriptions,
     NavRoutes.DahusimAutoselect,
     NavRoutes.DahusimDiagnostics,
+    NavRoutes.DahusimUserAgents,
     NavRoutes.Plugin,
     NavRoutes.Log,
     NavRoutes.Dashboard,

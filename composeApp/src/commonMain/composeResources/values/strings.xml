@@ -33,8 +33,9 @@
     <string name="library_empty_subscriptions_action">Pull down to refresh or tap Add</string>
     <string name="library_empty_manual">No manual groups yet</string>
     <string name="library_empty_manual_action">Create a group with Add</string>
-    <string name="library_empty_system">No system catalog groups</string>
-    <string name="library_empty_system_action">They appear after catalog sync</string>
+    <string name="library_empty_system">No system groups yet</string>
+    <string name="library_empty_system_action">Catalog feeds and built-in relays appear here</string>
+    <string name="library_group_origin_builtin">Built-in relay</string>
     <string name="menu_about">About</string>
     <string name="menu_app_update">Updates</string>
     <string name="menu_quick_settings">Quick settings</string>
@@ -50,6 +51,9 @@
     <string name="dahusim_nav_subscriptions">Subscriptions &amp; catalog</string>
     <string name="dahusim_nav_autoselect">Server autoselect</string>
     <string name="dahusim_nav_diagnostics">Diagnostics</string>
+    <string name="dahusim_nav_user_agents">User-Agent templates</string>
+    <string name="dahusim_quick_access_enabled">Quick access tiles</string>
+    <string name="dahusim_quick_access_enabled_sum">Show log, share, and update shortcuts at the top of Dahusim menu</string>
     <string name="quick_settings_screen_title">Quick settings</string>
     <string name="quick_settings_section_network">Network</string>
     <string name="quick_settings_section_updates">App updates</string>

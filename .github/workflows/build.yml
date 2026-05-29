@@ -183,12 +183,20 @@ jobs:
           BUILD_TYPE: ${{ env.build_type }}
         run: |
           set -e
-          VER=$(grep '^VERSION_NAME=' husi.properties | cut -d= -f2-)
+          chmod +x buildScript/ci/version_name.sh
+          VER="$(./buildScript/ci/version_name.sh husi.properties)"
           VER_CODE=$(grep '^VERSION_CODE=' husi.properties | cut -d= -f2-)
           SAFE_VER=$(printf '%s' "$VER" | tr ' /+' '---' | sed 's/[^0-9A-Za-z._-]/_/g')
           echo "version_name=$VER" >> "$GITHUB_OUTPUT"
           echo "version_code=$VER_CODE" >> "$GITHUB_OUTPUT"
           echo "safe_version=$SAFE_VER" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_name }}" = "redesign" ]; then
+            echo "release_tag=android-redesign-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+            echo "release_name=dahusim ${VER} (${VER_CODE}) · Android · redesign · CI #${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_tag=android-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+            echo "release_name=dahusim ${VER} (${VER_CODE}) · Android · CI #${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
           mkdir -p release_assets
           count=0
           for apk in dist/*.apk; do
@@ -215,7 +223,7 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           prerelease: true
-          tag_name: android-${{ github.run_id }}
-          name: "dahusim ${{ steps.rel.outputs.version_name }} (${{ steps.rel.outputs.version_code }}) · Android · CI #${{ github.run_number }}"
+          tag_name: ${{ steps.rel.outputs.release_tag }}
+          name: ${{ steps.rel.outputs.release_name }}
           body_path: release_body.md
           files: release_assets/*.apk

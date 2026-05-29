@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fr.husi.Key
 import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
 import fr.husi.compose.SagerFab
@@ -44,6 +45,7 @@ import fr.husi.compose.withNavigation
 import fr.husi.database.Probe2kProgress
 import fr.husi.ktx.onDefaultDispatcher
 import fr.husi.repository.resolveRepository
+import fr.husi.database.DataStore
 import fr.husi.resources.Res
 import fr.husi.resources.dahusim_hub_subtitle
 import fr.husi.resources.dahusim_hub_title
@@ -51,6 +53,8 @@ import fr.husi.resources.dahusim_nav_autoselect
 import fr.husi.resources.dahusim_nav_diagnostics
 import fr.husi.resources.dahusim_nav_network
 import fr.husi.resources.dahusim_nav_subscriptions
+import fr.husi.resources.dahusim_quick_access_enabled
+import fr.husi.resources.dahusim_quick_access_enabled_sum
 import fr.husi.resources.dahusim_section_settings
 import fr.husi.resources.developer_mode
 import fr.husi.resources.fast_forward
@@ -66,6 +70,8 @@ import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
+import me.zhanghai.compose.preference.ProvidePreferenceLocals
+import me.zhanghai.compose.preference.SwitchPreference
 
 @Composable
 fun DahusimHubScreen(
@@ -82,6 +88,9 @@ fun DahusimHubScreen(
     val listState = rememberLazyListState()
     val scrollHideVisible by rememberScrollHideState(listState)
     val serviceStatus by BackendState.status.collectAsStateWithLifecycle()
+    val quickAccessEnabled by DataStore.configurationStore
+        .booleanFlow(Key.DAHUSIM_QUICK_ACCESS_ENABLED, true)
+        .collectAsStateWithLifecycle(true)
 
     LaunchedEffect(Unit) {
         onDefaultDispatcher { Probe2kProgress.refreshPoolCounts() }
@@ -147,17 +156,29 @@ fun DahusimHubScreen(
             }
         },
     ) { innerPadding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding.withNavigation()),
-        ) {
-            item("quick-access") {
-                DahusimQuickAccessRow(
-                    onOpenAppUpdate = onOpenAppUpdate,
-                    showMessage = ::showMessage,
+        ProvidePreferenceLocals {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding.withNavigation()),
+            ) {
+            item("quick-access-toggle") {
+                SwitchPreference(
+                    value = quickAccessEnabled,
+                    onValueChange = { DataStore.dahusimQuickAccessEnabled = it },
+                    title = { Text(stringResource(Res.string.dahusim_quick_access_enabled)) },
+                    summary = { Text(stringResource(Res.string.dahusim_quick_access_enabled_sum)) },
+                    modifier = Modifier.padding(horizontal = 8.dp),
                 )
+            }
+            if (quickAccessEnabled) {
+                item("quick-access") {
+                    DahusimQuickAccessRow(
+                        onOpenAppUpdate = onOpenAppUpdate,
+                        showMessage = ::showMessage,
+                    )
+                }
             }
             item("settings-title") {
                 Text(
@@ -195,6 +216,7 @@ fun DahusimHubScreen(
                     onClick = { onNavigate(NavRoutes.DahusimDiagnostics) },
                 )
             }
+        }
         }
     }
 }

@@ -26,6 +26,7 @@ import fr.husi.ui.dahusim.DahusimDiagnosticsScreen
 import fr.husi.ui.dahusim.DahusimHubScreen
 import fr.husi.ui.dahusim.DahusimNetworkScreen
 import fr.husi.ui.dahusim.DahusimSubscriptionsScreen
+import fr.husi.ui.dahusim.DahusimUserAgentsScreen
 import fr.husi.ui.SettingsScreen
 import fr.husi.database.DataStore
 import fr.husi.ui.configuration.ConfigurationScreen
@@ -87,7 +88,7 @@ internal val commonNavigationModule = module {
                 onOpenProfileEditor = navigator::navigateTo,
                 onSwitchToSimpleMode = {
                     DataStore.simpleMode = true
-                    navigator.navigateTo(NavRoutes.Simple)
+                    navigator.navigateToSimpleMode()
                 },
                 fixedGroupId = route.groupId,
                 onBackPress = navigator::popBackStack,
@@ -107,7 +108,7 @@ internal val commonNavigationModule = module {
                 onOpenProfileEditor = navigator::navigateTo,
                 onSwitchToSimpleMode = {
                     DataStore.simpleMode = true
-                    navigator.navigateTo(NavRoutes.Simple)
+                    navigator.navigateToSimpleMode()
                 },
             )
         }
@@ -118,7 +119,8 @@ internal val commonNavigationModule = module {
             SimpleHomeScreen(
                 mainViewModel = viewModel,
                 onOpenFullMode = {
-                    navigator.navigateTo(NavRoutes.Library)
+                    DataStore.simpleMode = false
+                    navigator.leaveSimpleMode(NavRoutes.Library)
                 },
             )
         }
@@ -149,7 +151,7 @@ internal val commonNavigationModule = module {
                 onNavigate = navigator::navigateTo,
                 onOpenSimpleMode = {
                     DataStore.simpleMode = true
-                    navigator.navigateTo(NavRoutes.Simple)
+                    navigator.navigateToSimpleMode()
                 },
             )
         }
@@ -220,6 +222,16 @@ internal val commonNavigationModule = module {
             val viewModel = koinViewModel<MainViewModel>()
             val navigator = get<Navigator>()
             DahusimSubscriptionsScreen(
+                mainViewModel = viewModel,
+                onBackPress = navigator::popBackStack,
+                onNavigate = navigator::navigateTo,
+            )
+        }
+
+        navigation<NavRoutes.DahusimUserAgents> { _ ->
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            DahusimUserAgentsScreen(
                 mainViewModel = viewModel,
                 onBackPress = navigator::popBackStack,
             )

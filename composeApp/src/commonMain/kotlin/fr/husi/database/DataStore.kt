@@ -383,4 +383,6 @@ object DataStore {
         SubscriptionUserAgentPresets.FactoryVersions.INCY
     }
 
+    var dahusimQuickAccessEnabled by configurationStore.boolean(Key.DAHUSIM_QUICK_ACCESS_ENABLED) { true }
+
 }

@@ -76,6 +76,13 @@ jobs:
       INPUT_USE_CHANGELOG: ${{ inputs.use_changelog }}
       INPUT_PUBLISH: ${{ inputs.publish }}
     steps:
+      - name: Require main branch
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "promote-app-update must run on refs/heads/main (got ${{ github.ref }})"
+            exit 1
+          fi
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0

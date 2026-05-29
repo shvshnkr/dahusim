@@ -226,7 +226,10 @@ private fun MainScreenContent(
     }
     val selectedDrawerRoute = navigator.selectedDrawerRoute
     val selectedBottomNavTab = navigator.selectedBottomNavTab
-    val showBottomNav = PlatformInfo.isAndroid && selectedBottomNavTab != null
+    val showBottomNav = PlatformInfo.isAndroid &&
+        selectedBottomNavTab != null &&
+        navigator.currentRoute != NavRoutes.Simple &&
+        !DataStore.simpleMode
     val isAtStartDestination = navigator.isAtStartDestination
     val serviceStatus by BackendState.status.collectAsStateWithLifecycle()
     val profilePickerController = remember(koinScope) {
@@ -422,7 +425,7 @@ private fun MainScreenContent(
                     onClick = {
                         closeDrawer()
                         DataStore.simpleMode = true
-                        navigator.navigateTo(NavRoutes.Simple)
+                        navigator.navigateToSimpleMode()
                     },
                     modifier = Modifier
                         .fillMaxWidth()

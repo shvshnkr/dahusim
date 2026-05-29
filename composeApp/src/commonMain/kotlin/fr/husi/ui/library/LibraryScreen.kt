@@ -85,8 +85,11 @@ import fr.husi.resources.share_subscription
 import fr.husi.compose.rememberScrollHideState
 import fr.husi.compose.setPlainText
 import fr.husi.compose.withNavigation
-import fr.husi.database.CatalogOwnership
-import fr.husi.database.isCatalogDeletable
+import fr.husi.database.GroupOrigin
+import fr.husi.database.isGroupDeletable
+import fr.husi.database.isSystemLibraryItem
+import fr.husi.database.isUserOwnedLibraryItem
+import fr.husi.database.resolvedOrigin
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.formatTime
 import fr.husi.ktx.showAndDismissOld
@@ -127,6 +130,7 @@ import fr.husi.resources.library_empty_subscriptions
 import fr.husi.resources.library_empty_subscriptions_action
 import fr.husi.resources.library_empty_system
 import fr.husi.resources.library_empty_system_action
+import fr.husi.resources.library_group_origin_builtin
 import fr.husi.resources.library_reorder
 import fr.husi.resources.library_reorder_done
 import fr.husi.resources.no_proxies_found_in_file
@@ -156,17 +160,15 @@ enum class LibrarySegment {
 }
 
 fun GroupItemUiState.matchesSegment(segment: LibrarySegment): Boolean {
-    val sub = group.subscription
+    val group = this.group
     return when (segment) {
         LibrarySegment.Subscriptions ->
-            group.type == GroupType.SUBSCRIPTION &&
-                (sub?.catalogOwnership ?: CatalogOwnership.USER) == CatalogOwnership.USER
+            group.type == GroupType.SUBSCRIPTION && group.isUserOwnedLibraryItem()
 
-        LibrarySegment.System ->
-            group.type == GroupType.SUBSCRIPTION &&
-                (sub?.catalogOwnership ?: CatalogOwnership.USER) != CatalogOwnership.USER
+        LibrarySegment.System -> group.isSystemLibraryItem()
 
-        LibrarySegment.Manual -> group.type == GroupType.BASIC
+        LibrarySegment.Manual ->
+            group.type == GroupType.BASIC && group.isUserOwnedLibraryItem()
     }
 }
 
@@ -841,7 +843,7 @@ private fun LibraryGroupCard(
                         },
                     )
                 }
-                if (!group.ungrouped) {
+                if (!group.ungrouped && group.isGroupDeletable()) {
                     SheetActionRow(
                         text = stringResource(Res.string.edit),
                         leadingIcon = { Icon(vectorResource(Res.drawable.edit), null) },
@@ -851,7 +853,7 @@ private fun LibraryGroupCard(
                         },
                     )
                 }
-                if (group.isCatalogDeletable()) {
+                if (group.isGroupDeletable()) {
                     SheetActionRow(
                         text = stringResource(Res.string.delete),
                         leadingIcon = { Icon(vectorResource(Res.drawable.delete), null) },
@@ -914,6 +916,9 @@ private fun groupSubtitle(state: GroupItemUiState): String {
         return traffic
     }
     return when {
+        group.resolvedOrigin() == GroupOrigin.BUILTIN ->
+            stringResource(Res.string.library_group_origin_builtin)
+
         state.counts == 0L && group.type == GroupType.SUBSCRIPTION ->
             stringResource(Res.string.group_status_empty_subscription)
 

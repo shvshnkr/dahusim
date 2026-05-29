@@ -6,7 +6,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Icon
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,7 +27,6 @@ import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionUserAgentPresets
 import fr.husi.ktx.USER_AGENT
 import fr.husi.resources.Res
-import fr.husi.resources.grid_3x3
 import fr.husi.resources.subscription_fetch_profile_default
 import fr.husi.resources.subscription_fetch_profile_happ
 import fr.husi.resources.subscription_fetch_profile_incy
@@ -41,20 +41,28 @@ import fr.husi.resources.subscription_ua_template_v2raytun_sum
 import fr.husi.resources.subscription_ua_template_version
 import fr.husi.resources.subscription_ua_templates_section
 import fr.husi.resources.subscription_ua_templates_warning
-import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.TextFieldPreference
 import org.jetbrains.compose.resources.stringResource
-import org.jetbrains.compose.resources.vectorResource
 
 internal fun LazyListScope.subscriptionUserAgentTemplatesSettings() {
-    item("subscription_ua_templates_section", PreferenceType.CATEGORY) {
-        PreferenceCategory(text = { Text(stringResource(Res.string.subscription_ua_templates_section)) })
-    }
     item("subscription_ua_templates_warning", PreferenceType.TEXT_FIELD) {
-        Preference(
-            title = { Text(stringResource(Res.string.subscription_ua_templates_warning)) },
-            icon = { Icon(vectorResource(Res.drawable.grid_3x3), null) },
-        )
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            ),
+        ) {
+            Text(
+                text = stringResource(Res.string.subscription_ua_templates_warning),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+    }
+    item("subscription_ua_templates_clients", PreferenceType.CATEGORY) {
+        PreferenceCategory(text = { Text(stringResource(Res.string.subscription_ua_templates_section)) })
     }
     clientUaTemplate(
         key = Key.SUBSCRIPTION_UA_VERSION_HAPP,
@@ -113,23 +121,33 @@ internal fun LazyListScope.subscriptionUserAgentTemplatesSettings() {
         reset = { SubscriptionUserAgentPresets.resetTemplateToDefault(SubscriptionFetchProfile.INCY) },
     )
     item("subscription_ua_template_dahusim", PreferenceType.TEXT_FIELD) {
-        Preference(
-            title = { Text(stringResource(Res.string.subscription_fetch_profile_default)) },
-            summary = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(Res.string.subscription_ua_template_dahusim_sum))
-                    Text(
-                        text = USER_AGENT,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .padding(top = 4.dp)
-                            .horizontalScroll(rememberScrollState()),
-                    )
-                }
-            },
-            icon = { Icon(vectorResource(Res.drawable.grid_3x3), null) },
-        )
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            colors = CardDefaults.outlinedCardColors(),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(Res.string.subscription_fetch_profile_default),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = stringResource(Res.string.subscription_ua_template_dahusim_sum),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(
+                    text = USER_AGENT,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .horizontalScroll(rememberScrollState()),
+                )
+            }
+        }
     }
 }
 
@@ -147,38 +165,44 @@ private fun LazyListScope.clientUaTemplate(
             SubscriptionUserAgentPresets.templateVersion(profile),
         )
         var draft by remember(version) { mutableStateOf(version) }
-        Column(modifier = Modifier.fillMaxWidth()) {
-            TextFieldPreference(
-                value = draft,
-                onValueChange = {
-                    draft = it
-                    onVersionChange(it)
-                },
-                title = { Text(stringResource(titleRes)) },
-                textToValue = { it },
-                icon = { Icon(vectorResource(Res.drawable.grid_3x3), null) },
-                summary = { Text(stringResource(summaryRes)) },
-                valueToText = { it },
-            )
-            Text(
-                text = stringResource(
-                    Res.string.subscription_ua_template_version,
-                    SubscriptionUserAgentPresets.formatPresetUserAgent(profile, draft),
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .horizontalScroll(rememberScrollState()),
-            )
-            TextButton(
-                onClick = {
-                    reset()
-                    draft = SubscriptionUserAgentPresets.templateVersion(profile)
-                },
-                modifier = Modifier.padding(horizontal = 8.dp),
-            ) {
-                Text(stringResource(Res.string.subscription_ua_template_reset))
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                TextFieldPreference(
+                    value = draft,
+                    onValueChange = {
+                        draft = it
+                        onVersionChange(it)
+                    },
+                    title = { Text(stringResource(titleRes)) },
+                    textToValue = { it },
+                    summary = { Text(stringResource(summaryRes)) },
+                    valueToText = { it },
+                )
+                Text(
+                    text = stringResource(
+                        Res.string.subscription_ua_template_version,
+                        SubscriptionUserAgentPresets.formatPresetUserAgent(profile, draft),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .horizontalScroll(rememberScrollState()),
+                )
+                TextButton(
+                    onClick = {
+                        reset()
+                        draft = SubscriptionUserAgentPresets.templateVersion(profile)
+                    },
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                ) {
+                    Text(stringResource(Res.string.subscription_ua_template_reset))
+                }
             }
         }
     }

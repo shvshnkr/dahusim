@@ -98,6 +98,9 @@
     <string name="dahusim_nav_subscriptions">Подписки и каталог</string>
     <string name="dahusim_nav_autoselect">Автовыбор серверов</string>
     <string name="dahusim_nav_diagnostics">Диагностика</string>
+    <string name="dahusim_nav_user_agents">Шаблоны User-Agent</string>
+    <string name="dahusim_quick_access_enabled">Плитки быстрого доступа</string>
+    <string name="dahusim_quick_access_enabled_sum">Показывать вверху меню Dahusim быстрые кнопки: лог, отправка, обновления</string>
     <string name="quick_settings_screen_title">Быстрые настройки</string>
     <string name="quick_settings_section_network">Сеть</string>
     <string name="quick_settings_section_updates">Обновления приложения</string>
@@ -186,8 +189,9 @@
     <string name="library_empty_subscriptions_action">Потяните вниз для обновления или нажмите «Добавить»</string>
     <string name="library_empty_manual">Ручных групп пока нет</string>
     <string name="library_empty_manual_action">Создайте группу через «Добавить»</string>
-    <string name="library_empty_system">Системных групп каталога нет</string>
-    <string name="library_empty_system_action">Появятся после синхронизации каталога</string>
+    <string name="library_empty_system">Системных групп пока нет</string>
+    <string name="library_empty_system_action">Здесь фиды каталога и встроенные relay</string>
+    <string name="library_group_origin_builtin">Встроенный relay</string>
     <string name="logcat">Экспорт отладочной информации</string>
     <string name="version_x">Версия (%1$s)</string>
     <string name="server_port">Удаленный порт</string>
