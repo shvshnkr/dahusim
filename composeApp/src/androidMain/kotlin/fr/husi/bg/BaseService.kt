@@ -146,12 +146,14 @@ class BaseService {
                     }
                 }
 
-                Action.SWITCH_SERVER -> onMainDispatcher {
-                    collapseStatusBar(ctx)
-                    ctx.startActivity(
-                        Intent(ctx, fr.husi.ui.SwitchActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
+                Action.SWITCH_SERVER -> runOnDefaultDispatcher {
+                    onMainDispatcher {
+                        collapseStatusBar(ctx)
+                        ctx.startActivity(
+                            Intent(ctx, fr.husi.ui.SwitchActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
                 }
 
                 Intent.ACTION_USER_PRESENT -> runOnDefaultDispatcher {
