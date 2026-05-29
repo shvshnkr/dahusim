@@ -1,6 +1,7 @@
 package fr.husi.bg
 
 import fr.husi.database.DataStore
+import fr.husi.database.UserPoolPolicy
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeVpnCoordinator
@@ -32,6 +33,7 @@ internal object WhitelistNetworkRoutingState {
         DataStore.activeWhitelistRestrictedNetwork = nowWl
         if (!nowWl) {
             DataStore.simpleModeAutoselectPoolMerged = false
+            UserPoolPolicy.simpleModeUserPoolFallbackUsed = false
         }
         fr.husi.routing.VpnExitProbe.clearCache()
         simpleModeLog(
@@ -52,6 +54,7 @@ internal object WhitelistNetworkRoutingState {
     fun reset() {
         DataStore.activeWhitelistRestrictedNetwork = false
         DataStore.simpleModeAutoselectPoolMerged = false
+        UserPoolPolicy.simpleModeUserPoolFallbackUsed = false
         suppressExitRuRoutingReloadUntil = 0L
         VpnTunnelHandoffSuppress.clear()
         fr.husi.routing.VpnExitProbe.clearCache()

@@ -885,4 +885,10 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="probe_2k_warm_reserve_count">Тёплый резерв для переключения</string>
     <string name="probe_2k_warm_reserve_summary">Экспериментально: URL-проверка запасных серверов при включённом VPN (1–4). Больше число — больше нагрузка на батарею.</string>
     <string name="probe_2k_warm_reserve_status">Резерв: %1$s</string>
+    <string name="user_pool_mode">Приоритет личных подписок</string>
+    <string name="user_pool_mode_off">Выкл (наравне с каталогом)</string>
+    <string name="user_pool_mode_priority">Приоритет в пуле</string>
+    <string name="user_pool_mode_priority_fallback">Сначала личные, затем каталог</string>
+    <string name="user_pool_mode_exclusive">Только личные (скрыты в списке)</string>
+    <string name="user_pool_mode_summary">Автовыбор: приоритет или только ваши импорты; в режиме «только личные» группы скрыты здесь, данные не удаляются</string>
 </resources>

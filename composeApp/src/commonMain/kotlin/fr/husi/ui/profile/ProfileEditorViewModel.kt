@@ -12,6 +12,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.husi.GroupType
 import fr.husi.database.DataStore
+import fr.husi.database.UserPoolPolicy
 import fr.husi.database.ProfileManager
 import fr.husi.database.ProxyEntity
 import fr.husi.database.ProxyGroup
@@ -119,7 +120,9 @@ internal abstract class ProfileEditorViewModel<T : AbstractBean> : ViewModel() {
         SagerDatabase.groupDao.allGroups()
             .first()
             .filter {
-                it.type == GroupType.BASIC && it.id != proxyEntity.groupId
+                it.type == GroupType.BASIC &&
+                    it.id != proxyEntity.groupId &&
+                    !UserPoolPolicy.shouldHideGroupFromConfigurationUi(it)
             }
     }
 

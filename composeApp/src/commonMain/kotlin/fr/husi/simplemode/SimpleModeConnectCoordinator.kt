@@ -6,6 +6,7 @@ import fr.husi.bg.SubscriptionAutoUpdateRunner
 import fr.husi.bg.SubscriptionUpdateMode
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
+import fr.husi.database.UserPoolPolicy
 import fr.husi.database.PrepareForConnectResult
 import fr.husi.database.PrepareOwner
 import fr.husi.database.SagerDatabase
@@ -60,6 +61,7 @@ object SimpleModeConnectCoordinator {
         }
         cancel("connect_supersede")
         DataStore.simpleModeAutoselectPoolMerged = false
+        UserPoolPolicy.simpleModeUserPoolFallbackUsed = false
         DataStore.simpleModeActivity = "Checking network…"
         connectJob = connectScope.launch {
             runConnect(host)

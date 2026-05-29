@@ -42,7 +42,7 @@ object ProbeScheduler {
             DataStore.probe2kLastBackgroundRunAt = now
             return
         }
-        val proxies = dueIds.mapNotNull { SagerDatabase.proxyDao.getById(it) }
+        var proxies = dueIds.mapNotNull { SagerDatabase.proxyDao.getById(it) }
         if (proxies.isEmpty()) {
             DataStore.probe2kLastBackgroundRunAt = now
             return
@@ -50,7 +50,14 @@ object ProbeScheduler {
         val whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
         val merged = DataStore.simpleModeAutoselectPoolMerged
         val groups = SagerDatabase.groupDao.allGroups().first()
-        val tag = WlSubscriptionTag.resolve(SagerDatabase.proxyDao.getAll(), groups)
+        val userTag = UserSubscriptionTag.resolve(SagerDatabase.proxyDao.getAll(), groups)
+        val userMode = UserPoolPolicy.effectiveMode()
+        proxies = UserPoolPolicy.filterProxies(userMode, proxies, userTag.userProxyIds)
+        if (proxies.isEmpty()) {
+            DataStore.probe2kLastBackgroundRunAt = now
+            return
+        }
+        val tag = WlSubscriptionTag.resolve(proxies, groups)
         val probeStates = if (DataStore.probe2kPersistenceEnabled) {
             ProxyProbeStateStore.loadMap(proxies.map { it.id })
         } else {
@@ -62,9 +69,14 @@ object ProbeScheduler {
                 subscriptionWlIds = tag.subscriptionWlProxyIds,
                 probeStates = probeStates,
                 merged = merged,
+                userProxyIds = userTag.userProxyIds,
+                userPoolMode = userMode,
             )
         } else {
-            proxies.sortedBy { it.userOrder }
+            proxies.sortedWith(
+                compareBy<ProxyEntity> { ConnectPoolPolicy.userNodeRank(it.id, userTag.userProxyIds) }
+                    .thenBy { it.userOrder },
+            )
         }
         simpleModeLog(
             "SimpleMode",

@@ -101,6 +101,12 @@
     <string name="probe_2k_warm_reserve_count">Warm fallback reserve</string>
     <string name="probe_2k_warm_reserve_summary">Experimental: URL-checks backup servers while VPN is on (1–4). More checks use more battery.</string>
     <string name="probe_2k_warm_reserve_status">Reserve status: %1$s</string>
+    <string name="user_pool_mode">Personal subscriptions priority</string>
+    <string name="user_pool_mode_off">Off (equal with catalog)</string>
+    <string name="user_pool_mode_priority">Priority in pool</string>
+    <string name="user_pool_mode_priority_fallback">User pool first, then catalog</string>
+    <string name="user_pool_mode_exclusive">User pool only (hidden in list)</string>
+    <string name="user_pool_mode_summary">Autoselect: prefer or use only your imports; exclusive mode hides them here but keeps data</string>
     <!-- themes -->
     <string name="theme">Theme</string>
     <string name="themes_amber">Pine Tears</string>

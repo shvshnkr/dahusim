@@ -5,9 +5,13 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ernestoyaquello.dragdropswipelazycolumn.OrderedItem
+import fr.husi.Key
+import fr.husi.database.DataStore
 import fr.husi.database.GroupManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
+import fr.husi.database.UserPoolMode
+import fr.husi.database.UserPoolPolicy
 import fr.husi.database.isCatalogDeletable
 import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
@@ -57,20 +61,24 @@ class GroupScreenViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            SagerDatabase.groupDao.allGroups().collectLatest { groups ->
-                if (groups.isEmpty()) {
-                    _uiState.update { it.copy(groups = emptyList()) }
-                    return@collectLatest
+            combine(
+                SagerDatabase.groupDao.allGroups(),
+                DataStore.configurationStore.intFlow(Key.USER_POOL_MODE, UserPoolMode.OFF.wire),
+            ) { groups, _ -> groups }
+                .collectLatest { groups ->
+                    if (groups.isEmpty()) {
+                        _uiState.update { it.copy(groups = emptyList()) }
+                        return@collectLatest
+                    }
+                    combine(
+                        groups.map { group ->
+                            SagerDatabase.proxyDao.countByGroup(group.id)
+                                .map { count -> group to count }
+                        },
+                    ) { it.toList() }.collect { groupsWithCounts ->
+                        reloadGroups(groupsWithCounts)
+                    }
                 }
-                combine(
-                    groups.map { group ->
-                        SagerDatabase.proxyDao.countByGroup(group.id)
-                            .map { count -> group to count }
-                    },
-                ) { it.toList() }.collect { groupsWithCounts ->
-                    reloadGroups(groupsWithCounts)
-                }
-            }
         }
         viewModelScope.launch {
             GroupUpdater.updatingGroups.collect { updatingGroupIds ->
@@ -95,6 +103,8 @@ class GroupScreenViewModel : ViewModel() {
                 state.copy(
                     groups = groupsWithCounts.mapNotNull { (group, counts) ->
                         if (group.ungrouped && counts == 0L) {
+                            null
+                        } else if (UserPoolPolicy.shouldHideGroupFromConfigurationUi(group)) {
                             null
                         } else if (group.id in hiddenGroup) {
                             null

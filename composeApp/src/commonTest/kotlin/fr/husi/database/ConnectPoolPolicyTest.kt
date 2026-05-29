@@ -163,6 +163,28 @@ class ConnectPoolPolicyTest {
         assertTrue(!WlSubscriptionTag.isWlGroup(group))
     }
 
+    @Test
+    fun userOnlyBuildIncludesOnlyUserProxies() {
+        val userGroup = group(20L, "User sub", ownership = CatalogOwnership.USER)
+        val managedGroup = group(21L, "Managed", sourceId = "gh.tri-228-open")
+        val userProxy = proxy(201L, 20L, 1L)
+        val managedProxy = proxy(202L, 21L, 1L)
+        val userIds = setOf(201L)
+        val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.OPEN,
+            allProxies = listOf(userProxy, managedProxy),
+            groups = listOf(userGroup, managedGroup),
+            handoffIds = emptySet(),
+            probeStates = emptyMap(),
+            membershipFilter = ConnectPoolPolicy.PoolMembershipFilter.USER_ONLY,
+            userProxyIds = userIds,
+            userPoolMode = UserPoolMode.EXCLUSIVE,
+        )
+        assertEquals(1, result.orderedProxies.size)
+        assertEquals(201L, result.orderedProxies.first().id)
+        assertEquals(userIds, result.userProxyIds)
+    }
+
     private fun proxy(id: Long, groupId: Long, order: Long, profileName: String = "node$id") = ProxyEntity().apply {
         this.id = id
         this.groupId = groupId

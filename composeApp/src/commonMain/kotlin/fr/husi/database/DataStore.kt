@@ -322,6 +322,8 @@ object DataStore {
     var probe2kPoolDead by configurationStore.int(Key.PROBE_2K_POOL_DEAD) { 0 }
     var probe2kPoolCemetery by configurationStore.int(Key.PROBE_2K_POOL_CEMETERY) { 0 }
     var probe2kPoolUnknown by configurationStore.int(Key.PROBE_2K_POOL_UNKNOWN) { 0 }
+    var userPoolMode by configurationStore.int(Key.USER_POOL_MODE) { UserPoolMode.OFF.wire }
+
     var probe2kWarmReserveCount by configurationStore.int(Key.PROBE_2K_WARM_RESERVE_COUNT) {
         Probe2kDefaults.WARM_RESERVE_COUNT_DEFAULT
     }

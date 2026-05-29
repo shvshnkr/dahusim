@@ -190,15 +190,87 @@ object AutoServerSelector {
         session: PrepareSession,
         networkHandoff: Boolean,
     ): PrepareForConnectResult {
+        val allProxies = SagerDatabase.proxyDao.getAll()
+        val groups = SagerDatabase.groupDao.allGroups().first()
+        val userTag = UserSubscriptionTag.resolve(allProxies, groups)
+        val userMode = UserPoolPolicy.effectiveMode()
+        simpleModeLog(
+            "SimpleMode",
+            "H39 user_pool_mode=${userMode.name} userProxies=${userTag.userProxyIds.size} " +
+                "userGroups=${userTag.userGroupCount} fallbackUsed=${UserPoolPolicy.simpleModeUserPoolFallbackUsed}",
+        )
+
+        if (userMode == UserPoolMode.EXCLUSIVE) {
+            if (userTag.userProxyIds.isEmpty()) {
+                simpleModeLog("SimpleMode", "H39 user_pool_exclusive_empty")
+                return PrepareForConnectResult.NoProfiles
+            }
+            return runUserPoolPrepare(session, networkHandoff, userTag, userMode)
+        }
+
+        if (UserPoolPolicy.shouldRunUserFirstPass(userMode, userTag.userProxyIds)) {
+            val userResult = runUserPoolPrepare(session, networkHandoff, userTag, userMode)
+            if (userResult !is PrepareForConnectResult.NoProfiles &&
+                userResult !is PrepareForConnectResult.AllProbesDead
+            ) {
+                return userResult
+            }
+            UserPoolPolicy.simpleModeUserPoolFallbackUsed = true
+            simpleModeLog("SimpleMode", "H39 user_pool_fallback_managed")
+        }
+
+        return runManagedPoolPrepare(session, networkHandoff)
+    }
+
+    private suspend fun runUserPoolPrepare(
+        session: PrepareSession,
+        networkHandoff: Boolean,
+        userTag: UserSubscriptionTag.Resolution,
+        userMode: UserPoolMode,
+    ): PrepareForConnectResult {
+        val wlNetRequested = DataStore.simpleModeUseWhitelistBuiltinPoolOnly
+        DataStore.simpleModeUseWhitelistBuiltinPoolOnly = false
+        val poolMode = resolvePoolBuildMode(wlNetRequested)
+        return executePrepareForPool(
+            session = session,
+            networkHandoff = networkHandoff,
+            poolMode = poolMode,
+            membershipFilter = ConnectPoolPolicy.PoolMembershipFilter.USER_ONLY,
+            userTag = userTag,
+            userMode = userMode,
+        )
+    }
+
+    private suspend fun runManagedPoolPrepare(
+        session: PrepareSession,
+        networkHandoff: Boolean,
+    ): PrepareForConnectResult {
         val wlNetRequested = DataStore.simpleModeUseWhitelistBuiltinPoolOnly
         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = false
         val initialMode = resolvePoolBuildMode(wlNetRequested)
-        var result = executePrepareForPool(session, networkHandoff, initialMode)
+        val userMode = UserPoolPolicy.effectiveMode()
+        val userTag = UserSubscriptionTag.resolve(
+            SagerDatabase.proxyDao.getAll(),
+            SagerDatabase.groupDao.allGroups().first(),
+        )
+        var result = executePrepareForPool(
+            session = session,
+            networkHandoff = networkHandoff,
+            poolMode = initialMode,
+            userTag = userTag,
+            userMode = userMode,
+        )
         if (initialMode == ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION &&
             (result is PrepareForConnectResult.NoProfiles || result is PrepareForConnectResult.AllProbesDead)
         ) {
             simpleModeLog("SimpleMode", "H4 wl_pool_fallback_open_priority_once")
-            result = executePrepareForPool(session, networkHandoff, ConnectPoolPolicy.PoolBuildMode.OPEN)
+            result = executePrepareForPool(
+                session = session,
+                networkHandoff = networkHandoff,
+                poolMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
+                userTag = userTag,
+                userMode = userMode,
+            )
             if (result is PrepareForConnectResult.Success) {
                 DataStore.simpleModeAutoselectPoolMerged = true
                 simpleModeLog("SimpleMode", "H4 wl_pool_merged_enabled")
@@ -217,16 +289,33 @@ object AutoServerSelector {
         mode == ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION ||
             (mode == ConnectPoolPolicy.PoolBuildMode.MERGED && DataStore.activeWhitelistRestrictedNetwork)
 
+    private fun resolveWlUrlProbes(
+        poolMode: ConnectPoolPolicy.PoolBuildMode,
+        membershipFilter: ConnectPoolPolicy.PoolMembershipFilter,
+        orderedProxies: List<ProxyEntity>,
+        subscriptionWlIds: Set<Long>,
+    ): Boolean {
+        if (membershipFilter == ConnectPoolPolicy.PoolMembershipFilter.USER_ONLY) {
+            return DataStore.activeWhitelistRestrictedNetwork &&
+                orderedProxies.isNotEmpty() &&
+                orderedProxies.all { it.id in subscriptionWlIds }
+        }
+        return poolUsesWlUrlProbes(poolMode)
+    }
+
     private suspend fun executePrepareForPool(
         session: PrepareSession,
         networkHandoff: Boolean,
         poolMode: ConnectPoolPolicy.PoolBuildMode,
+        membershipFilter: ConnectPoolPolicy.PoolMembershipFilter = ConnectPoolPolicy.PoolMembershipFilter.NONE,
+        userTag: UserSubscriptionTag.Resolution? = null,
+        userMode: UserPoolMode = UserPoolPolicy.effectiveMode(),
     ): PrepareForConnectResult {
         val selectedBefore = DataStore.selectedProxy
-        val wlUrlProbes = poolUsesWlUrlProbes(poolMode)
 
         val allProxies = SagerDatabase.proxyDao.getAll()
         val groups = SagerDatabase.groupDao.allGroups().first()
+        val resolvedUserTag = userTag ?: UserSubscriptionTag.resolve(allProxies, groups)
 
         val handoffPriorityIds = if (networkHandoff) {
             buildHandoffPriorityIds(selectedBefore)
@@ -246,15 +335,21 @@ object AutoServerSelector {
             groups = groups,
             handoffIds = handoffPriorityIds,
             probeStates = probeStatesAll,
+            membershipFilter = membershipFilter,
+            userProxyIds = resolvedUserTag.userProxyIds,
+            userPoolMode = userMode,
         )
         val priorityFirstIds = poolBuild.priorityFirstIds
         val proxies = poolBuild.orderedProxies
         val subscriptionWhitelistIds = poolBuild.subscriptionWlIds
+        val userProxyIds = poolBuild.userProxyIds
+        val wlUrlProbes = resolveWlUrlProbes(poolMode, membershipFilter, proxies, subscriptionWhitelistIds)
         simpleModeLog(
             "SimpleMode",
-            "H24 autoselect_pool poolMode=${poolMode.name} handoff=$networkHandoff merged=${DataStore.simpleModeAutoselectPoolMerged} " +
+            "H24 autoselect_pool poolMode=${poolMode.name} userMode=${userMode.name} " +
+                "membership=$membershipFilter handoff=$networkHandoff merged=${DataStore.simpleModeAutoselectPoolMerged} " +
                 "subsWlMarked=${poolBuild.subsWlMarkedCount} wlGroups=${poolBuild.wlGroupCount} " +
-                "pool=${proxies.size} priorityFirst=${priorityFirstIds.size}",
+                "userPool=${userProxyIds.size} pool=${proxies.size} priorityFirst=${priorityFirstIds.size}",
         )
         val subscriptionCompactReprobe = AutoServerSelectorProbePolicy.useCompactReprobeForProxySetChange(
             proxies = proxies,
@@ -305,6 +400,8 @@ object AutoServerSelector {
                 poolMode = poolMode,
                 wlUrlProbes = wlUrlProbes,
                 subscriptionWlIds = subscriptionWhitelistIds,
+                userProxyIds = userProxyIds,
+                userMode = userMode,
             )?.let { best ->
                 ProxyProbeStateStore.recordSelectionReason("lkg_fast_path")
                 simpleModeLog("SimpleMode", "H26 lkg_fast_path best=$best reason=url_verified")
@@ -398,6 +495,8 @@ object AutoServerSelector {
                     probeStates = probeStates,
                     poolMode = poolMode,
                     subscriptionWlIds = subscriptionWhitelistIds,
+                    userProxyIds = userProxyIds,
+                    userMode = userMode,
                 ),
                 probeStates = probeStates,
                 networkHandoff = effectiveHandoff,
@@ -482,6 +581,8 @@ object AutoServerSelector {
                     priorityFirstIds = priorityFirstIds,
                     poolMode = poolMode,
                     subscriptionWlIds = subscriptionWhitelistIds,
+                    userProxyIds = userProxyIds,
+                    userMode = userMode,
                 )
                 val baseIds = baseUrlTest.map { it.id }.toSet()
                 val tcpSurvivors = quickProbePings.size.coerceAtMost(TCP_SURVIVOR_URL_CAP)
@@ -594,6 +695,8 @@ object AutoServerSelector {
                 priorityFirstIds = priorityFirstIds,
                 poolMode = poolMode,
                 subscriptionWlIds = subscriptionWhitelistIds,
+                userProxyIds = userProxyIds,
+                userMode = userMode,
             )
             urlTestCandidates = baseUrlTest
             urlTestDelays = if (urlTestCandidates.isNotEmpty()) {
@@ -701,6 +804,8 @@ object AutoServerSelector {
                                 it.id,
                                 subscriptionWhitelistIds,
                                 poolMode,
+                                userProxyIds,
+                                userMode,
                             )
                         }
                         .thenBy { it.userOrder }
@@ -722,6 +827,8 @@ object AutoServerSelector {
                                 it.id,
                                 subscriptionWhitelistIds,
                                 poolMode,
+                                userProxyIds,
+                                userMode,
                             )
                         }
                         .thenBy { it.userOrder }
@@ -1118,9 +1225,14 @@ object AutoServerSelector {
         poolMode: ConnectPoolPolicy.PoolBuildMode,
         wlUrlProbes: Boolean,
         subscriptionWlIds: Set<Long> = emptySet(),
+        userProxyIds: Set<Long> = emptySet(),
+        userMode: UserPoolMode = UserPoolMode.OFF,
     ): Long? {
         val goodId = DataStore.autoSelectLastKnownGood
         if (goodId <= 0L || !AutoServerSelectorProbePolicy.isLastKnownGoodUrlFresh(goodId)) {
+            return null
+        }
+        if (!UserPoolPolicy.lkgAllowed(userMode, goodId, userProxyIds)) {
             return null
         }
         val good = proxies.find { it.id == goodId } ?: return null
@@ -1146,6 +1258,8 @@ object AutoServerSelector {
             priorityFirstIds = priorityFirstIds + goodId,
             poolMode = poolMode,
             subscriptionWlIds = subscriptionWlIds,
+            userProxyIds = userProxyIds,
+            userMode = userMode,
         )
         val urlDelays = if (urlPool.size <= 1) {
             mapOf(goodId to lkgDelay)
@@ -1169,6 +1283,8 @@ object AutoServerSelector {
                 preferId = alt,
                 poolMode = poolMode,
                 subscriptionWlIds = subscriptionWlIds,
+                userProxyIds = userProxyIds,
+                userMode = userMode,
             )
         }
         if (urlDelays[goodId] == null) return null
@@ -1181,6 +1297,8 @@ object AutoServerSelector {
             preferId = goodId,
             poolMode = poolMode,
             subscriptionWlIds = subscriptionWlIds,
+            userProxyIds = userProxyIds,
+            userMode = userMode,
         )
     }
 
@@ -1193,6 +1311,8 @@ object AutoServerSelector {
         preferId: Long? = null,
         poolMode: ConnectPoolPolicy.PoolBuildMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
         subscriptionWlIds: Set<Long> = emptySet(),
+        userProxyIds: Set<Long> = emptySet(),
+        userMode: UserPoolMode = UserPoolMode.OFF,
     ): Long {
         val ranked = proxies.sortedWith(
             compareBy<ProxyEntity> { if (it.id == preferId) 0 else 1 }
@@ -1216,6 +1336,8 @@ object AutoServerSelector {
                         it.id,
                         subscriptionWlIds,
                         poolMode,
+                        userProxyIds,
+                        userMode,
                     )
                 }
                 .thenBy { it.userOrder }
@@ -1264,6 +1386,8 @@ object AutoServerSelector {
         probeStates: Map<Long, ProxyProbeState> = emptyMap(),
         poolMode: ConnectPoolPolicy.PoolBuildMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
         subscriptionWlIds: Set<Long> = emptySet(),
+        userProxyIds: Set<Long> = emptySet(),
+        userMode: UserPoolMode = UserPoolMode.OFF,
     ): List<ProxyEntity> {
         if (proxies.isEmpty() || cap <= 0) return emptyList()
         val rotation = stratifiedListRotationOffset(proxies, probeStates)
@@ -1275,6 +1399,8 @@ object AutoServerSelector {
                     probeStates = probeStates,
                     poolMode = poolMode,
                     subscriptionWlIds = subscriptionWlIds,
+                    userProxyIds = userProxyIds,
+                    userMode = userMode,
                 ),
             )
             if (rotation <= 0 || sorted.size <= 1) {
@@ -1365,6 +1491,8 @@ object AutoServerSelector {
         probeStates: Map<Long, ProxyProbeState> = emptyMap(),
         poolMode: ConnectPoolPolicy.PoolBuildMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
         subscriptionWlIds: Set<Long> = emptySet(),
+        userProxyIds: Set<Long> = emptySet(),
+        userMode: UserPoolMode = UserPoolMode.OFF,
     ): Comparator<ProxyEntity> =
         compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
             .thenBy { warmProbeStateRank(probeStates, it.id) }
@@ -1376,6 +1504,8 @@ object AutoServerSelector {
                     it.id,
                     subscriptionWlIds,
                     poolMode,
+                    userProxyIds,
+                    userMode,
                 )
             }
             .thenBy { it.userOrder }
