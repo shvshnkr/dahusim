@@ -27,6 +27,18 @@ class WarmReserveMaintainerPolicyTest {
     }
 
     @Test
+    fun replenishDebounceBypassedForInitial() {
+        val now = 100_000L
+        assertFalse(
+            WarmReserveMaintainerPolicy.shouldSkipReplenish(
+                reason = "initial",
+                nowMs = now,
+                lastReplenishAtMs = now - 1_000L,
+            ),
+        )
+    }
+
+    @Test
     fun replenishDebounceWithinWindow() {
         val now = 100_000L
         assertTrue(

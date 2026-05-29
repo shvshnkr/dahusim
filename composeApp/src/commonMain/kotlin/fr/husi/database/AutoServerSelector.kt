@@ -5,6 +5,7 @@ import fr.husi.bg.ServiceState
 import fr.husi.fmt.PrepareTestConfigBuilder
 import fr.husi.ktx.Logs
 import fr.husi.simplemode.SimpleModeHealthRoute
+import fr.husi.simplemode.WarmReserveSessionCache
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
@@ -1081,20 +1082,46 @@ object AutoServerSelector {
         val startIndex = currentIndex + 1
         val strictFreshFallback = WarmReservePool.isFeatureEnabled()
         val nowMs = System.currentTimeMillis()
+        if (strictFreshFallback) {
+            val cache = WarmReserveSessionCache
+            val liveReserves = WarmReservePool.liveReserveIds(queue, currentId, cache, probeStates)
+            for (candidate in liveReserves) {
+                if (candidate == currentId || isInFailureCooldown(candidate)) continue
+                val state = probeStates[candidate]
+                if (state?.state == ProbeState.CEMETERY || state?.state == ProbeState.DEAD) continue
+                sessionFallbackSteps.incrementAndGet()
+                val nextIndex = queue.indexOf(candidate).takeIf { it >= 0 } ?: startIndex
+                DataStore.autoSelectFallbackIndex = nextIndex
+                DataStore.selectedProxy = candidate
+                AutoServerSelectorSessionFallback.syncIndexForConnected(candidate)
+                setSimpleModeActivity("Trying next server ${nextIndex + 1}/${queue.size}")
+                Logs.w("AutoSelect fallback: move to session-live profile $candidate")
+                simpleModeLog(
+                    "SimpleMode",
+                    "H37 warm_reserve_fallback_session_live currentId=$currentId nextId=$candidate",
+                )
+                return candidate
+            }
+        }
         val walk = AutoServerSelectorSessionFallback.findNextFallbackCandidate(
             queue = queue,
             startIndex = startIndex,
             probeStates = probeStates,
             inRecentFailureCooldown = ::isInFailureCooldown,
             requireFreshUrlVerified = strictFreshFallback,
+            excludeIds = if (strictFreshFallback) {
+                WarmReserveSessionCache.warmFailedIdsSnapshot()
+            } else {
+                emptySet()
+            },
             nowMs = nowMs,
         )
         if (walk == null && strictFreshFallback) {
-            val queueFresh = WarmReservePool.countFreshUrlAlive(queue, probeStates, nowMs)
-            if (queueFresh <= 1) {
+            val queueLive = WarmReservePool.countSessionLiveInQueue(queue, WarmReserveSessionCache)
+            if (queueLive <= 1) {
                 simpleModeLog(
                     "SimpleMode",
-                    "H37 warm_reserve_single_alive_no_fallback currentId=$currentId queueFresh=$queueFresh",
+                    "H37 warm_reserve_single_alive_no_fallback currentId=$currentId queueLive=$queueLive",
                 )
             }
         }
@@ -1145,7 +1172,7 @@ object AutoServerSelector {
             "H1 fallback_moved currentId=$currentId nextId=${walk.nextId} nextIndex=${walk.nextIndex} " +
                 "size=${queue.size} sessionStep=${sessionFallbackSteps.get()} " +
                 "skip=jail:${walk.skippedJail} dead:${walk.skippedDead} cooldown:${walk.skippedCooldown} " +
-                "notFresh:${walk.skippedNotFresh}",
+                "notFresh:${walk.skippedNotFresh} warmFailed:${walk.skippedWarmFailed}",
         )
         return walk.nextId
     }

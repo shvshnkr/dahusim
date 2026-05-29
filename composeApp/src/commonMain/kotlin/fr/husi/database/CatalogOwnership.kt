@@ -12,7 +12,3 @@ object ConnectPoolRole {
     const val OPEN = 2
 }
 
-fun ProxyGroup.isCatalogDeletable(): Boolean {
-    val sub = subscription ?: return true
-    return sub.catalogOwnership != CatalogOwnership.PROTECTED_RESERVED
-}

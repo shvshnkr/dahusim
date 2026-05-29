@@ -62,6 +62,7 @@ object ProfileManager {
     }
 
     suspend fun deleteProfile(groupId: Long, profileId: Long) {
+        if (!canDeleteProfiles(groupId, listOf(profileId))) return
         if (SagerDatabase.proxyDao.deleteById(profileId) == 0) return
         if (DataStore.selectedProxy == profileId) {
             DataStore.selectedProxy = 0L
@@ -73,12 +74,23 @@ object ProfileManager {
 
     suspend fun deleteProfiles(groupId: Long, profileIDs: List<Long>) {
         if (profileIDs.isEmpty()) return
+        if (!canDeleteProfiles(groupId, profileIDs)) return
         SagerDatabase.proxyDao.deleteProxies(profileIDs)
         if (profileIDs.contains(DataStore.selectedProxy)) {
             DataStore.selectedProxy = 0L
         }
         if (SagerDatabase.proxyDao.countByGroup(groupId).first() > 1) {
             GroupManager.rearrange(groupId)
+        }
+    }
+
+    private suspend fun canDeleteProfiles(groupId: Long, profileIDs: List<Long>): Boolean {
+        val group = SagerDatabase.groupDao.getById(groupId).first() ?: return true
+        if (!group.isGroupDeletable()) return false
+        if (group.resolvedOrigin() != GroupOrigin.BUILTIN) return true
+        val profiles = SagerDatabase.proxyDao.getByGroup(groupId).first()
+        return profileIDs.none { id ->
+            profiles.find { it.id == id }?.originSourceId?.isNotBlank() == true
         }
     }
 

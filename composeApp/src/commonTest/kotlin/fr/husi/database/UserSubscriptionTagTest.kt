@@ -18,7 +18,9 @@ class UserSubscriptionTagTest {
 
     @Test
     fun managedSubscriptionIsNotUserOwned() {
-        val group = subscriptionGroup(2L, "Catalog", CatalogOwnership.GH_MANAGED)
+        val group = subscriptionGroup(2L, "Catalog", CatalogOwnership.GH_MANAGED).apply {
+            origin = GroupOrigin.GH_MANAGED
+        }
         assertFalse(UserSubscriptionTag.isUserOwnedGroup(group))
     }
 
@@ -30,14 +32,21 @@ class UserSubscriptionTagTest {
 
     @Test
     fun builtinStandaloneIsNotUserOwned() {
-        val group = ProxyGroup(name = "Quick standalone SE", type = GroupType.BASIC).apply { id = 4L }
+        val group = ProxyGroup(name = BuiltinRelayDefaults.GROUP_NAME, type = GroupType.BASIC).apply {
+            id = 4L
+            origin = GroupOrigin.BUILTIN
+            originSourceId = BuiltinRelayDefaults.groupSourceId()
+        }
         assertFalse(UserSubscriptionTag.isUserOwnedGroup(group))
+        assertTrue(UserSubscriptionTag.isBuiltinStandaloneGroup(group))
     }
 
     @Test
     fun resolveCollectsUserProxiesOnly() {
         val userGroup = subscriptionGroup(10L, "User", CatalogOwnership.USER)
-        val managedGroup = subscriptionGroup(11L, "Managed", CatalogOwnership.GH_MANAGED)
+        val managedGroup = subscriptionGroup(11L, "Managed", CatalogOwnership.GH_MANAGED).apply {
+            origin = GroupOrigin.GH_MANAGED
+        }
         val basicGroup = ProxyGroup(name = "Manual", type = GroupType.BASIC).apply { id = 12L }
         val proxies = listOf(
             proxy(1L, 10L),
@@ -50,6 +59,14 @@ class UserSubscriptionTagTest {
         )
         assertEquals(setOf(10L, 12L), resolution.userGroupIds)
         assertEquals(setOf(1L, 3L), resolution.userProxyIds)
+    }
+
+    @Test
+    fun builtinProfileDetectedByOriginSourceId() {
+        val profile = proxy(99L, 4L).apply {
+            originSourceId = BuiltinRelayDefaults.profileSourceId()
+        }
+        assertTrue(UserSubscriptionTag.isBuiltinStandaloneProfile(profile))
     }
 
     private fun subscriptionGroup(id: Long, name: String, ownership: Int): ProxyGroup =

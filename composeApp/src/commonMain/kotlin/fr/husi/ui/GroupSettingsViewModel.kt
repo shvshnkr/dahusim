@@ -12,7 +12,8 @@ import fr.husi.database.GroupManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
-import fr.husi.database.isCatalogDeletable
+import fr.husi.database.GroupOrigin
+import fr.husi.database.isGroupDeletable
 import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionSourceKind
 import fr.husi.group.SubscriptionUserAgentPresets
@@ -122,18 +123,25 @@ internal class GroupSettingsViewModel(
 
     fun delete() = runOnIoDispatcher {
         val entity = SagerDatabase.groupDao.getById(editingID).firstOrNull() ?: return@runOnIoDispatcher
-        if (!entity.isCatalogDeletable()) return@runOnIoDispatcher
+        if (!entity.isGroupDeletable()) return@runOnIoDispatcher
         GroupManager.deleteGroup(editingID)
     }
 
     fun save() = runOnIoDispatcher {
         if (isNew) {
-            GroupManager.createGroup(ProxyGroup().apply { loadFromUiState(uiState.value) })
+            GroupManager.createGroup(
+                ProxyGroup().apply {
+                    loadFromUiState(uiState.value)
+                    origin = GroupOrigin.USER
+                    originSourceId = ""
+                },
+            )
             return@runOnIoDispatcher
         }
         if (!isDirty.value) return@runOnIoDispatcher
         val entity =
             SagerDatabase.groupDao.getById(editingID).firstOrNull() ?: return@runOnIoDispatcher
+        if (!entity.isGroupDeletable()) return@runOnIoDispatcher
         val state = _uiState.value
         val keepUserInfo = entity.type == GroupType.SUBSCRIPTION
                 && initialState.value?.type == GroupType.SUBSCRIPTION
