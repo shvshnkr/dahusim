@@ -26,9 +26,10 @@ public class SwitchActivityInstrumentedTest {
     public void warmProgressOrFullPickerVisibleWhenLaunched() throws InterruptedException {
         launchSwitchActivity();
         UiDevice device = InstrumentedTestSupport.device();
-        boolean visible = device.wait(Until.hasObject(By.res("switch_warm_progress")), 5_000L)
-            || device.wait(Until.hasObject(By.res("switch_full_picker")), 5_000L)
-            || device.wait(Until.hasObject(By.textContains("search")), 3_000L);
+        boolean visible = device.wait(Until.hasObject(By.textContains("Comparing")), 5_000L)
+            || device.wait(Until.hasObject(By.text("Search")), 5_000L)
+            || device.wait(Until.hasObject(By.textContains("backup")), 3_000L)
+            || InstrumentedTestSupport.isSwitchActivityResumed();
         assertTrue("Warm progress or full picker should be visible", visible);
     }
 

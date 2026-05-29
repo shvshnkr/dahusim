@@ -56,8 +56,26 @@ public final class InstrumentedTestSupport {
         waitUntil(() -> !isProcessRunning(), "process did not stop");
     }
 
+    /**
+     * After {@code am kill}, the package process often stays alive for a foreground VPN service;
+     * use activity visibility instead of {@link #isProcessRunning()}.
+     */
+    public static void waitForMainActivityStopped() {
+        waitUntil(() -> !isMainActivityResumed(), "MainActivity did not stop");
+    }
+
     public static void waitForMainActivityResumed() {
         waitUntil(InstrumentedTestSupport::isMainActivityResumed, "MainActivity did not resume");
+    }
+
+    public static boolean isSwitchActivityResumed() {
+        try {
+            String output = executeShellCommand("dumpsys activity activities");
+            return output.contains("fr.husi.ui.SwitchActivity")
+                && (output.contains("mResumedActivity") || output.contains("ResumedActivity"));
+        } catch (IOException exception) {
+            return false;
+        }
     }
 
     public static void waitMillis(long millis) throws InterruptedException {

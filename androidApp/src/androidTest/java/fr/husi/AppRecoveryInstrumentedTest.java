@@ -16,7 +16,7 @@ public class AppRecoveryInstrumentedTest {
         InstrumentedTestSupport.waitForMainActivityResumed();
 
         InstrumentedTestSupport.killTargetApp();
-        InstrumentedTestSupport.waitForProcessStopped();
+        InstrumentedTestSupport.waitForMainActivityStopped();
 
         InstrumentedTestSupport.launchMainActivity();
         InstrumentedTestSupport.waitForProcessRunning();
@@ -36,7 +36,7 @@ public class AppRecoveryInstrumentedTest {
         InstrumentedTestSupport.pressHome();
         InstrumentedTestSupport.waitMillis(2_000L);
         InstrumentedTestSupport.killTargetApp();
-        InstrumentedTestSupport.waitForProcessStopped();
+        InstrumentedTestSupport.waitForMainActivityStopped();
 
         InstrumentedTestSupport.launchMainActivity();
         InstrumentedTestSupport.waitForProcessRunning();
