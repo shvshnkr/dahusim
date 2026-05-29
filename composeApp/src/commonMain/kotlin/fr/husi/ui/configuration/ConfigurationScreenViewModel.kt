@@ -178,7 +178,7 @@ class ConfigurationScreenViewModel : ViewModel() {
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun doTest(group: Long, type: TestType) {
+    fun doTest(group: Long, type: TestType, profileIds: Set<Long>? = null) {
         val performTest: suspend (ProxyEntity) -> TestResult = when (type) {
             TestType.ICMPPing -> ::icmpPing
             TestType.TCPPing -> ::tcpPing
@@ -187,7 +187,10 @@ class ConfigurationScreenViewModel : ViewModel() {
 
         testErrorMessages.clear()
         testJob = viewModelScope.launch {
-            val proxies = SagerDatabase.proxyDao.getByGroup(group).first()
+            var proxies = SagerDatabase.proxyDao.getByGroup(group).first()
+            if (profileIds != null) {
+                proxies = proxies.filter { it.id in profileIds }
+            }
             val totalCount = proxies.size
             var processedCount = 0
             val concurrent = DataStore.connectionTestConcurrent

@@ -11,13 +11,21 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 actual fun ScannerDropdownMenuItem() {
+    val launch = rememberProfileScannerAction()
+    if (launch != null) {
+        DropdownMenuItem(
+            text = { Text(stringResource(Res.string.add_profile_methods_scan_qr_code)) },
+            onClick = launch,
+        )
+    }
+}
+
+@Composable
+actual fun rememberProfileScannerAction(): (() -> Unit)? {
     val context = LocalContext.current
-    DropdownMenuItem(
-        text = { Text(stringResource(Res.string.add_profile_methods_scan_qr_code)) },
-        onClick = {
-            context.startActivity(
-                Intent(context, ScannerActivity::class.java),
-            )
-        },
-    )
+    return {
+        context.startActivity(
+            Intent(context, ScannerActivity::class.java),
+        )
+    }
 }

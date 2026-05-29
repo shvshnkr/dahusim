@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import fr.husi.compose.material3.Icon
@@ -146,6 +147,9 @@ internal fun GroupHolderScreen(
     showSnackbar: (message: StringOrRes) -> Unit,
     showUndoSnackbar: (count: Int, onUndo: () -> Unit) -> Unit,
     onScrollHideChange: (Boolean) -> Unit = {},
+    bulkSelectionMode: Boolean = false,
+    bulkSelectedIds: Set<Long> = emptySet(),
+    onBulkToggle: (Long) -> Unit = {},
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val resultBus = onOpenProfileEditor?.let { LocalResultEventBus.current }
@@ -301,6 +305,9 @@ internal fun GroupHolderScreen(
                     trafficStatistic = trafficStatistics,
                     securityAdvice = securityAdvisory,
                     showActions = showActions,
+                    bulkSelectionMode = bulkSelectionMode,
+                    bulkSelected = item.profile.id in bulkSelectedIds,
+                    onBulkToggle = { onBulkToggle(item.profile.id) },
                 )
             }
         }
@@ -346,6 +353,9 @@ private fun DraggableSwipeableItemScope<ProfileItem>.ProxyCard(
     trafficStatistic: Boolean,
     securityAdvice: Boolean,
     showActions: Boolean = true,
+    bulkSelectionMode: Boolean = false,
+    bulkSelected: Boolean = false,
+    onBulkToggle: () -> Unit = {},
 ) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
@@ -409,28 +419,40 @@ private fun DraggableSwipeableItemScope<ProfileItem>.ProxyCard(
     }
 
     OutlinedCard(
-        onClick = select,
+        onClick = if (bulkSelectionMode) onBulkToggle else select,
         modifier = modifier,
         elevation = CardDefaults.elevatedCardElevation(),
-        border = if (profile.isSelected) {
-            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            CardDefaults.outlinedCardBorder()
+        border = when {
+            bulkSelectionMode && bulkSelected ->
+                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+
+            !bulkSelectionMode && profile.isSelected ->
+                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+
+            else -> CardDefaults.outlinedCardBorder()
         },
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Icon(
-                imageVector = vectorResource(Res.drawable.drag_indicator),
-                contentDescription = "Drag to reorder",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .align(Alignment.CenterVertically)
-                    .size(40.dp)
-                    .padding(8.dp)
-                    .dragDropModifier(),
-            )
+            if (bulkSelectionMode) {
+                Checkbox(
+                    checked = bulkSelected,
+                    onCheckedChange = { onBulkToggle() },
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                )
+            } else {
+                Icon(
+                    imageVector = vectorResource(Res.drawable.drag_indicator),
+                    contentDescription = "Drag to reorder",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .size(40.dp)
+                        .padding(8.dp)
+                        .dragDropModifier(),
+                )
+            }
 
             Column(
                 modifier = Modifier
@@ -450,7 +472,7 @@ private fun DraggableSwipeableItemScope<ProfileItem>.ProxyCard(
                         modifier = Modifier.weight(1f),
                     )
 
-                    if (showActions) {
+                    if (showActions && !bulkSelectionMode) {
                         SimpleIconButton(
                             imageVector = vectorResource(Res.drawable.edit),
                             contentDescription = stringResource(Res.string.edit),

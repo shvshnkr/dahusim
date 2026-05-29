@@ -76,7 +76,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
 import fr.husi.ui.MainViewModelAlertDialog
-import fr.husi.compose.PlatformMenuIcon
+import fr.husi.ui.MainTopNavigationIcon
 import fr.husi.compose.SagerFab
 import fr.husi.compose.SheetActionRow
 import fr.husi.compose.SimpleIconButton
@@ -173,11 +173,7 @@ fun LogcatScreen(
                     Text(stringResource(Res.string.menu_log))
                 },
                 navigationIcon = {
-                    PlatformMenuIcon(
-                        imageVector = vectorResource(Res.drawable.menu),
-                        contentDescription = stringResource(Res.string.menu),
-                        onClick = onDrawerClick,
-                    )
+                    MainTopNavigationIcon(useBack = true, onClick = onDrawerClick)
                 },
                 actions = {
                     SimpleIconButton(

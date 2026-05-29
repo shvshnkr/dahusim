@@ -8,8 +8,8 @@ import fr.husi.ui.AboutScreen
 import fr.husi.ui.AppUpdateScreen
 import fr.husi.ui.AssetEditScreen
 import fr.husi.ui.AssetsScreen
-import fr.husi.ui.GroupScreen
 import fr.husi.ui.GroupSettingsScreen
+import fr.husi.ui.MoreScreen
 import fr.husi.ui.LibrariesScreen
 import fr.husi.ui.DrawerController
 import fr.husi.ui.LogcatScreen
@@ -21,10 +21,15 @@ import fr.husi.ui.PluginScreen
 import fr.husi.ui.ProfilePickerController
 import fr.husi.ui.RouteScreen
 import fr.husi.ui.RouteSettingsScreen
-import fr.husi.ui.QuickSettingsScreen
+import fr.husi.ui.dahusim.DahusimAutoselectScreen
+import fr.husi.ui.dahusim.DahusimDiagnosticsScreen
+import fr.husi.ui.dahusim.DahusimHubScreen
+import fr.husi.ui.dahusim.DahusimNetworkScreen
+import fr.husi.ui.dahusim.DahusimSubscriptionsScreen
 import fr.husi.ui.SettingsScreen
 import fr.husi.database.DataStore
 import fr.husi.ui.configuration.ConfigurationScreen
+import fr.husi.ui.library.LibraryScreen
 import fr.husi.ui.dashboard.ConnectionDetailScreen
 import fr.husi.ui.dashboard.DashboardScreen
 import fr.husi.ui.profile.ConfigEditScreen
@@ -56,6 +61,42 @@ internal val commonNavigationModule = module {
         }
         scopedOf(::ProfilePickerController)
 
+        navigation<NavRoutes.Library> { _ ->
+            val drawerController = get<DrawerController>()
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            LibraryScreen(
+                mainViewModel = viewModel,
+                onDrawerClick = drawerController::toggle,
+                openGroup = { groupId ->
+                    navigator.navigateTo(NavRoutes.LibraryGroup(groupId = groupId))
+                },
+                openGroupSettings = { groupId ->
+                    navigator.navigateTo(NavRoutes.GroupSettings(groupId = groupId))
+                },
+            )
+        }
+
+        navigation<NavRoutes.LibraryGroup> { route ->
+            val drawerController = get<DrawerController>()
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            ConfigurationScreen(
+                mainViewModel = viewModel,
+                onNavigationClick = drawerController::toggle,
+                onOpenProfileEditor = navigator::navigateTo,
+                onSwitchToSimpleMode = {
+                    DataStore.simpleMode = true
+                    navigator.navigateTo(NavRoutes.Simple)
+                },
+                fixedGroupId = route.groupId,
+                onBackPress = navigator::popBackStack,
+                onOpenGroupSettings = { groupId ->
+                    navigator.navigateTo(NavRoutes.GroupSettings(groupId = groupId))
+                },
+            )
+        }
+
         navigation<NavRoutes.Configuration> { _ ->
             val drawerController = get<DrawerController>()
             val viewModel = koinViewModel<MainViewModel>()
@@ -77,7 +118,7 @@ internal val commonNavigationModule = module {
             SimpleHomeScreen(
                 mainViewModel = viewModel,
                 onOpenFullMode = {
-                    navigator.navigateTo(NavRoutes.Configuration)
+                    navigator.navigateTo(NavRoutes.Library)
                 },
             )
         }
@@ -86,11 +127,29 @@ internal val commonNavigationModule = module {
             val drawerController = get<DrawerController>()
             val viewModel = koinViewModel<MainViewModel>()
             val navigator = get<Navigator>()
-            GroupScreen(
+            LibraryScreen(
                 mainViewModel = viewModel,
                 onDrawerClick = drawerController::toggle,
+                openGroup = { groupId ->
+                    navigator.navigateTo(NavRoutes.LibraryGroup(groupId = groupId))
+                },
                 openGroupSettings = { groupId ->
                     navigator.navigateTo(NavRoutes.GroupSettings(groupId = groupId))
+                },
+            )
+        }
+
+        navigation<NavRoutes.More> { _ ->
+            val drawerController = get<DrawerController>()
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            MoreScreen(
+                mainViewModel = viewModel,
+                onDrawerClick = drawerController::toggle,
+                onNavigate = navigator::navigateTo,
+                onOpenSimpleMode = {
+                    DataStore.simpleMode = true
+                    navigator.navigateTo(NavRoutes.Simple)
                 },
             )
         }
@@ -117,7 +176,8 @@ internal val commonNavigationModule = module {
             val navigator = get<Navigator>()
             SettingsScreen(
                 mainViewModel = viewModel,
-                onDrawerClick = drawerController::toggle,
+                onDrawerClick = { navigator.navigateUp(drawerController::toggle) },
+                useBackNavigation = navigator.showsBackNavigation,
                 openAppManager = {
                     navigator.navigateTo(NavRoutes.AppManager)
                 },
@@ -125,32 +185,81 @@ internal val commonNavigationModule = module {
         }
 
         navigation<NavRoutes.QuickSettings> { _ ->
-            val drawerController = get<DrawerController>()
             val viewModel = koinViewModel<MainViewModel>()
             val navigator = get<Navigator>()
-            QuickSettingsScreen(
+            DahusimHubScreen(
                 mainViewModel = viewModel,
-                onDrawerClick = drawerController::toggle,
-                openAppManager = { navigator.navigateTo(NavRoutes.AppManager) },
+                onBackPress = navigator::popBackStack,
+                onNavigate = navigator::navigateTo,
                 onOpenAppUpdate = { navigator.navigateTo(NavRoutes.AppUpdate) },
+            )
+        }
+
+        navigation<NavRoutes.DahusimHub> { _ ->
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            DahusimHubScreen(
+                mainViewModel = viewModel,
+                onBackPress = navigator::popBackStack,
+                onNavigate = navigator::navigateTo,
+                onOpenAppUpdate = { navigator.navigateTo(NavRoutes.AppUpdate) },
+            )
+        }
+
+        navigation<NavRoutes.DahusimNetwork> { _ ->
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            DahusimNetworkScreen(
+                mainViewModel = viewModel,
+                onBackPress = navigator::popBackStack,
+                openAppManager = { navigator.navigateTo(NavRoutes.AppManager) },
+            )
+        }
+
+        navigation<NavRoutes.DahusimSubscriptions> { _ ->
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            DahusimSubscriptionsScreen(
+                mainViewModel = viewModel,
+                onBackPress = navigator::popBackStack,
+            )
+        }
+
+        navigation<NavRoutes.DahusimAutoselect> { _ ->
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            DahusimAutoselectScreen(
+                mainViewModel = viewModel,
+                onBackPress = navigator::popBackStack,
+            )
+        }
+
+        navigation<NavRoutes.DahusimDiagnostics> { _ ->
+            val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
+            DahusimDiagnosticsScreen(
+                mainViewModel = viewModel,
+                onBackPress = navigator::popBackStack,
             )
         }
 
         navigation<NavRoutes.Plugin> { _ ->
             val drawerController = get<DrawerController>()
             val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
             PluginScreen(
                 mainViewModel = viewModel,
-                onDrawerClick = drawerController::toggle,
+                onDrawerClick = { navigator.navigateUp(drawerController::toggle) },
             )
         }
 
         navigation<NavRoutes.Log> { _ ->
             val drawerController = get<DrawerController>()
             val viewModel = koinViewModel<MainViewModel>()
+            val navigator = get<Navigator>()
             LogcatScreen(
                 mainViewModel = viewModel,
-                onDrawerClick = drawerController::toggle,
+                onDrawerClick = { navigator.navigateUp(drawerController::toggle) },
             )
         }
 
@@ -160,7 +269,7 @@ internal val commonNavigationModule = module {
             val navigator = get<Navigator>()
             DashboardScreen(
                 mainViewModel = viewModel,
-                onDrawerClick = drawerController::toggle,
+                onDrawerClick = { navigator.navigateUp(drawerController::toggle) },
                 openConnectionDetail = { uuid ->
                     navigator.navigateTo(NavRoutes.ConnectionsDetail(uuid = uuid))
                 },
@@ -257,7 +366,7 @@ internal val commonNavigationModule = module {
             val navigator = get<Navigator>()
             ToolsScreen(
                 mainViewModel = viewModel,
-                onDrawerClick = drawerController::toggle,
+                onDrawerClick = { navigator.navigateUp(drawerController::toggle) },
                 onOpenTool = navigator::navigateTo,
             )
         }
@@ -292,8 +401,9 @@ internal val commonNavigationModule = module {
 
         navigation<NavRoutes.AppUpdate> { _ ->
             val drawerController = get<DrawerController>()
+            val navigator = get<Navigator>()
             AppUpdateScreen(
-                onDrawerClick = drawerController::toggle,
+                onDrawerClick = { navigator.navigateUp(drawerController::toggle) },
             )
         }
 
@@ -303,7 +413,7 @@ internal val commonNavigationModule = module {
             val navigator = get<Navigator>()
             AboutScreen(
                 mainViewModel = viewModel,
-                onDrawerClick = drawerController::toggle,
+                onDrawerClick = { navigator.navigateUp(drawerController::toggle) },
                 onNavigateToLibraries = {
                     navigator.navigateTo(NavRoutes.Libraries)
                 },

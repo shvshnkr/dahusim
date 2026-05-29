@@ -68,7 +68,7 @@ import fr.husi.bg.ServiceState
 import androidx.compose.foundation.layout.fillMaxHeight
 import fr.husi.compose.BoxedVerticalScrollbar
 import fr.husi.ui.MainViewModelAlertDialog
-import fr.husi.compose.PlatformMenuIcon
+import fr.husi.ui.MainTopNavigationIcon
 import io.github.oikvpqya.compose.fastscroller.rememberScrollbarAdapter
 import fr.husi.compose.SagerFab
 import fr.husi.compose.SimpleIconButton
@@ -202,10 +202,10 @@ fun RouteScreen(
             TopAppBar(
                 title = { Text(stringResource(Res.string.menu_route)) },
                 navigationIcon = {
-                    PlatformMenuIcon(
-                        imageVector = vectorResource(Res.drawable.menu),
-                        contentDescription = stringResource(Res.string.menu),
+                    MainTopNavigationIcon(
+                        useBack = false,
                         onClick = onDrawerClick,
+                        hideOnAndroidBottomNavRoot = true,
                     )
                 },
                 actions = {

@@ -70,7 +70,7 @@ import fr.husi.compose.HostTextField
 import fr.husi.compose.LinkOrContentTextField
 import fr.husi.ui.MainViewModelAlertDialog
 import fr.husi.compose.PasswordPreference
-import fr.husi.compose.PlatformMenuIcon
+import fr.husi.ui.MainTopNavigationIcon
 import fr.husi.compose.PortTextField
 import fr.husi.compose.PreferenceCategory
 import fr.husi.compose.PreferenceType
@@ -255,6 +255,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     mainViewModel: MainViewModel,
     onDrawerClick: () -> Unit,
+    useBackNavigation: Boolean = false,
     openAppManager: () -> Unit,
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -335,9 +336,8 @@ fun SettingsScreen(
             SimpleTopAppBar(
                 title = { Text(stringResource(Res.string.settings)) },
                 navigationIcon = {
-                    PlatformMenuIcon(
-                        imageVector = vectorResource(Res.drawable.menu),
-                        contentDescription = stringResource(Res.string.menu),
+                    MainTopNavigationIcon(
+                        useBack = useBackNavigation,
                         onClick = onDrawerClick,
                     )
                 },

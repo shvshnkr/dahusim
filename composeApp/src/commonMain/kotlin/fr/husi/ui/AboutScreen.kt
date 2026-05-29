@@ -48,7 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import fr.husi.BuildConfig
 import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
-import fr.husi.compose.PlatformMenuIcon
+import fr.husi.ui.MainTopNavigationIcon
 import fr.husi.compose.SagerFab
 import fr.husi.compose.SimpleTopAppBar
 import fr.husi.compose.StatsBar
@@ -97,11 +97,7 @@ fun AboutScreen(
             SimpleTopAppBar(
                 title = { Text(stringResource(Res.string.menu_about)) },
                 navigationIcon = {
-                    PlatformMenuIcon(
-                        imageVector = vectorResource(Res.drawable.menu),
-                        contentDescription = stringResource(Res.string.menu),
-                        onClick = onDrawerClick,
-                    )
+                    MainTopNavigationIcon(useBack = true, onClick = onDrawerClick)
                 },
                 windowInsets = windowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                 scrollBehavior = scrollBehavior,

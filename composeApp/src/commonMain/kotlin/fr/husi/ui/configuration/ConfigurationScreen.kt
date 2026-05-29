@@ -102,8 +102,11 @@ import fr.husi.compose.material3.Text
 import fr.husi.compose.paddingExceptBottom
 import fr.husi.database.DataStore
 import fr.husi.database.ProxyEntity
+import fr.husi.database.SagerDatabase
 import fr.husi.database.displayType
+import fr.husi.compose.setPlainText
 import fr.husi.keyevent.isTypeControlPressed
+import fr.husi.ktx.onIoDispatcher
 import fr.husi.ktx.runOnIoDispatcher
 import fr.husi.ktx.showAndDismissOld
 import fr.husi.repository.resolveRepository
@@ -131,6 +134,8 @@ import fr.husi.resources.action_wireguard
 import fr.husi.resources.add_profile
 import fr.husi.resources.add_profile_methods_manual_settings
 import fr.husi.resources.apply
+import fr.husi.resources.arrow_back
+import fr.husi.resources.back
 import fr.husi.resources.cancel
 import fr.husi.resources.clear_traffic_statistics
 import fr.husi.resources.close
@@ -168,6 +173,9 @@ import fr.husi.resources.remove_duplicate
 import fr.husi.resources.removed
 import fr.husi.resources.search
 import fr.husi.resources.search_go
+import fr.husi.resources.library_select
+import fr.husi.resources.library_select_done
+import fr.husi.resources.settings
 import fr.husi.resources.simple_mode_switch
 import fr.husi.resources.sort_mode
 import fr.husi.resources.undo
@@ -175,7 +183,10 @@ import fr.husi.ui.MainViewModel
 import fr.husi.ui.MainViewModelUiEvent
 import fr.husi.ui.NavRoutes
 import fr.husi.ui.getStringOrRes
+import fr.husi.ui.library.LibraryActionStrip
+import fr.husi.ui.library.LibraryBulkActionBar
 import fr.husi.ui.stringOrRes
+import kotlinx.coroutines.flow.first
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
@@ -191,6 +202,9 @@ fun ConfigurationScreen(
     vm: ConfigurationScreenViewModel = viewModel { ConfigurationScreenViewModel() },
     onOpenProfileEditor: ((NavRoutes.ProfileEditor) -> Unit)? = null,
     onSwitchToSimpleMode: (() -> Unit)? = null,
+    fixedGroupId: Long? = null,
+    onBackPress: (() -> Unit)? = null,
+    onOpenGroupSettings: ((Long) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val snackbarState = remember { SnackbarHostState() }
@@ -246,8 +260,21 @@ fun ConfigurationScreen(
     )
     var isPageRestored by remember { mutableStateOf(false) }
     var lastPage by remember { mutableIntStateOf(pagerState.currentPage) }
+    val singleGroupMode = fixedGroupId != null
+    val profileScannerAction = rememberProfileScannerAction()
+    var bulkMode by remember { mutableStateOf(false) }
+    var bulkSelectedIds by remember { mutableStateOf(setOf<Long>()) }
+    val activeGroupId = fixedGroupId ?: DataStore.selectedGroup
+    LaunchedEffect(fixedGroupId, hasGroups, uiState.groups) {
+        if (fixedGroupId == null || !hasGroups) return@LaunchedEffect
+        val index = uiState.groups.indexOfFirst { it.id == fixedGroupId }
+        if (index >= 0 && index != pagerState.currentPage) {
+            pagerState.scrollToPage(index)
+        }
+        isPageRestored = true
+    }
     LaunchedEffect(selectedGroup, hasGroups, uiState.groups) {
-        if (!hasGroups) return@LaunchedEffect
+        if (singleGroupMode || !hasGroups) return@LaunchedEffect
         val index = uiState.groups.indexOfFirst { it.id == selectedGroup }
         if (index < 0) return@LaunchedEffect
         if (index != pagerState.currentPage) {
@@ -415,13 +442,47 @@ fun ConfigurationScreen(
                     state = searchBarState,
                     inputField = searchInputField,
                     navigationIcon = {
-                        PlatformMenuIcon(
-                            imageVector = vectorResource(Res.drawable.menu),
-                            contentDescription = stringResource(Res.string.menu),
-                            onClick = onNavigationClick,
-                        )
+                        if (onBackPress != null) {
+                            SimpleIconButton(
+                                imageVector = vectorResource(Res.drawable.arrow_back),
+                                contentDescription = stringResource(Res.string.back),
+                                onClick = onBackPress,
+                            )
+                        } else {
+                            PlatformMenuIcon(
+                                imageVector = vectorResource(Res.drawable.menu),
+                                contentDescription = stringResource(Res.string.menu),
+                                onClick = onNavigationClick,
+                            )
+                        }
                     },
                     actions = {
+                        if (singleGroupMode) {
+                            onOpenGroupSettings?.let { openSettings ->
+                                fixedGroupId?.let { groupId ->
+                                    SimpleIconButton(
+                                        imageVector = vectorResource(Res.drawable.settings),
+                                        contentDescription = stringResource(Res.string.settings),
+                                        onClick = { openSettings(groupId) },
+                                    )
+                                }
+                            }
+                            TextButton(
+                                stringResource(
+                                    if (bulkMode) {
+                                        Res.string.library_select_done
+                                    } else {
+                                        Res.string.library_select
+                                    },
+                                ),
+                                onClick = {
+                                    bulkMode = !bulkMode
+                                    if (!bulkMode) {
+                                        bulkSelectedIds = emptySet()
+                                    }
+                                },
+                            )
+                        }
                         Box {
                             SimpleIconButton(
                                 imageVector = vectorResource(Res.drawable.note_add),
@@ -474,6 +535,7 @@ fun ConfigurationScreen(
                             }
                         }
 
+                        if (!singleGroupMode) {
                         Box {
                             SimpleIconButton(
                                 imageVector = vectorResource(Res.drawable.more_vert),
@@ -593,11 +655,48 @@ fun ConfigurationScreen(
                                 }
                             }
                         }
+                        }
                     },
                     colors = appBarWithSearchColors,
                     scrollBehavior = scrollBehavior,
                     windowInsets = windowInsets.only(WindowInsetsSides.Horizontal),
                 )
+                if (singleGroupMode) {
+                    LibraryActionStrip(
+                        onImportClipboard = ::importFromClipboard,
+                        onImportFile = { importFile.launch() },
+                        onScan = profileScannerAction,
+                        onTest = {
+                            vm.doTest(activeGroupId, TestType.URLTest)
+                        },
+                        onSort = { showOrderMenu = true },
+                    )
+                    Box {
+                        DropdownMenu(
+                            expanded = showOrderMenu,
+                            onDismissRequest = { showOrderMenu = false },
+                            containerColor = MenuDefaults.groupStandardContainerColor,
+                            shape = MenuDefaults.standaloneGroupShape,
+                        ) {
+                            val orders = listOf(
+                                stringResource(Res.string.group_order_origin),
+                                stringResource(Res.string.group_order_by_name),
+                                stringResource(Res.string.group_order_by_delay),
+                            )
+                            orders.forEachIndexed { i, option ->
+                                DropdownMenuItem(
+                                    selected = currentOrder == i,
+                                    onClick = {
+                                        showOrderMenu = false
+                                        vm.updateOrder(activeGroupId, i)
+                                    },
+                                    text = { Text(text = option) },
+                                    shapes = MenuDefaults.itemShape(i, orders.size),
+                                )
+                            }
+                        }
+                    }
+                }
                 onSwitchToSimpleMode?.let { switch ->
                     Button(
                         modifier = Modifier
@@ -609,7 +708,7 @@ fun ConfigurationScreen(
                     }
                 }
 
-                if (hasGroups && uiState.groups.size > 1) PrimaryScrollableTabRow(
+                if (hasGroups && uiState.groups.size > 1 && !singleGroupMode) PrimaryScrollableTabRow(
                     selectedTabIndex = pagerState.currentPage.fastCoerceIn(
                         0,
                         uiState.groups.size - 1,
@@ -649,12 +748,49 @@ fun ConfigurationScreen(
             )
         },
         bottomBar = {
-            if (serviceStatus.state == ServiceState.Connected) {
-                StatsBar(
-                    status = serviceStatus,
-                    visible = scrollHideVisible,
-                    mainViewModel = mainViewModel,
-                )
+            Column {
+                if (singleGroupMode && bulkMode && bulkSelectedIds.isNotEmpty()) {
+                    LibraryBulkActionBar(
+                        selectedCount = bulkSelectedIds.size,
+                        onTest = {
+                            vm.doTest(
+                                activeGroupId,
+                                TestType.URLTest,
+                                bulkSelectedIds,
+                            )
+                        },
+                        onCopy = {
+                            scope.launch {
+                                val links = onIoDispatcher {
+                                    SagerDatabase.proxyDao.getByGroup(activeGroupId).first()
+                                        .filter { it.id in bulkSelectedIds }
+                                        .joinToString("\n") { it.toStdLink() }
+                                }
+                                if (links.isNotBlank()) {
+                                    clipboard.setPlainText(links)
+                                    snackbarState.showSnackbar(
+                                        message = resolveRepository().getString(Res.string.copy_success),
+                                        actionLabel = resolveRepository().getString(Res.string.ok),
+                                        duration = SnackbarDuration.Short,
+                                    )
+                                }
+                            }
+                        },
+                        onDelete = {
+                            bulkSelectedIds.forEach { id ->
+                                vm.childViewModels[activeGroupId]?.undoableRemove(id)
+                            }
+                            bulkSelectedIds = emptySet()
+                        },
+                    )
+                }
+                if (serviceStatus.state == ServiceState.Connected) {
+                    StatsBar(
+                        status = serviceStatus,
+                        visible = scrollHideVisible,
+                        mainViewModel = mainViewModel,
+                    )
+                }
             }
         },
     ) { innerPadding ->
@@ -674,6 +810,15 @@ fun ConfigurationScreen(
             bottomPadding = bottomPadding,
             onScrollHideChange = { scrollHideVisible = it },
             onOpenProfileEditor = onOpenProfileEditor,
+            libraryBulkMode = singleGroupMode && bulkMode,
+            libraryBulkSelected = bulkSelectedIds,
+            onLibraryBulkToggle = { id ->
+                bulkSelectedIds = if (id in bulkSelectedIds) {
+                    bulkSelectedIds - id
+                } else {
+                    bulkSelectedIds + id
+                }
+            },
         )
     }
 
@@ -811,6 +956,9 @@ fun ConfigurationContent(
     bottomPadding: Dp,
     onOpenProfileEditor: ((NavRoutes.ProfileEditor) -> Unit)? = null,
     onScrollHideChange: (Boolean) -> Unit = {},
+    libraryBulkMode: Boolean = false,
+    libraryBulkSelected: Set<Long> = emptySet(),
+    onLibraryBulkToggle: (Long) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
 
@@ -918,6 +1066,9 @@ fun ConfigurationContent(
                                 onScrollHideChange(visible)
                             }
                         },
+                        bulkSelectionMode = libraryBulkMode,
+                        bulkSelectedIds = libraryBulkSelected,
+                        onBulkToggle = onLibraryBulkToggle,
                     )
                 }
             }

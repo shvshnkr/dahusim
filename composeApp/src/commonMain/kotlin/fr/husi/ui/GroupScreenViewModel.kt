@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import fr.husi.resources.*
+import fr.husi.ui.library.LibrarySegment
+import fr.husi.ui.library.matchesSegment
 
 @Immutable
 data class GroupUiState(
@@ -156,6 +158,27 @@ class GroupScreenViewModel : ViewModel() {
         deleteTimer = viewModelScope.launch {
             delay(5000)
             commit()
+        }
+    }
+
+    fun submitSegmentReorder(
+        segment: LibrarySegment,
+        changes: List<OrderedItem<GroupItemUiState>>,
+    ) = runOnDefaultDispatcher {
+        val segmentItems = _uiState.value.groups.filter { it.matchesSegment(segment) }
+        if (segmentItems.isEmpty() || changes.isEmpty()) return@runOnDefaultDispatcher
+        val baseOrder = segmentItems.minOf { it.group.userOrder }
+        val toUpdate = changes.mapNotNull { orderedItem ->
+            val newUserOrder = baseOrder + orderedItem.newIndex
+            val group = orderedItem.value.group
+            if (group.userOrder != newUserOrder) {
+                group.copy(userOrder = newUserOrder)
+            } else {
+                null
+            }
+        }
+        if (toUpdate.isNotEmpty()) onIoDispatcher {
+            SagerDatabase.groupDao.updateGroups(toUpdate)
         }
     }
 

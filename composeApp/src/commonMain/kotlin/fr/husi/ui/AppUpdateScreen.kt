@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.husi.BuildConfig
 import fr.husi.Key
-import fr.husi.compose.PlatformMenuIcon
+import fr.husi.ui.MainTopNavigationIcon
 import fr.husi.compose.SimpleTopAppBar
 import fr.husi.compose.material3.Icon
 import fr.husi.compose.withNavigation
@@ -173,11 +173,7 @@ fun AppUpdateScreen(
             SimpleTopAppBar(
                 title = { Text(stringResource(Res.string.app_update_screen_title)) },
                 navigationIcon = {
-                    PlatformMenuIcon(
-                        imageVector = vectorResource(Res.drawable.menu),
-                        contentDescription = stringResource(Res.string.menu),
-                        onClick = onDrawerClick,
-                    )
+                    MainTopNavigationIcon(useBack = true, onClick = onDrawerClick)
                 },
                 windowInsets = windowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                 scrollBehavior = scrollBehavior,
