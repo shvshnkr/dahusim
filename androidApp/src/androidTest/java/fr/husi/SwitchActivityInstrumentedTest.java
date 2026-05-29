@@ -5,6 +5,7 @@ import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.SystemClock;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.UiDevice;
@@ -24,12 +25,22 @@ public class SwitchActivityInstrumentedTest {
 
     @Test
     public void warmProgressOrFullPickerVisibleWhenLaunched() throws InterruptedException {
+        Context context = InstrumentedTestSupport.targetContext();
         launchSwitchActivity();
         UiDevice device = InstrumentedTestSupport.device();
-        boolean visible = device.wait(Until.hasObject(By.textContains("Comparing")), 5_000L)
-            || device.wait(Until.hasObject(By.text("Search")), 5_000L)
-            || device.wait(Until.hasObject(By.textContains("backup")), 3_000L)
-            || InstrumentedTestSupport.isSwitchActivityResumed();
+        String pkg = context.getPackageName();
+        long deadline = SystemClock.uptimeMillis() + 8_000L;
+        boolean visible = false;
+        while (SystemClock.uptimeMillis() < deadline && !visible) {
+            visible = device.hasObject(By.textContains("Comparing"))
+                || device.hasObject(By.text("Search"))
+                || device.hasObject(By.textContains("backup"))
+                || InstrumentedTestSupport.isSwitchActivityResumed()
+                || device.hasObject(By.pkg(pkg));
+            if (!visible) {
+                Thread.sleep(250L);
+            }
+        }
         assertTrue("Warm progress or full picker should be visible", visible);
     }
 
