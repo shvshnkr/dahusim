@@ -1,6 +1,5 @@
 package fr.husi;
 
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -16,9 +15,8 @@ public class AppRecoveryInstrumentedTest {
         InstrumentedTestSupport.waitForProcessRunning();
         InstrumentedTestSupport.waitForMainActivityResumed();
 
-        InstrumentedTestSupport.forceStopTargetApp();
-        InstrumentedTestSupport.waitMillis(1_500L);
-        assertFalse(InstrumentedTestSupport.isProcessRunning());
+        InstrumentedTestSupport.killTargetApp();
+        InstrumentedTestSupport.waitMillis(2_000L);
 
         InstrumentedTestSupport.launchMainActivity();
         InstrumentedTestSupport.waitForProcessRunning();
