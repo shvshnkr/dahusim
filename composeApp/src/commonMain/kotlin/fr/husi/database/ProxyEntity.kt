@@ -1,5 +1,6 @@
 package fr.husi.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Delete
 import androidx.room.Entity
 import androidx.room.Ignore
@@ -66,6 +67,7 @@ import kotlinx.coroutines.runBlocking
 data class ProxyEntity(
     @PrimaryKey(autoGenerate = true) var id: Long = 0L,
     var groupId: Long = 0L,
+    @ColumnInfo(defaultValue = "") var originSourceId: String = "",
     var type: Int = 0,
     var userOrder: Long = 0L,
     var tx: Long = 0L,

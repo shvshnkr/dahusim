@@ -72,7 +72,7 @@ import fr.husi.compose.rememberScrollHideState
 import fr.husi.compose.setPlainText
 import fr.husi.compose.withNavigation
 import fr.husi.database.SagerDatabase
-import fr.husi.database.isCatalogDeletable
+import fr.husi.database.isGroupDeletable
 import fr.husi.fmt.toUniversalLink
 import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionSourceKind
@@ -319,10 +319,10 @@ fun GroupScreen(
                         state = swipeState,
                         enableDismissFromStartToEnd = !groupState.group.ungrouped &&
                             !groupState.isUpdating &&
-                            groupState.group.isCatalogDeletable(),
+                            groupState.group.isGroupDeletable(),
                         enableDismissFromEndToStart = !groupState.group.ungrouped &&
                             !groupState.isUpdating &&
-                            groupState.group.isCatalogDeletable(),
+                            groupState.group.isGroupDeletable(),
                         backgroundContent = {
                             Box(
                                 modifier = Modifier

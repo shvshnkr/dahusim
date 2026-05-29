@@ -93,3 +93,17 @@ object SagerDatabase_Migration_18_19 : Migration(18, 19) {
         )
     }
 }
+
+object SagerDatabase_Migration_20_21 : Migration(20, 21) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            """ALTER TABLE `proxy_groups` ADD `origin` INTEGER NOT NULL DEFAULT 0""",
+        )
+        connection.execSQL(
+            """ALTER TABLE `proxy_groups` ADD `originSourceId` TEXT NOT NULL DEFAULT ''""",
+        )
+        connection.execSQL(
+            """ALTER TABLE `proxy_entities` ADD `originSourceId` TEXT NOT NULL DEFAULT ''""",
+        )
+    }
+}

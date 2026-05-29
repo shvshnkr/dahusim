@@ -838,8 +838,9 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_activity_server_degraded">Сервер ухудшился, переключение…</string>
     <string name="simple_mode_activity_server_unreachable">Сервер недоступен, следующий…</string>
     <string name="simple_mode_activity_connection_error">Ошибка соединения, следующий…</string>
-    <string name="simple_mode_unclean_stop_battery_restricted">Соединение оборвалось в фоне — вы VPN не отключали. Частая причина — оптимизация батареи: нажмите кнопку ниже, чтобы разрешить работу без ограничений, или «Подключить».</string>
-    <string name="simple_mode_unclean_stop_battery_already_off">Соединение оборвалось в фоне. Для приложения оптимизация батареи уже отключена. Возможные причины: закрытие из «Недавних», режим экономии, ограничение фона в настройках производителя или остановка системой. Нажмите «Подключить», чтобы снова включить VPN.</string>
+    <string name="simple_mode_unclean_stop_title">Соединение оборвалось в фоне</string>
+    <string name="simple_mode_unclean_stop_battery_restricted">Вы VPN не отключали. Частая причина — оптимизация батареи: нажмите кнопку ниже или «Подключить».</string>
+    <string name="simple_mode_unclean_stop_battery_already_off">Оптимизация батареи уже отключена. Возможные причины: закрытие из «Недавних», режим экономии, ограничение фона в настройках производителя или остановка системой. Нажмите «Подключить».</string>
     <string name="simple_mode_activity_trying_next">Пробуем следующий сервер…</string>
     <string name="simple_mode_activity_ranking">Ранжирование %1$d серверов…</string>
     <string name="simple_mode_activity_testing_tcp">Проверка TCP %1$d/%2$d</string>

@@ -13,5 +13,8 @@ internal object WarmReserveMaintainerPolicy {
         nowMs: Long,
         lastReplenishAtMs: Long,
         debounceMs: Long = Probe2kDefaults.WARM_RESERVE_REPLENISH_DEBOUNCE_MS,
-    ): Boolean = reason != "pre_fallback" && nowMs - lastReplenishAtMs < debounceMs
+    ): Boolean = when (reason) {
+        "initial", "pre_fallback" -> false
+        else -> nowMs - lastReplenishAtMs < debounceMs
+    }
 }

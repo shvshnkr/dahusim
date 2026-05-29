@@ -18,7 +18,7 @@ import fr.husi.fmt.KryoConverters
         AssetEntity::class,
         PluginEntity::class,
     ],
-    version = 20,
+    version = 21,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3, spec = SagerDatabase_Migration_2_3::class),

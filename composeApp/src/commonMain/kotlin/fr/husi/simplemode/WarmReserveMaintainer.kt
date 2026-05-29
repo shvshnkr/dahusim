@@ -58,6 +58,7 @@ object WarmReserveMaintainer {
         job = null
         monitoredProfileId = -1L
         lastReplenishAt = 0L
+        WarmReserveSessionCache.clear()
         DataStore.probe2kWarmReserveStatus = ""
         simpleModeLog("SimpleMode", "H37 warm_reserve_cancel")
     }
@@ -77,6 +78,7 @@ object WarmReserveMaintainer {
     private suspend fun runCycle(connectedProfileId: Long, reason: String) {
         if (!WarmReservePool.isFeatureEnabled() || !DataStore.serviceState.connected) return
         if (connectedProfileId <= 0L) return
+        val cache = WarmReserveSessionCache
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
         val queue = AutoServerSelectorSessionFallback.parseQueue(DataStore.autoSelectFallbackQueue)
         if (queue.isEmpty()) {
@@ -84,14 +86,15 @@ object WarmReserveMaintainer {
             return
         }
         var probeStates = ProxyProbeStateStore.loadMap(queue)
-        var reserveIds = WarmReservePool.selectReserveIds(queue, connectedProfileId, probeStates)
         val target = WarmReservePool.targetCount()
+        var reserveIds = WarmReservePool.selectReserveIds(queue, connectedProfileId, probeStates, target = target, cache = cache)
+        var liveAlive = WarmReservePool.countSessionLive(reserveIds, cache)
         var freshAlive = WarmReservePool.countFreshUrlAlive(reserveIds, probeStates)
-        var deficit = WarmReservePool.deficit(reserveIds, probeStates)
+        var deficit = WarmReservePool.deficit(reserveIds, cache, target)
         simpleModeLog(
             "SimpleMode",
             "H37 warm_reserve_cycle_start trigger=$reason target=$target reserveIds=$reserveIds " +
-                "freshAlive=$freshAlive deficit=$deficit wlOnly=$wlOnly queueSize=${queue.size}",
+                "liveAlive=$liveAlive freshAlive=$freshAlive deficit=$deficit wlOnly=$wlOnly queueSize=${queue.size}",
         )
         if (reserveIds.isNotEmpty() && DataStore.serviceState.connected) {
             val verifyResults = WarmReserveLiveProbe.probeUrlDelaysParallel(
@@ -106,9 +109,10 @@ object WarmReserveMaintainer {
             }
             probeStates = ProxyProbeStateStore.loadMap(queue)
         }
-        reserveIds = WarmReservePool.selectReserveIds(queue, connectedProfileId, probeStates)
+        reserveIds = WarmReservePool.liveReserveIds(queue, connectedProfileId, cache, probeStates, target)
+        liveAlive = WarmReservePool.countSessionLive(reserveIds, cache)
         freshAlive = WarmReservePool.countFreshUrlAlive(reserveIds, probeStates)
-        deficit = WarmReservePool.deficit(reserveIds, probeStates)
+        deficit = WarmReservePool.deficit(reserveIds, cache, target)
         if (deficit > 0) {
             val now = System.currentTimeMillis()
             if (WarmReserveMaintainerPolicy.shouldSkipReplenish(reason, now, lastReplenishAt)) {
@@ -118,44 +122,69 @@ object WarmReserveMaintainer {
                 )
             } else {
                 lastReplenishAt = now
-                val candidates = WarmReservePool.replenishCandidates(
+                val scanLimit = maxOf(
+                    Probe2kDefaults.WARM_REPLENISH_SCAN_LIMIT,
+                    target * 4,
+                )
+                var candidates = WarmReservePool.replenishScanCandidates(
                     queue = queue,
                     connectedId = connectedProfileId,
                     reserveIds = reserveIds,
                     probeStates = probeStates,
-                    limit = deficit,
+                    cache = cache,
+                    scanLimit = scanLimit,
                 )
-                val replenishResults = if (candidates.isNotEmpty() && DataStore.serviceState.connected) {
-                    WarmReserveLiveProbe.probeUrlDelaysParallel(
-                        profileIds = candidates,
+                var promoted = 0
+                var scanIdx = 0
+                while (
+                    liveAlive < target &&
+                    scanIdx < candidates.size &&
+                    DataStore.serviceState.connected
+                ) {
+                    val batch = candidates.drop(scanIdx).take(Probe2kDefaults.WARM_SWITCH_LIVE_PARALLELISM)
+                    scanIdx += batch.size
+                    if (batch.isEmpty()) break
+                    val replenishResults = WarmReserveLiveProbe.probeUrlDelaysParallel(
+                        profileIds = batch,
                         whitelistOnly = wlOnly,
                     )
-                } else {
-                    emptyMap()
-                }
-                var promoted = 0
-                replenishResults.forEach { (id, ms) ->
-                    if (ms != null) {
-                        promoted++
-                        simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=true ms=$ms")
-                    } else {
-                        simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=false")
+                    replenishResults.forEach { (id, ms) ->
+                        if (ms != null) {
+                            promoted++
+                            simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=true ms=$ms")
+                        } else {
+                            simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=false")
+                        }
+                    }
+                    probeStates = ProxyProbeStateStore.loadMap(queue)
+                    reserveIds = WarmReservePool.liveReserveIds(queue, connectedProfileId, cache, probeStates, target)
+                    liveAlive = WarmReservePool.countSessionLive(reserveIds, cache)
+                    if (liveAlive < target && scanIdx >= candidates.size) {
+                        candidates = WarmReservePool.replenishScanCandidates(
+                            queue = queue,
+                            connectedId = connectedProfileId,
+                            reserveIds = reserveIds,
+                            probeStates = probeStates,
+                            cache = cache,
+                            scanLimit = scanLimit,
+                        )
+                        scanIdx = 0
+                        if (candidates.isEmpty()) break
                     }
                 }
-                probeStates = ProxyProbeStateStore.loadMap(queue)
-                reserveIds = WarmReservePool.selectReserveIds(queue, connectedProfileId, probeStates)
                 freshAlive = WarmReservePool.countFreshUrlAlive(reserveIds, probeStates)
                 simpleModeLog(
                     "SimpleMode",
-                    "H37 warm_reserve_replenish attempted=${candidates.size} promoted=$promoted",
+                    "H37 warm_reserve_replenish scanLimit=$scanLimit promoted=$promoted liveAlive=$liveAlive",
                 )
             }
         }
-        WarmReservePool.updateStatusSnapshot(reserveIds, probeStates)
-        if (freshAlive < target) {
+        WarmReservePool.updateStatusSnapshot(reserveIds, probeStates, cache)
+        if (liveAlive < target) {
             simpleModeLog(
                 "SimpleMode",
-                "H37 warm_reserve_partial alive=$freshAlive target=$target",
+                "H37 warm_reserve_partial liveAlive=$liveAlive freshAlive=$freshAlive target=$target " +
+                    "warmFailed=${cache.warmFailedIdsSnapshot()}",
             )
         }
         ProxyProbeStateStore.logPoolSnapshot("warm_reserve")

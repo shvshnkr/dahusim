@@ -6,36 +6,32 @@ import fr.husi.SubscriptionType
 import fr.husi.database.CatalogOwnership
 import fr.husi.database.DataStore
 import fr.husi.database.GroupManager
+import fr.husi.database.GroupOrigin
+import fr.husi.database.GroupOriginSync
 import fr.husi.database.ProfileManager
-import fr.husi.database.ProxyEntity
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
-import fr.husi.fmt.v2ray.VLESSBean
 import fr.husi.bg.SubscriptionUpdater
 import fr.husi.group.GroupUpdater
-import fr.husi.subscription.catalog.SubscriptionCatalogApplier
 import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
-import fr.husi.ktx.parseProxies
 import fr.husi.simplemode.probeSimpleModeNetwork
+import fr.husi.subscription.catalog.SubscriptionCatalogApplier
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import fr.husi.subscription.catalog.SubscriptionCatalogDefaults
 import kotlinx.coroutines.flow.first
 
 object DefaultUserBootstrap {
     private const val AUTO_UPDATE_MINUTES = 60
-    private const val STANDALONE_SE_GROUP = "Quick standalone SE"
-    private const val STANDALONE_SE_PROFILE = "SE relay builtin"
     private const val LEGACY_BUILTIN_HELPERS_GROUP = "Built-in (simple mode helpers)"
-    private const val STANDALONE_SE_VLESS_URI: String =
-        "vless://2001daf3-5c56-4bef-8ea6-8dd0493c5a4c@2.27.23.73:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.deepl.com&fp=chrome&pbk=ZHEMPjSWslk6_qD2JNQzd5enUPz8nY9mYRRuM6NkZmU&sid=1a&packetEncoding=xudp#%F0%9F%87%B8%F0%9F%87%AA%20SE%20%7C%20VLESS%20%7C%20%E2%9A%A1%201362ms"
     private val obsoleteQuickSubscriptionLinks = setOf(
         "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/githubmirror/clean/vless.txt",
     )
 
     suspend fun bootstrapAll() {
         applyBootstrapNetworkProbe()
+        GroupOriginSync.reconcileAll()
         ensureReservedBuiltinSlot()
         bootstrapDefaultSubscriptions()
         runCatching {
@@ -51,7 +47,7 @@ object DefaultUserBootstrap {
         }.onFailure {
             Logs.w("DefaultUserBootstrap: subscription catalog sync", it)
         }
-        ensureStandaloneSeVlessProfile()
+        BuiltinRelayBootstrap.ensureBuiltinRelayPool()
         bootstrapPerAppDefaults()
         ProfileManager.ensureBootstrapRoutingDefaults()
         if (DataStore.routeQuickProfile != RouteQuickProfile.MANUAL) {
@@ -85,11 +81,21 @@ object DefaultUserBootstrap {
         val existing = subscriptions.find { it.subscription?.sourceId == reservedId }
         if (existing != null) {
             val sub = existing.subscription ?: return
+            var changed = false
             if (sub.catalogOwnership != CatalogOwnership.PROTECTED_RESERVED) {
                 sub.catalogOwnership = CatalogOwnership.PROTECTED_RESERVED
                 sub.managedByRemote = true
-                GroupManager.updateGroup(existing)
+                changed = true
             }
+            if (existing.origin != GroupOrigin.PROTECTED_BUILTIN) {
+                existing.origin = GroupOrigin.PROTECTED_BUILTIN
+                changed = true
+            }
+            if (existing.originSourceId != reservedId) {
+                existing.originSourceId = reservedId
+                changed = true
+            }
+            if (changed) GroupManager.updateGroup(existing)
             return
         }
         GroupManager.createGroup(
@@ -97,6 +103,8 @@ object DefaultUserBootstrap {
                 name = SubscriptionCatalogDefaults.RESERVED_BUILTIN_GROUP_NAME,
                 type = GroupType.SUBSCRIPTION,
             ).apply {
+                origin = GroupOrigin.PROTECTED_BUILTIN
+                originSourceId = reservedId
                 subscription = SubscriptionBean().apply {
                     type = SubscriptionType.RAW
                     link = ""
@@ -123,11 +131,14 @@ object DefaultUserBootstrap {
         SubscriptionCatalogDefaults.STARTER_SEEDS.forEachIndexed { index, seed ->
             val link = seed.link
             if (link in existingLinks) return@forEachIndexed
+            val targetSourceId = SubscriptionCatalogDefaults.builtinSourceId(seed.sourceKey)
             val created = GroupManager.createGroup(
                 ProxyGroup(
                     name = seed.name.ifBlank { "Quick Subscription ${index + 1}" },
                     type = GroupType.SUBSCRIPTION,
                 ).apply {
+                    origin = GroupOrigin.GH_MANAGED
+                    originSourceId = targetSourceId
                     subscription = SubscriptionBean().apply {
                         this.type = SubscriptionType.RAW
                         this.link = link
@@ -136,7 +147,7 @@ object DefaultUserBootstrap {
                         deduplication = true
                         updateWhenConnectedOnly = false
                         managedByRemote = true
-                        sourceId = SubscriptionCatalogDefaults.builtinSourceId(seed.sourceKey)
+                        sourceId = targetSourceId
                         connectPoolRole = seed.poolRole
                     }
                 },
@@ -182,34 +193,15 @@ object DefaultUserBootstrap {
                 sub.connectPoolRole = seed.poolRole
                 changed = true
             }
+            if (group.origin != GroupOrigin.GH_MANAGED) {
+                group.origin = GroupOrigin.GH_MANAGED
+                changed = true
+            }
+            if (group.originSourceId != targetSourceId) {
+                group.originSourceId = targetSourceId
+                changed = true
+            }
             if (changed) GroupManager.updateGroup(group)
-        }
-    }
-
-    private suspend fun ensureStandaloneSeVlessProfile() {
-        val bean = parseProxies(STANDALONE_SE_VLESS_URI)
-            .mapNotNull { it as? VLESSBean }
-            .firstOrNull()
-            ?: return
-        bean.name = STANDALONE_SE_PROFILE
-        bean.applyDefaultValues()
-        val allGroups = SagerDatabase.groupDao.allGroups().first()
-        var seGroup = allGroups.find { it.name == STANDALONE_SE_GROUP }
-        if (seGroup == null) {
-            seGroup = GroupManager.createGroup(
-                ProxyGroup(name = STANDALONE_SE_GROUP, type = GroupType.BASIC),
-            )
-        }
-        val gid = seGroup.id
-        val existing = SagerDatabase.proxyDao.getByGroup(gid).first()
-        val entity = existing.find {
-            it.type == ProxyEntity.TYPE_VLESS && it.vlessBean?.name == STANDALONE_SE_PROFILE
-        }
-        if (entity == null) {
-            ProfileManager.createProfile(gid, bean)
-        } else {
-            entity.putBean(bean)
-            ProfileManager.updateProfile(entity)
         }
     }
 

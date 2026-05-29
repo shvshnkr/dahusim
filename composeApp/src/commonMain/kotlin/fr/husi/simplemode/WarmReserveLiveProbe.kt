@@ -43,9 +43,11 @@ internal object WarmReserveLiveProbe {
                             }
                             if (ms != null) {
                                 ProxyProbeStateStore.recordUrlSuccess(id, ms)
+                                WarmReserveSessionCache.markLive(id)
                                 results[id] = ms
                             } else if (proxy != null) {
                                 ProxyProbeStateStore.recordFailure(id, errorClass = "warm_live_probe_fail")
+                                WarmReserveSessionCache.markWarmFailed(id)
                             }
                         }
                         onProgress(doneCounter.incrementAndGet(), total, id, results[id])

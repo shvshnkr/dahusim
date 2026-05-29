@@ -3,6 +3,7 @@ package fr.husi.subscription.catalog
 import fr.husi.GroupType
 import fr.husi.bg.SubscriptionUpdater
 import fr.husi.database.CatalogOwnership
+import fr.husi.database.applyOriginFromSubscription
 import fr.husi.database.ConnectPoolRole
 import fr.husi.database.DataStore
 import fr.husi.database.GroupManager
@@ -117,6 +118,7 @@ object SubscriptionCatalogApplier {
                             fetchProfile = record.fetchProfile
                             customUserAgent = record.customUserAgent
                         }.applyDefaultValues()
+                        applyOriginFromSubscription()
                     },
                     notifySubscriptionScheduler = false,
                 )
@@ -139,6 +141,7 @@ object SubscriptionCatalogApplier {
                 }
                 group.name = record.name
                 group.subscription = sub
+                group.applyOriginFromSubscription()
                 GroupManager.updateGroup(group)
                 affectedGroupIds += group.id
                 updated++
@@ -220,7 +223,10 @@ object SubscriptionCatalogApplier {
                         changed = true
                     }
             }
-            if (changed) GroupManager.updateGroup(group)
+            if (changed) {
+                group.applyOriginFromSubscription()
+                GroupManager.updateGroup(group)
+            }
         }
     }
 

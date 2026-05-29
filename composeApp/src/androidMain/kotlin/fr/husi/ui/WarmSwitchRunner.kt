@@ -5,6 +5,7 @@ import fr.husi.database.ProfileManager
 import fr.husi.database.ProxyProbeStateStore
 import fr.husi.database.WarmReservePool
 import fr.husi.simplemode.WarmReserveLiveProbe
+import fr.husi.simplemode.WarmReserveSessionCache
 import fr.husi.simplemode.WarmReserveSwitchPolicy
 import fr.husi.simplemode.WarmSwitchDecision
 import fr.husi.utils.simpleModeLog
@@ -82,6 +83,9 @@ internal object WarmSwitchRunner {
             liveUrlMs = liveUrlMs,
             probeStates = updatedStates,
         )
+        if (decision is WarmSwitchDecision.SwitchTo) {
+            WarmReserveSessionCache.markLive(decision.profileId)
+        }
         simpleModeLog(
             "SimpleMode",
             "H37 warm_switch_decision decision=${decision::class.simpleName} connected=$connectedId reserves=$reserveIds",

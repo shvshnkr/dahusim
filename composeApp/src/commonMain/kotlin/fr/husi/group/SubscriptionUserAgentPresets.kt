@@ -27,10 +27,10 @@ object SubscriptionUserAgentPresets {
 
   // Factory defaults — verify against real clients before release (mitm / Play builds).
     object FactoryVersions {
-        const val HAPP = "3.19.1"
-        const val V2RAYNG = "1.8.29"
-        const val V2RAYTUN = "1.0.0"
-        const val INCY = "2.1.0"
+        const val HAPP = "3.21.1"
+        const val V2RAYNG = "2.1.8"
+        const val V2RAYTUN = "5.21.68"
+        const val INCY = "2.1.1"
     }
 
     fun defaultVersions(): Map<Int, String> = mapOf(

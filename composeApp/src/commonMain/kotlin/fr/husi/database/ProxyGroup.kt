@@ -1,5 +1,6 @@
 package fr.husi.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Delete
 import androidx.room.Entity
 import androidx.room.Insert
@@ -25,6 +26,8 @@ data class ProxyGroup(
     var ungrouped: Boolean = false,
     var name: String? = null,
     var type: Int = GroupType.BASIC,
+    @ColumnInfo(defaultValue = "0") var origin: Int = GroupOrigin.USER,
+    @ColumnInfo(defaultValue = "") var originSourceId: String = "",
     var subscription: SubscriptionBean? = null,
     var order: Int = GroupOrder.ORIGIN,
     var frontProxy: Long = -1L,
@@ -117,6 +120,9 @@ data class ProxyGroup(
 
         @Query("SELECT * FROM proxy_groups WHERE id = :groupId")
         fun getById(groupId: Long): Flow<ProxyGroup?>
+
+        @Query("SELECT * FROM proxy_groups WHERE originSourceId = :sourceId LIMIT 1")
+        suspend fun findByOriginSourceId(sourceId: String): ProxyGroup?
 
         @Query("DELETE FROM proxy_groups WHERE id = :groupId")
         suspend fun deleteById(groupId: Long): Int
