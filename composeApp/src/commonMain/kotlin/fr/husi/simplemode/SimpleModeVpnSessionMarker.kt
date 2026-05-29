@@ -43,10 +43,11 @@ object SimpleModeVpnSessionMarker {
         nowMs: Long = System.currentTimeMillis(),
         batteryRestrictedForLog: Boolean = false,
     ): Boolean {
+        val lastHeartbeatMs = DataStore.simpleModeVpnLastHeartbeatMs
         return when (
             evaluateUncleanStopState(
                 sessionExpected = DataStore.simpleModeVpnSessionExpected,
-                lastHeartbeatMs = DataStore.simpleModeVpnLastHeartbeatMs,
+                lastHeartbeatMs = lastHeartbeatMs,
                 nowMs = nowMs,
             )
         ) {
