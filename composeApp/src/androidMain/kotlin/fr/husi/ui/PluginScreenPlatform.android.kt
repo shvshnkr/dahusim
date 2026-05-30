@@ -15,6 +15,7 @@ import androidx.core.net.toUri
 import fr.husi.fmt.PluginEntry
 import fr.husi.ktx.Logs
 import fr.husi.platform.OemVendorPolicy
+import fr.husi.platform.VendorBackgroundHint
 import fr.husi.plugin.Plugins
 import fr.husi.plugin.loadString
 import fr.husi.utils.PackageCache
@@ -100,19 +101,30 @@ internal actual fun rememberRequestIgnoreBatteryOptimizations(): () -> Unit {
 }
 
 @Composable
-internal actual fun rememberShowHuaweiLaunchManagerHint(): Boolean {
+internal actual fun rememberVendorBackgroundHint(): VendorBackgroundHint {
     val context = LocalContext.current
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     return remember(context, powerManager) {
-        OemVendorPolicy.isHuaweiFamilyManufacturer(Build.MANUFACTURER, Build.BRAND) &&
-            powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        OemVendorPolicy.resolveVendorBackgroundHint(
+            manufacturer = Build.MANUFACTURER,
+            brand = Build.BRAND,
+            batteryOptimizationIgnored = powerManager.isIgnoringBatteryOptimizations(context.packageName),
+        )
     }
 }
 
 @Composable
-internal actual fun rememberOpenHuaweiLaunchManagerSettings(): () -> Unit {
+internal actual fun rememberOpenVendorBackgroundSettings(): () -> Unit {
     val context = LocalContext.current
-    return remember(context) {
-        { OemBackgroundSettings.openHuaweiLaunchManager(context) }
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    return remember(context, powerManager) {
+        {
+            val hint = OemVendorPolicy.resolveVendorBackgroundHint(
+                manufacturer = Build.MANUFACTURER,
+                brand = Build.BRAND,
+                batteryOptimizationIgnored = powerManager.isIgnoringBatteryOptimizations(context.packageName),
+            )
+            OemBackgroundSettings.openVendorBackground(context, hint)
+        }
     }
 }

@@ -843,6 +843,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_unclean_stop_battery_already_off">Оптимизация батареи уже отключена. Возможные причины: закрытие из «Недавних», режим экономии, ограничение фона в настройках производителя или остановка системой. Нажмите «Подключить».</string>
     <string name="simple_mode_unclean_stop_huawei_launch">На Huawei/Honor оптимизация батареи может быть уже выключена, но VPN всё равно рвёт «Диспетчер запуска». Откройте настройки ниже, включите автозапуск и работу в фоне для этого приложения, затем «Подключить».</string>
     <string name="simple_mode_open_huawei_launch_manager">Диспетчер запуска</string>
+    <string name="simple_mode_unclean_stop_xiaomi_autostart">На Xiaomi/Redmi/POCO (MIUI/HyperOS) автозапуск часто выключен — VPN рвётся в фоне даже при отключённой оптимизации батареи. Откройте автозапуск ниже, включите для этого приложения, в батарее выберите «Без ограничений», затем «Подключить». Вручную: Безопасность → Автозапуск или Настройки → Приложения → Автозапуск.</string>
+    <string name="simple_mode_open_xiaomi_autostart">Автозапуск</string>
     <string name="simple_mode_activity_trying_next">Пробуем следующий сервер…</string>
     <string name="simple_mode_activity_ranking">Ранжирование %1$d серверов…</string>
     <string name="simple_mode_activity_testing_tcp">Проверка TCP %1$d/%2$d</string>
