@@ -47,6 +47,7 @@ import fr.husi.compose.material3.Surface
 import fr.husi.compose.theme.AppTheme
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
+import fr.husi.simplemode.prepareManualProfileReload
 import fr.husi.permission.LocalPermissionPlatform
 import fr.husi.permission.rememberAndroidPermissionPlatform
 import fr.husi.resources.Res
@@ -84,6 +85,7 @@ class SwitchActivity : ComposeActivity() {
 
     private fun applySwitchAndFinish(profileId: Long) {
         AutoServerSelector.applyManualSwitch(profileId)
+        prepareManualProfileReload()
         resolveRepository().reloadService()
         finish()
     }

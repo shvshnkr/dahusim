@@ -44,6 +44,7 @@ import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.simplemode.SimpleModeSessionHealth
 import fr.husi.simplemode.SimpleModeVpnSessionMarker
 import fr.husi.simplemode.WarmReserveMaintainer
+import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.simplemode.SimpleModeTunnelRestart
 import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.resources.*
@@ -563,6 +564,27 @@ class BaseService {
                         reachability,
                         requestReloadOnChange = false,
                     )
+                    if (shouldRunManualProfileProbe()) {
+                        val manualDelay = DirectProfileUrlProbe.urlTestDelay(
+                            profile,
+                            whitelistOnly = reachability.whitelistOnly,
+                        )
+                        if (manualDelay == null) {
+                            simpleModeLog(
+                                "SimpleMode",
+                                "H17 manual_profile_probe_failed profileId=${profile.id} wlOnly=${reachability.whitelistOnly}",
+                            )
+                            stopRunner(
+                                false,
+                                resolveRepository().getString(Res.string.manual_profile_probe_failed),
+                            )
+                            return@runOnDefaultDispatcher
+                        }
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H17 manual_profile_probe_ok profileId=${profile.id} delayMs=$manualDelay",
+                        )
+                    }
                     simpleModeLog(
                         "SimpleMode",
                         "H9 connect_profile id=${profile.id} group=${profile.groupId} status=${profile.status} ping=${profile.ping} fallbackIndex=${DataStore.autoSelectFallbackIndex}",
@@ -969,6 +991,9 @@ class BaseService {
 
 }
 
+private fun shouldRunManualProfileProbe(): Boolean =
+    !SimpleModeConnectCoordinator.consumeAutoselectPrepareProbe()
+
 private suspend fun resolveConnectReachability(): NetworkReachability {
     val startedAt = System.currentTimeMillis()
     SimpleModeTunnelRestart.takeCachedReachability()?.let { cached ->
@@ -983,10 +1008,31 @@ private suspend fun resolveConnectReachability(): NetworkReachability {
         )
         return cached
     }
-    val result = NetworkReachabilityProbe.probe(fast = DataStore.simpleMode)
+    val fast = DataStore.simpleMode
+    var attempts = 0
+    val result = ConnectReachabilityRetry.resolveWithRetry(
+        maxAttempts = ConnectReachabilityRetry.DEFAULT_MAX_ATTEMPTS,
+        retryDelayMs = ConnectReachabilityRetry.DEFAULT_RETRY_DELAY_MS,
+        budgetMs = ConnectReachabilityRetry.DEFAULT_BUDGET_MS,
+        hasInternet = { it.hasInternet },
+        probe = {
+            attempts++
+            val probeResult = NetworkReachabilityProbe.probe(fast = fast)
+            if (attempts > 1) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H7 reachability_retry attempt=${attempts - 1} google=${probeResult.googleReachable} " +
+                        "dzen=${probeResult.dzenReachable} ya=${probeResult.yaReachable} " +
+                        "wlSource=${probeResult.whitelistSourceReachable}",
+                )
+            }
+            probeResult
+        },
+    )
     simpleModeLog(
         "SimpleMode",
-        "H7 reachability_probe source=network elapsedMs=${System.currentTimeMillis() - startedAt} fast=${DataStore.simpleMode}",
+        "H7 reachability_probe source=network elapsedMs=${System.currentTimeMillis() - startedAt} " +
+            "fast=$fast attempts=$attempts",
     )
     return result
 }

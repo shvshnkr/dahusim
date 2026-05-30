@@ -36,6 +36,7 @@ import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeConnectCoordinator
+import fr.husi.simplemode.prepareManualProfileReload
 import fr.husi.simplemode.releaseSimpleModeVpnSession
 import fr.husi.utils.closeQuietly
 import kotlinx.coroutines.Dispatchers
@@ -432,6 +433,7 @@ class ConfigurationScreenViewModel : ViewModel() {
             if (DataStore.serviceState.canStop && reloadAccess.tryLock()) {
                 releaseSimpleModeVpnSession("full_profile_select_connect")
                 SimpleModeConnectCoordinator.takeOverByFullUi("full_profile_select_connect")
+                prepareManualProfileReload()
                 resolveRepository().reloadService()
                 reloadAccess.unlock()
             }
@@ -441,6 +443,7 @@ class ConfigurationScreenViewModel : ViewModel() {
             } else {
                 releaseSimpleModeVpnSession("full_profile_select_connect")
                 SimpleModeConnectCoordinator.takeOverByFullUi("full_profile_select_connect")
+                prepareManualProfileReload()
                 resolveRepository().startService()
             }
         }
