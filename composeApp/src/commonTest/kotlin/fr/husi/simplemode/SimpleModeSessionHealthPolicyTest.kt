@@ -65,10 +65,55 @@ class SimpleModeSessionHealthPolicyTest {
     }
 
     @Test
-    fun connectFirstCheckRunsBeforeDefaultInterval() {
+    fun monitoringStaleWhenNoRecentCheck() {
+        val now = 100_000L
         assertTrue(
-            SimpleModeSessionHealthPolicy.CONNECT_FIRST_CHECK_DELAY_MS <
-                SimpleModeSessionHealthPolicy.CHECK_INTERVAL_MS,
+            SimpleModeSessionHealthPolicy.isMonitoringStale(
+                lastCheckCompletedAt = 0L,
+                nowMs = now,
+            ),
+        )
+        assertTrue(
+            SimpleModeSessionHealthPolicy.isMonitoringStale(
+                lastCheckCompletedAt = now - SimpleModeSessionHealthPolicy.MONITORING_STALE_MS,
+                nowMs = now,
+            ),
+        )
+        assertFalse(
+            SimpleModeSessionHealthPolicy.isMonitoringStale(
+                lastCheckCompletedAt = now - SimpleModeSessionHealthPolicy.MONITORING_STALE_MS + 1L,
+                nowMs = now,
+            ),
+        )
+    }
+
+    @Test
+    fun deferStallWhenWarmReserveOrSessionLive() {
+        assertTrue(
+            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                warmReserveVerifiedRecently = true,
+                profileSessionLive = false,
+            ),
+        )
+        assertTrue(
+            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                warmReserveVerifiedRecently = false,
+                profileSessionLive = true,
+            ),
+        )
+        assertFalse(
+            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                warmReserveVerifiedRecently = false,
+                profileSessionLive = false,
+            ),
+        )
+    }
+
+    @Test
+    fun monitoringStaleBeforeStallRecovery() {
+        assertTrue(
+            SimpleModeSessionHealthPolicy.MONITORING_STALE_MS <
+                SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS,
         )
     }
 }

@@ -8,11 +8,20 @@ object WarmReserveSessionCache {
 
     private val liveVerifiedIds = mutableSetOf<Long>()
     private val warmFailedIds = mutableSetOf<Long>()
+    private var lastVerifySuccessAtMs: Long = 0L
 
     fun clear() {
         liveVerifiedIds.clear()
         warmFailedIds.clear()
+        lastVerifySuccessAtMs = 0L
     }
+
+    fun noteWarmVerifySuccess(nowMs: Long = System.currentTimeMillis()) {
+        lastVerifySuccessAtMs = nowMs
+    }
+
+    fun hasRecentVerifySuccess(withinMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean =
+        lastVerifySuccessAtMs > 0L && nowMs - lastVerifySuccessAtMs <= withinMs
 
     fun markLive(id: Long) {
         if (id <= 0L) return

@@ -7,9 +7,9 @@ import fr.husi.fmt.PluginEntry
 import fr.husi.ktx.Logs
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.openFilePath
+import fr.husi.platform.VendorBackgroundHint
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-
 internal actual fun platformPluginsFlow(): Flow<List<PluginDisplay>> {
     val entries = enumValues<PluginEntry>().toList()
     return SagerDatabase.pluginDao.getAll().map { plugins ->
@@ -50,3 +50,9 @@ internal actual fun rememberShouldRequestBatteryOptimizations(): Boolean = false
 
 @Composable
 internal actual fun rememberRequestIgnoreBatteryOptimizations(): () -> Unit = remember { {} }
+
+@Composable
+internal actual fun rememberVendorBackgroundHint(): VendorBackgroundHint = VendorBackgroundHint.None
+
+@Composable
+internal actual fun rememberOpenVendorBackgroundSettings(): () -> Unit = remember { {} }

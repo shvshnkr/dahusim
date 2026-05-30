@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import fr.husi.fmt.PluginEntry
 import fr.husi.ktx.Logs
+import fr.husi.platform.OemVendorPolicy
+import fr.husi.platform.VendorBackgroundHint
 import fr.husi.plugin.Plugins
 import fr.husi.plugin.loadString
 import fr.husi.utils.PackageCache
@@ -94,6 +96,35 @@ internal actual fun rememberRequestIgnoreBatteryOptimizations(): () -> Unit {
                     .setData("package:${context.packageName}".toUri())
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
+        }
+    }
+}
+
+@Composable
+internal actual fun rememberVendorBackgroundHint(): VendorBackgroundHint {
+    val context = LocalContext.current
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    return remember(context, powerManager) {
+        OemVendorPolicy.resolveVendorBackgroundHint(
+            manufacturer = Build.MANUFACTURER,
+            brand = Build.BRAND,
+            batteryOptimizationIgnored = powerManager.isIgnoringBatteryOptimizations(context.packageName),
+        )
+    }
+}
+
+@Composable
+internal actual fun rememberOpenVendorBackgroundSettings(): () -> Unit {
+    val context = LocalContext.current
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    return remember(context, powerManager) {
+        {
+            val hint = OemVendorPolicy.resolveVendorBackgroundHint(
+                manufacturer = Build.MANUFACTURER,
+                brand = Build.BRAND,
+                batteryOptimizationIgnored = powerManager.isIgnoringBatteryOptimizations(context.packageName),
+            )
+            OemBackgroundSettings.openVendorBackground(context, hint)
         }
     }
 }

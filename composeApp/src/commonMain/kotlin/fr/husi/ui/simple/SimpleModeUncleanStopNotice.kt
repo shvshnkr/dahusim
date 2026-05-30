@@ -19,24 +19,36 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import fr.husi.platform.PlatformInfo
+import fr.husi.platform.VendorBackgroundHint
 import fr.husi.resources.Res
 import fr.husi.resources.ignore_battery_optimizations
+import fr.husi.resources.simple_mode_open_huawei_launch_manager
+import fr.husi.resources.simple_mode_open_xiaomi_autostart
 import fr.husi.resources.simple_mode_unclean_stop_battery_already_off
 import fr.husi.resources.simple_mode_unclean_stop_battery_restricted
+import fr.husi.resources.simple_mode_unclean_stop_huawei_launch
 import fr.husi.resources.simple_mode_unclean_stop_title
+import fr.husi.resources.simple_mode_unclean_stop_xiaomi_autostart
+import fr.husi.ui.rememberOpenVendorBackgroundSettings
 import fr.husi.ui.rememberRequestIgnoreBatteryOptimizations
 import fr.husi.ui.rememberShouldRequestBatteryOptimizations
+import fr.husi.ui.rememberVendorBackgroundHint
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun SimpleModeUncleanStopNotice(modifier: Modifier = Modifier) {
     if (!PlatformInfo.isAndroid) return
     val shouldRequestBattery = rememberShouldRequestBatteryOptimizations()
+    val vendorHint = rememberVendorBackgroundHint()
     val requestIgnoreBatteryOptimizations = rememberRequestIgnoreBatteryOptimizations()
-    val body = if (shouldRequestBattery) {
-        stringResource(Res.string.simple_mode_unclean_stop_battery_restricted)
-    } else {
-        stringResource(Res.string.simple_mode_unclean_stop_battery_already_off)
+    val openVendorBackgroundSettings = rememberOpenVendorBackgroundSettings()
+    val body = when {
+        shouldRequestBattery -> stringResource(Res.string.simple_mode_unclean_stop_battery_restricted)
+        vendorHint == VendorBackgroundHint.HuaweiLaunchManager ->
+            stringResource(Res.string.simple_mode_unclean_stop_huawei_launch)
+        vendorHint == VendorBackgroundHint.XiaomiAutostart ->
+            stringResource(Res.string.simple_mode_unclean_stop_xiaomi_autostart)
+        else -> stringResource(Res.string.simple_mode_unclean_stop_battery_already_off)
     }
     val containerColor = MaterialTheme.colorScheme.errorContainer
     val contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -78,6 +90,25 @@ internal fun SimpleModeUncleanStopNotice(modifier: Modifier = Modifier) {
                 ),
             ) {
                 Text(text = stringResource(Res.string.ignore_battery_optimizations))
+            }
+        } else if (vendorHint != VendorBackgroundHint.None) {
+            val buttonLabel = when (vendorHint) {
+                VendorBackgroundHint.HuaweiLaunchManager ->
+                    stringResource(Res.string.simple_mode_open_huawei_launch_manager)
+                VendorBackgroundHint.XiaomiAutostart ->
+                    stringResource(Res.string.simple_mode_open_xiaomi_autostart)
+                VendorBackgroundHint.None -> return@Column
+            }
+            OutlinedButton(
+                onClick = openVendorBackgroundSettings,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = contentColor,
+                ),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = SolidColor(borderColor),
+                ),
+            ) {
+                Text(text = buttonLabel)
             }
         }
     }
