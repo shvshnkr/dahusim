@@ -211,6 +211,7 @@ private fun MainScreenContent(
             backStack.clear()
             backStack.add(NavRoutes.Simple)
         }
+        DataStore.simpleMode = true
         // #region agent log
         simpleModeDebugEvent(
             runId = "cold-start",
@@ -226,10 +227,16 @@ private fun MainScreenContent(
     }
     val selectedDrawerRoute = navigator.selectedDrawerRoute
     val selectedBottomNavTab = navigator.selectedBottomNavTab
+    val currentRoute = backStack.lastOrNull() as? NavRoutes
     val showBottomNav = PlatformInfo.isAndroid &&
-        selectedBottomNavTab != null &&
-        navigator.currentRoute != NavRoutes.Simple &&
-        !DataStore.simpleMode
+        currentRoute != NavRoutes.Simple &&
+        currentRoute != null &&
+        (currentRoute.isMainBottomNavRoot() || selectedBottomNavTab != null)
+    LaunchedEffect(currentRoute, backStack.size) {
+        if (currentRoute == NavRoutes.Simple && backStack.size > 1) {
+            navigator.navigateToSimpleMode()
+        }
+    }
     val isAtStartDestination = navigator.isAtStartDestination
     val serviceStatus by BackendState.status.collectAsStateWithLifecycle()
     val profilePickerController = remember(koinScope) {

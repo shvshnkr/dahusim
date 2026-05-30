@@ -1,6 +1,7 @@
 package fr.husi.ui
 
 import androidx.navigation3.runtime.NavKey
+import fr.husi.database.DataStore
 
 class Navigator(
     private val backStack: MutableList<NavKey>,
@@ -70,19 +71,16 @@ class Navigator(
     }
 
     fun navigateToSimpleMode() {
-        while (backStack.size > 1) {
-            backStack.removeLastOrNull()
-        }
-        if (backStack.lastOrNull() != NavRoutes.Simple) {
-            backStack.clear()
-            backStack.add(NavRoutes.Simple)
-        }
+        backStack.clear()
+        backStack.add(NavRoutes.Simple)
+        DataStore.simpleMode = true
     }
 
     fun leaveSimpleMode(route: NavRoutes = NavRoutes.Library) {
         val target = route.resolveDeprecatedNavTarget()
         backStack.clear()
         backStack.add(target)
+        DataStore.simpleMode = false
     }
 
     fun navigateUp(fallback: () -> Unit) {
