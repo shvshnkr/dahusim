@@ -623,6 +623,10 @@ class BaseService {
                     VpnTunnelHandoffSuppress.markVpnSessionAnchor()
                     simpleModeLog("SimpleMode", "H9 connected_profile id=${profile.id}")
                     DataStore.simpleModeActivity = "Verifying internet access..."
+                    val outboundTag = data.proxy?.config?.mainTag.orEmpty()
+                    if (DataStore.simpleMode && outboundTag.isNotBlank()) {
+                        SimpleModeSessionHealth.scheduleOnConnect(profile.id, outboundTag)
+                    }
                     var postConnectHealthy = true
                     var postConnectRecordUrlVerified = true
                     var postConnectLatencyMs = 0
@@ -632,7 +636,6 @@ class BaseService {
                         reachability.whitelistOnly,
                         baseTimeoutMs,
                     )
-                    val outboundTag = data.proxy?.config?.mainTag.orEmpty()
                     val skipTunnelHealth = SimpleModeHealthRoute.skipTunnelHealthCheck(reachability.whitelistOnly)
                     val postConnectUrls = SimpleModeHealthRoute.postConnectProbeUrls(reachability.whitelistOnly)
                     val healthRoute = if (skipTunnelHealth) {

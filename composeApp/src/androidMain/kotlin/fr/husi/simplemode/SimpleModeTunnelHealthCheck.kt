@@ -1,8 +1,15 @@
 package fr.husi.simplemode
 
 import fr.husi.libcore.Libcore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal object SimpleModeTunnelHealthCheck {
+
+    /** Kotlin-side cap when native urlTest ignores timeoutMs (Doze / stuck sing-box). */
+    private fun probeWatchdogBudgetMs(timeoutMs: Int): Long =
+        (timeoutMs + 3_000).toLong()
 
     suspend fun check(
         phase: String,
@@ -99,8 +106,13 @@ internal object SimpleModeTunnelHealthCheck {
             var lastError: String? = null
             var lastProbeUrl: String? = null
             for (url in urls) {
+                val budgetMs = probeWatchdogBudgetMs(timeoutMs)
                 val attempt = runCatching {
-                    client.urlTest(outboundTag, url, timeoutMs)
+                    withTimeoutOrNull(budgetMs) {
+                        withContext(Dispatchers.IO) {
+                            client.urlTest(outboundTag, url, timeoutMs)
+                        }
+                    }
                 }
                 val latency = attempt.getOrNull()
                 if (latency != null && latency > 0) {
@@ -122,7 +134,11 @@ internal object SimpleModeTunnelHealthCheck {
                         wasSyntheticSuccess = false,
                     )
                 }
-                val errText = attempt.exceptionOrNull()?.message
+                val errText = when {
+                    attempt.isFailure -> attempt.exceptionOrNull()?.message
+                    latency == null -> "probe_watchdog_timeout"
+                    else -> null
+                }
                 lastError = errText
                 lastProbeUrl = url
                 SimpleModeHealthRoute.wlUrlProbeTreatAsOk(

@@ -16,6 +16,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Periodic URL health check while simple-mode VPN stays connected.
@@ -26,22 +28,36 @@ internal object SimpleModeSessionHealth {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val checkLock = Mutex()
     private var job: Job? = null
+    private var stallWatchdogJob: Job? = null
     private var monitoredProfileId: Long = -1L
     private var monitoredOutboundTag: String = ""
     private var consecutiveFails: Int = 0
     private var lastOnDemandAt: Long = 0L
     private var lastHealthError: String? = null
     private var lastHealthFailAt: Long = 0L
+    private val lastCheckCompletedAt = AtomicLong(0L)
+    private val stallRecoveryInFlight = AtomicBoolean(false)
 
-    fun schedule(profileId: Long, outboundTag: String) {
+    fun schedule(
+        profileId: Long,
+        outboundTag: String,
+        firstCheckDelayMs: Long = SimpleModeSessionHealthPolicy.CHECK_INTERVAL_MS,
+    ) {
         if (!DataStore.simpleMode || outboundTag.isBlank()) return
         cancel()
         monitoredProfileId = profileId
         monitoredOutboundTag = outboundTag
         consecutiveFails = 0
         lastHealthFailAt = 0L
+        lastCheckCompletedAt.set(System.currentTimeMillis())
+        stallWatchdogJob = scope.launch {
+            while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
+                delay(SimpleModeSessionHealthPolicy.STALL_TICK_MS)
+                maybeRecoverFromStalledProbe(profileId)
+            }
+        }
         job = scope.launch {
-            delay(SimpleModeSessionHealthPolicy.CHECK_INTERVAL_MS)
+            delay(firstCheckDelayMs.coerceAtLeast(0L))
             while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
                 val keepRunning = runHealthCheck(profileId, outboundTag)
                 if (!keepRunning) break
@@ -53,6 +69,14 @@ internal object SimpleModeSessionHealth {
                 )
             }
         }
+    }
+
+    fun scheduleOnConnect(profileId: Long, outboundTag: String) {
+        schedule(
+            profileId = profileId,
+            outboundTag = outboundTag,
+            firstCheckDelayMs = SimpleModeSessionHealthPolicy.CONNECT_FIRST_CHECK_DELAY_MS,
+        )
     }
 
     fun triggerQuickCheck(reason: String) {
@@ -103,12 +127,16 @@ internal object SimpleModeSessionHealth {
     fun cancel() {
         job?.cancel()
         job = null
+        stallWatchdogJob?.cancel()
+        stallWatchdogJob = null
         monitoredProfileId = -1L
         monitoredOutboundTag = ""
         consecutiveFails = 0
         lastOnDemandAt = 0L
         lastHealthError = null
         lastHealthFailAt = 0L
+        lastCheckCompletedAt.set(0L)
+        stallRecoveryInFlight.set(false)
     }
 
     private fun ensureMonitoring(reason: String) {
@@ -136,6 +164,7 @@ internal object SimpleModeSessionHealth {
         if (!DataStore.simpleMode || !DataStore.serviceState.connected) return@withLock false
         if (DataStore.selectedProxy != profileId) return@withLock false
         val ok = runUrlHealthCheck(profileId, outboundTag)
+        lastCheckCompletedAt.set(System.currentTimeMillis())
         if (ok) {
             consecutiveFails = 0
             lastHealthError = null
@@ -162,6 +191,28 @@ internal object SimpleModeSessionHealth {
         }
         handleUnhealthySession(profileId)
         return@withLock false
+    }
+
+    private suspend fun maybeRecoverFromStalledProbe(profileId: Long) {
+        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return
+        if (DataStore.selectedProxy != profileId) return
+        val completedAt = lastCheckCompletedAt.get()
+        if (completedAt <= 0L) return
+        val stalledMs = System.currentTimeMillis() - completedAt
+        if (stalledMs < SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS) return
+        if (!stallRecoveryInFlight.compareAndSet(false, true)) return
+        try {
+            lastHealthError = "session_health_probe_stall"
+            lastHealthFailAt = System.currentTimeMillis()
+            simpleModeLog(
+                "SimpleMode",
+                "H34 session_health_stall_recovery profileId=$profileId stalledMs=$stalledMs",
+            )
+            handleUnhealthySession(profileId)
+        } finally {
+            lastCheckCompletedAt.set(System.currentTimeMillis())
+            stallRecoveryInFlight.set(false)
+        }
     }
 
     private suspend fun runUrlHealthCheck(profileId: Long, outboundTag: String): Boolean {
