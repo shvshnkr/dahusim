@@ -422,6 +422,24 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun stallProbeErrorIsInconclusiveRegardlessOfPhase() {
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR,
+                whitelistOnly = false,
+                phase = "post_connect",
+            ),
+        )
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR,
+                whitelistOnly = false,
+                phase = "session_periodic",
+            ),
+        )
+    }
+
+    @Test
     fun openRealFailuresNotSyntheticOrInconclusive() {
         assertEquals(
             null,

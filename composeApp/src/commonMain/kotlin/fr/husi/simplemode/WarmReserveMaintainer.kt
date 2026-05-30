@@ -102,6 +102,9 @@ object WarmReserveMaintainer {
                 whitelistOnly = wlOnly,
             )
             verifyResults.forEach { (id, ms) ->
+                if (ms != null) {
+                    WarmReserveSessionCache.noteWarmVerifySuccess()
+                }
                 simpleModeLog(
                     "SimpleMode",
                     "H37 warm_reserve_verify id=$id ok=${ms != null}${ms?.let { " ms=$it" } ?: ""}",
@@ -151,6 +154,7 @@ object WarmReserveMaintainer {
                     replenishResults.forEach { (id, ms) ->
                         if (ms != null) {
                             promoted++
+                            WarmReserveSessionCache.noteWarmVerifySuccess()
                             simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=true ms=$ms")
                         } else {
                             simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=false")

@@ -184,6 +184,9 @@ internal object SimpleModeHealthRoute {
         probeUrl: String? = null,
     ): Boolean {
         if (error.isNullOrBlank()) return false
+        if (error == SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR) {
+            return true
+        }
         if (isMessengerDnsOrDialFailure(error, probeUrl)) return false
         // Messenger probe is a "must succeed" signal in simple-mode. When it times out, we
         // must treat it as a real degradation and allow server re-selection.

@@ -53,13 +53,21 @@ internal object SimpleModeSessionHealth {
         stallWatchdogJob = scope.launch {
             while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
                 delay(SimpleModeSessionHealthPolicy.STALL_TICK_MS)
-                maybeRecoverFromStalledProbe(profileId)
+                maybeRecoverFromStalledProbe()
             }
         }
         job = scope.launch {
             delay(firstCheckDelayMs.coerceAtLeast(0L))
             while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
-                val keepRunning = runHealthCheck(profileId, outboundTag)
+                val activeProfileId = DataStore.selectedProxy
+                if (activeProfileId <= 0L) break
+                if (activeProfileId != monitoredProfileId) {
+                    ensureMonitoring("profile_drift")
+                    break
+                }
+                val activeOutboundTag = resolveMonitoredOutboundTag(activeProfileId)
+                if (activeOutboundTag.isBlank()) break
+                val keepRunning = runHealthCheck(activeProfileId, activeOutboundTag)
                 if (!keepRunning) break
                 delay(
                     SimpleModeSessionHealthPolicy.nextCheckDelayMs(
@@ -88,18 +96,14 @@ internal object SimpleModeSessionHealth {
             logQuickCheckSkipped(reason, "not_connected")
             return
         }
-        var profileId = monitoredProfileId
-        var outboundTag = monitoredOutboundTag
+        if (SimpleModeSessionHealthPolicy.shouldRescheduleMonitoringWhenSessionMissing(reason)) {
+            ensureMonitoring(reason)
+        }
+        val profileId = monitoredProfileId
+        val outboundTag = monitoredOutboundTag
         if (profileId <= 0L || outboundTag.isBlank()) {
-            if (SimpleModeSessionHealthPolicy.shouldRescheduleMonitoringWhenSessionMissing(reason)) {
-                ensureMonitoring(reason)
-                profileId = monitoredProfileId
-                outboundTag = monitoredOutboundTag
-            }
-            if (profileId <= 0L || outboundTag.isBlank()) {
-                logQuickCheckSkipped(reason, "no_monitored_session")
-                return
-            }
+            logQuickCheckSkipped(reason, "no_monitored_session")
+            return
         }
         val now = System.currentTimeMillis()
         val minGap = SimpleModeSessionHealthPolicy.onDemandMinGapMs(reason)
@@ -140,17 +144,33 @@ internal object SimpleModeSessionHealth {
     }
 
     private fun ensureMonitoring(reason: String) {
-        if (job?.isActive == true && monitoredProfileId > 0L && monitoredOutboundTag.isNotBlank()) {
-            return
-        }
+        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return
         val profileId = DataStore.selectedProxy
-        val outboundTag = ServiceRegistry.baseService?.data?.proxy?.config?.mainTag.orEmpty()
+        val outboundTag = resolveMonitoredOutboundTag(profileId)
         if (profileId <= 0L || outboundTag.isBlank()) return
+        val monitoringStale = SimpleModeSessionHealthPolicy.isMonitoringStale(
+            lastCheckCompletedAt = lastCheckCompletedAt.get(),
+            nowMs = System.currentTimeMillis(),
+        )
+        val alreadyHealthy = job?.isActive == true &&
+            monitoredProfileId == profileId &&
+            monitoredOutboundTag == outboundTag &&
+            !monitoringStale
+        if (alreadyHealthy) return
         simpleModeLog(
             "SimpleMode",
-            "H34 session_health_reschedule reason=$reason profileId=$profileId",
+            "H34 session_health_reschedule reason=$reason profileId=$profileId stale=$monitoringStale",
         )
         schedule(profileId, outboundTag)
+    }
+
+    private fun resolveMonitoredOutboundTag(profileId: Long): String {
+        val fromService = ServiceRegistry.baseService?.data?.proxy?.config?.mainTag.orEmpty()
+        if (fromService.isNotBlank()) return fromService
+        if (monitoredProfileId == profileId && monitoredOutboundTag.isNotBlank()) {
+            return monitoredOutboundTag
+        }
+        return ""
     }
 
     private fun logQuickCheckSkipped(reason: String, skip: String) {
@@ -168,6 +188,7 @@ internal object SimpleModeSessionHealth {
         if (ok) {
             consecutiveFails = 0
             lastHealthError = null
+            WarmReserveSessionCache.markLive(profileId)
             SimpleModeVpnSessionMarker.touchHeartbeat()
             if (DataStore.simpleModeActivity == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING) {
                 DataStore.simpleModeActivity = ""
@@ -193,22 +214,46 @@ internal object SimpleModeSessionHealth {
         return@withLock false
     }
 
-    private suspend fun maybeRecoverFromStalledProbe(profileId: Long) {
+    private suspend fun maybeRecoverFromStalledProbe() {
         if (!DataStore.simpleMode || !DataStore.serviceState.connected) return
-        if (DataStore.selectedProxy != profileId) return
+        val profileId = DataStore.selectedProxy
+        if (profileId <= 0L || profileId != monitoredProfileId) return
         val completedAt = lastCheckCompletedAt.get()
         if (completedAt <= 0L) return
         val stalledMs = System.currentTimeMillis() - completedAt
         if (stalledMs < SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS) return
         if (!stallRecoveryInFlight.compareAndSet(false, true)) return
         try {
-            lastHealthError = "session_health_probe_stall"
+            lastHealthError = SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR
             lastHealthFailAt = System.currentTimeMillis()
+            val deferRecovery = SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                warmReserveVerifiedRecently = WarmReserveSessionCache.hasRecentVerifySuccess(
+                    SimpleModeSessionHealthPolicy.WARM_STALL_DEFER_MS,
+                ),
+                profileSessionLive = WarmReserveSessionCache.isSessionLive(profileId),
+            )
+            if (deferRecovery) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H34 session_health_stall_deferred profileId=$profileId stalledMs=$stalledMs",
+                )
+                ensureMonitoring("stall_deferred")
+                return
+            }
             simpleModeLog(
                 "SimpleMode",
                 "H34 session_health_stall_recovery profileId=$profileId stalledMs=$stalledMs",
             )
             handleUnhealthySession(profileId)
+            if (DataStore.serviceState.connected &&
+                SimpleModeHealthRoute.isProbeFailureInconclusive(
+                    error = lastHealthError,
+                    whitelistOnly = DataStore.activeWhitelistRestrictedNetwork,
+                    phase = "session_periodic",
+                )
+            ) {
+                ensureMonitoring("stall_inconclusive")
+            }
         } finally {
             lastCheckCompletedAt.set(System.currentTimeMillis())
             stallRecoveryInFlight.set(false)
