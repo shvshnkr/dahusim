@@ -55,4 +55,20 @@ class SimpleModeSessionHealthPolicyTest {
             SimpleModeSessionHealthPolicy.onDemandMinGapMs("network_handoff"),
         )
     }
+
+    @Test
+    fun stallRecoveryExceedsCheckInterval() {
+        assertTrue(
+            SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS >
+                SimpleModeSessionHealthPolicy.CHECK_INTERVAL_MS,
+        )
+    }
+
+    @Test
+    fun connectFirstCheckRunsBeforeDefaultInterval() {
+        assertTrue(
+            SimpleModeSessionHealthPolicy.CONNECT_FIRST_CHECK_DELAY_MS <
+                SimpleModeSessionHealthPolicy.CHECK_INTERVAL_MS,
+        )
+    }
 }
