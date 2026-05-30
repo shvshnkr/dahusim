@@ -944,6 +944,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_unclean_stop_title">Connection dropped in the background</string>
     <string name="simple_mode_unclean_stop_battery_restricted">You did not disconnect manually. Battery optimization is often the cause — tap the button below or Connect.</string>
     <string name="simple_mode_unclean_stop_battery_already_off">Battery optimization is already off. Possible causes: closed from Recents, power saving, vendor background limits, or system stop. Tap Connect to turn VPN back on.</string>
+    <string name="simple_mode_unclean_stop_huawei_launch">On Huawei/Honor, battery optimization may already be off while App launch still stops VPN in the background. Open launch settings below, allow auto-launch and background activity for this app, then tap Connect.</string>
+    <string name="simple_mode_open_huawei_launch_manager">App launch settings</string>
     <string name="simple_mode_activity_server_degraded">Server degraded, switching…</string>
     <string name="simple_mode_activity_server_unreachable">Server unreachable, trying next…</string>
     <string name="simple_mode_activity_connection_error">Connection error, trying next…</string>

@@ -50,3 +50,9 @@ internal actual fun rememberShouldRequestBatteryOptimizations(): Boolean = false
 
 @Composable
 internal actual fun rememberRequestIgnoreBatteryOptimizations(): () -> Unit = remember { {} }
+
+@Composable
+internal actual fun rememberShowHuaweiLaunchManagerHint(): Boolean = false
+
+@Composable
+internal actual fun rememberOpenHuaweiLaunchManagerSettings(): () -> Unit = remember { {} }

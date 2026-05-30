@@ -21,22 +21,28 @@ import androidx.compose.ui.unit.dp
 import fr.husi.platform.PlatformInfo
 import fr.husi.resources.Res
 import fr.husi.resources.ignore_battery_optimizations
+import fr.husi.resources.simple_mode_open_huawei_launch_manager
 import fr.husi.resources.simple_mode_unclean_stop_battery_already_off
 import fr.husi.resources.simple_mode_unclean_stop_battery_restricted
+import fr.husi.resources.simple_mode_unclean_stop_huawei_launch
 import fr.husi.resources.simple_mode_unclean_stop_title
+import fr.husi.ui.rememberOpenHuaweiLaunchManagerSettings
 import fr.husi.ui.rememberRequestIgnoreBatteryOptimizations
 import fr.husi.ui.rememberShouldRequestBatteryOptimizations
+import fr.husi.ui.rememberShowHuaweiLaunchManagerHint
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun SimpleModeUncleanStopNotice(modifier: Modifier = Modifier) {
     if (!PlatformInfo.isAndroid) return
     val shouldRequestBattery = rememberShouldRequestBatteryOptimizations()
+    val showHuaweiLaunchHint = rememberShowHuaweiLaunchManagerHint()
     val requestIgnoreBatteryOptimizations = rememberRequestIgnoreBatteryOptimizations()
-    val body = if (shouldRequestBattery) {
-        stringResource(Res.string.simple_mode_unclean_stop_battery_restricted)
-    } else {
-        stringResource(Res.string.simple_mode_unclean_stop_battery_already_off)
+    val openHuaweiLaunchManager = rememberOpenHuaweiLaunchManagerSettings()
+    val body = when {
+        shouldRequestBattery -> stringResource(Res.string.simple_mode_unclean_stop_battery_restricted)
+        showHuaweiLaunchHint -> stringResource(Res.string.simple_mode_unclean_stop_huawei_launch)
+        else -> stringResource(Res.string.simple_mode_unclean_stop_battery_already_off)
     }
     val containerColor = MaterialTheme.colorScheme.errorContainer
     val contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -78,6 +84,18 @@ internal fun SimpleModeUncleanStopNotice(modifier: Modifier = Modifier) {
                 ),
             ) {
                 Text(text = stringResource(Res.string.ignore_battery_optimizations))
+            }
+        } else if (showHuaweiLaunchHint) {
+            OutlinedButton(
+                onClick = openHuaweiLaunchManager,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = contentColor,
+                ),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = SolidColor(borderColor),
+                ),
+            ) {
+                Text(text = stringResource(Res.string.simple_mode_open_huawei_launch_manager))
             }
         }
     }

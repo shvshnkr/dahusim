@@ -13,3 +13,10 @@ internal expect fun rememberShouldRequestBatteryOptimizations(): Boolean
 
 @Composable
 internal expect fun rememberRequestIgnoreBatteryOptimizations(): () -> Unit
+
+/** True when standard battery optimization is off but OEM launch/background limits likely apply. */
+@Composable
+internal expect fun rememberShowHuaweiLaunchManagerHint(): Boolean
+
+@Composable
+internal expect fun rememberOpenHuaweiLaunchManagerSettings(): () -> Unit

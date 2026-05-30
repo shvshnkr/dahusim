@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import fr.husi.fmt.PluginEntry
 import fr.husi.ktx.Logs
+import fr.husi.platform.OemVendorPolicy
 import fr.husi.plugin.Plugins
 import fr.husi.plugin.loadString
 import fr.husi.utils.PackageCache
@@ -95,5 +96,23 @@ internal actual fun rememberRequestIgnoreBatteryOptimizations(): () -> Unit {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }
+    }
+}
+
+@Composable
+internal actual fun rememberShowHuaweiLaunchManagerHint(): Boolean {
+    val context = LocalContext.current
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    return remember(context, powerManager) {
+        OemVendorPolicy.isHuaweiFamilyManufacturer(Build.MANUFACTURER, Build.BRAND) &&
+            powerManager.isIgnoringBatteryOptimizations(context.packageName)
+    }
+}
+
+@Composable
+internal actual fun rememberOpenHuaweiLaunchManagerSettings(): () -> Unit {
+    val context = LocalContext.current
+    return remember(context) {
+        { OemBackgroundSettings.openHuaweiLaunchManager(context) }
     }
 }
