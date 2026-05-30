@@ -37,7 +37,17 @@ object SimpleModeConnectCoordinator {
     private val connectScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var connectJob: Job? = null
 
+    @Volatile
+    private var autoselectPrepareCompletedForConnect = false
+
     fun isInFlight(): Boolean = connectJob?.isActive == true
+
+    /** Autoselect prepare already URL-probed the chosen profile; skip manual pre-connect probe. */
+    fun consumeAutoselectPrepareProbe(): Boolean {
+        val had = autoselectPrepareCompletedForConnect
+        autoselectPrepareCompletedForConnect = false
+        return had
+    }
 
     fun cancel(reason: String = "connect") {
         AutoServerSelector.cancelConnectPrepare(reason)
@@ -247,6 +257,7 @@ object SimpleModeConnectCoordinator {
                     if (vpnProfileId != DataStore.selectedProxy) {
                         DataStore.selectedProxy = vpnProfileId
                     }
+                    autoselectPrepareCompletedForConnect = true
                     DataStore.simpleModeActivity = "Starting VPN…"
                     withContext(Dispatchers.Main) { host.requestVpnConnect() }
                 }
