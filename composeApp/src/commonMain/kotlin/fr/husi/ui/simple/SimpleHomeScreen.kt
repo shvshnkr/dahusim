@@ -113,11 +113,12 @@ fun SimpleHomeScreen(
             else -> showUncleanStopNotice = false
         }
     }
-    val connector = rememberVpnServiceLauncher {
+    val onVpnDenied: () -> Unit = {
         permissionPending = false
         simpleModeLog("SimpleMode", "permission_denied")
         mainViewModel.showSnackbar(StringOrRes.Res(Res.string.vpn_permission_denied))
     }
+    val connector = rememberVpnServiceLauncher(onVpnDenied)
     val connectHost = remember(mainViewModel, connector) {
         object : SimpleModeConnectCoordinator.ConnectHost {
             override fun setPermissionPending(pending: Boolean) {
@@ -126,6 +127,10 @@ fun SimpleHomeScreen(
 
             override fun requestVpnConnect() {
                 connector()
+            }
+
+            override fun onVpnPermissionDenied() {
+                onVpnDenied()
             }
 
             override fun onNoInternet() {
