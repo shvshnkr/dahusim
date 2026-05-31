@@ -191,6 +191,7 @@ object AutoServerSelector {
         session: PrepareSession,
         networkHandoff: Boolean,
     ): PrepareForConnectResult {
+        DataStore.simpleModePrepareVerifiedProfileId = 0L
         val allProxies = SagerDatabase.proxyDao.getAll()
         val groups = SagerDatabase.groupDao.allGroups().first()
         val userTag = UserSubscriptionTag.resolve(allProxies, groups)

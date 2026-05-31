@@ -170,6 +170,7 @@ object Key {
     const val SIMPLE_MODE_WL_SKIP_TUNNEL_HEALTH_CHECK = "simpleModeWlSkipTunnelHealthCheck"
     const val SIMPLE_MODE_TELEGRAM_PROBE = "simpleModeTelegramProbe"
     const val AUTO_CONNECT_PAUSED_UNTIL_GOOGLE = "autoConnectPausedUntilGoogle"
+    const val SIMPLE_MODE_PREPARE_VERIFIED_PROFILE_ID = "simpleModePrepareVerifiedProfileId"
     const val SIMPLE_MODE_ACTIVITY = "simpleModeActivity"
     const val SIMPLE_MODE_VPN_SESSION_EXPECTED = "simpleModeVpnSessionExpected"
     const val SIMPLE_MODE_VPN_LAST_HEARTBEAT_MS = "simpleModeVpnLastHeartbeatMs"
