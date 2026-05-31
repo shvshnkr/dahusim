@@ -63,12 +63,9 @@ object SimpleModeConnectCoordinator {
      * Skip duplicate direct sing-box probe when prepare already URL-tested this profile.
      */
     fun shouldSkipManualProfileProbe(selectedProfileId: Long): Boolean {
-        if (consumeAutoselectPrepareProbe()) {
-            clearPrepareVerifiedProfileIdOnly()
-            return true
-        }
         val verifiedId = DataStore.simpleModePrepareVerifiedProfileId
         if (verifiedId > 0L && selectedProfileId == verifiedId) {
+            consumeAutoselectPrepareProbe()
             clearPrepareVerifiedProfileIdOnly()
             return true
         }
