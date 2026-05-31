@@ -426,6 +426,27 @@ class BaseService {
             )
         }
 
+        private fun trySimpleModeManualProbeFallback(profileId: Long, whitelistOnly: Boolean): Boolean {
+            if (!DataStore.simpleMode) return false
+            val hadQueue = DataStore.autoSelectFallbackQueue.isNotBlank()
+            AutoServerSelector.recordProbeFailure(profileId)
+            val fallback = AutoServerSelector.tryMoveToFallback(profileId)
+            if (fallback != null) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H17 manual_profile_probe_fallback currentId=$profileId nextId=$fallback wlOnly=$whitelistOnly",
+                )
+                SimpleModeTunnelRestart.markModeReconnect(DataStore.activeWhitelistRestrictedNetwork)
+                stopRunner(restart = true)
+                return true
+            }
+            if (hadQueue) {
+                BackendState.emitAlert(AlertType.SIMPLE_MODE_ALL_SERVERS_DEAD, "")
+                SimpleModeVpnSessionMarker.markGracefulStop("manual_profile_probe_exhausted")
+            }
+            return false
+        }
+
         suspend fun preInit() {
             DefaultNetworkMonitor.start()
         }
@@ -564,7 +585,7 @@ class BaseService {
                         reachability,
                         requestReloadOnChange = false,
                     )
-                    if (shouldRunManualProfileProbe()) {
+                    if (shouldRunManualProfileProbe(profile.id)) {
                         val manualDelay = DirectProfileUrlProbe.urlTestDelay(
                             profile,
                             whitelistOnly = reachability.whitelistOnly,
@@ -574,6 +595,9 @@ class BaseService {
                                 "SimpleMode",
                                 "H17 manual_profile_probe_failed profileId=${profile.id} wlOnly=${reachability.whitelistOnly}",
                             )
+                            if (trySimpleModeManualProbeFallback(profile.id, reachability.whitelistOnly)) {
+                                return@runOnDefaultDispatcher
+                            }
                             stopRunner(
                                 false,
                                 resolveRepository().getString(Res.string.manual_profile_probe_failed),
@@ -994,8 +1018,8 @@ class BaseService {
 
 }
 
-private fun shouldRunManualProfileProbe(): Boolean =
-    !SimpleModeConnectCoordinator.consumeAutoselectPrepareProbe()
+private fun shouldRunManualProfileProbe(profileId: Long): Boolean =
+    !SimpleModeConnectCoordinator.shouldSkipManualProfileProbe(profileId)
 
 private suspend fun resolveConnectReachability(): NetworkReachability {
     val startedAt = System.currentTimeMillis()

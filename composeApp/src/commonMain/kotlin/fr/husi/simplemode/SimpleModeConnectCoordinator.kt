@@ -49,10 +49,41 @@ object SimpleModeConnectCoordinator {
         return had
     }
 
+    fun clearPrepareConnectMarkers() {
+        autoselectPrepareCompletedForConnect = false
+        DataStore.simpleModePrepareVerifiedProfileId = 0L
+    }
+
+    fun markPrepareVerifiedForConnect(profileId: Long) {
+        autoselectPrepareCompletedForConnect = true
+        DataStore.simpleModePrepareVerifiedProfileId = profileId
+    }
+
+    /**
+     * Skip duplicate direct sing-box probe when prepare already URL-tested this profile.
+     */
+    fun shouldSkipManualProfileProbe(selectedProfileId: Long): Boolean {
+        if (consumeAutoselectPrepareProbe()) {
+            clearPrepareVerifiedProfileIdOnly()
+            return true
+        }
+        val verifiedId = DataStore.simpleModePrepareVerifiedProfileId
+        if (verifiedId > 0L && selectedProfileId == verifiedId) {
+            clearPrepareVerifiedProfileIdOnly()
+            return true
+        }
+        return false
+    }
+
+    private fun clearPrepareVerifiedProfileIdOnly() {
+        DataStore.simpleModePrepareVerifiedProfileId = 0L
+    }
+
     fun cancel(reason: String = "connect") {
         AutoServerSelector.cancelConnectPrepare(reason)
         connectJob?.cancel()
         connectJob = null
+        clearPrepareConnectMarkers()
     }
 
     fun takeOverByFullUi(reason: String = "full_manual_connect") {
@@ -257,7 +288,7 @@ object SimpleModeConnectCoordinator {
                     if (vpnProfileId != DataStore.selectedProxy) {
                         DataStore.selectedProxy = vpnProfileId
                     }
-                    autoselectPrepareCompletedForConnect = true
+                    markPrepareVerifiedForConnect(vpnProfileId)
                     DataStore.simpleModeActivity = "Starting VPN…"
                     withContext(Dispatchers.Main) { host.requestVpnConnect() }
                 }

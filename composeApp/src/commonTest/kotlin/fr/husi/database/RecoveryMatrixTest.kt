@@ -53,6 +53,24 @@ class RecoveryMatrixTest : HusiKoinTest() {
     }
 
     @Test
+    fun fallbackWalkSkipsDegradedHeadAndPicksNextInPrepareQueue() {
+        val queue = listOf(5597L, 5463L, 5228L)
+        val now = System.currentTimeMillis()
+        AutoServerSelectorProbePolicy.recordDegradedProfile(5597L, nowMs = now)
+        val walk = AutoServerSelectorSessionFallback.findNextFallbackCandidate(
+            queue = queue,
+            startIndex = 1,
+            probeStates = emptyMap(),
+            inRecentFailureCooldown = { id ->
+                AutoServerSelectorProbePolicy.isRecentlyDegraded(id, nowMs = now + 1_000L)
+            },
+        )
+        requireNotNull(walk)
+        assertEquals(5463L, walk.nextId)
+        assertEquals(1, walk.nextIndex)
+    }
+
+    @Test
     fun manualSwitchSyncsFallbackIndex() {
         DataStore.autoSelectFallbackQueue = "10,20,30"
         DataStore.autoSelectFallbackIndex = 0

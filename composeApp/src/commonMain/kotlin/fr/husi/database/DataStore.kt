@@ -291,6 +291,8 @@ object DataStore {
     var defaultSubscriptionsBootstrapped by configurationStore.boolean(Key.DEFAULT_SUBSCRIPTIONS_BOOTSTRAPPED) { false }
     var firstLaunchSubscriptionUiRefreshDone by configurationStore.boolean(Key.FIRST_LAUNCH_SUBSCRIPTION_UI_REFRESH_DONE) { false }
     var defaultPerAppBootstrapped by configurationStore.boolean(Key.DEFAULT_PER_APP_BOOTSTRAPPED) { false }
+    /** Set after autoselect prepare URL-verified the profile about to connect; cleared on connect probe consume. */
+    var simpleModePrepareVerifiedProfileId by configurationStore.long(Key.SIMPLE_MODE_PREPARE_VERIFIED_PROFILE_ID) { 0L }
     var autoSelectFallbackQueue by configurationStore.string(Key.AUTO_SELECT_FALLBACK_QUEUE) { "" }
     var autoSelectFallbackIndex by configurationStore.int(Key.AUTO_SELECT_FALLBACK_INDEX) { 0 }
     var autoSelectLastKnownGood by configurationStore.long(Key.AUTO_SELECT_LAST_KNOWN_GOOD) { 0L }
