@@ -290,7 +290,12 @@ object SimpleModeConnectCoordinator {
                     }
                     markPrepareVerifiedForConnect(vpnProfileId)
                     DataStore.simpleModeActivity = "Starting VPN…"
-                    withContext(Dispatchers.Main) { host.requestVpnConnect() }
+                    val launched = withContext(Dispatchers.Main) { launchSimpleModeVpnConnect(host) }
+                    if (!launched) {
+                        DataStore.simpleModeActivity = "Return to app to allow VPN…"
+                        withContext(Dispatchers.Main) { host.setPermissionPending(false) }
+                        return
+                    }
                 }
             }
         } catch (e: CancellationException) {
@@ -304,6 +309,14 @@ object SimpleModeConnectCoordinator {
                 "SimpleMode",
                 "H21 preconnect_failed stage=$preconnectStage class=${t.javaClass.simpleName} error=${t.message ?: "unknown"}",
             )
+            if (t is IllegalStateException && preconnectStage == "permission_request") {
+                DataStore.simpleModeActivity = "Return to app to allow VPN…"
+                withContext(Dispatchers.Main) {
+                    host.setPermissionPending(false)
+                    host.onNeedForegroundForPermission()
+                }
+                return
+            }
             throw t
         } finally {
             watchdog.cancel()
@@ -328,6 +341,7 @@ object SimpleModeConnectCoordinator {
     interface ConnectHost {
         fun setPermissionPending(pending: Boolean)
         fun requestVpnConnect()
+        fun onVpnPermissionDenied()
         fun onNoInternet()
         fun onNoProfile()
         fun onNeedForegroundForPermission()

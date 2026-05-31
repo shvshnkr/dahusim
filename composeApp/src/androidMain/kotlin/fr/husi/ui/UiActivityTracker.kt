@@ -64,8 +64,10 @@ object UiActivityTracker {
         }
     }
 
+    fun currentActivity(): Activity? = activityRef?.get()?.takeUnless { it.isFinishing }
+
     fun isResumedForVpnPermission(): Boolean {
-        val activity = activityRef?.get() ?: return false
+        val activity = currentActivity() ?: return false
         return resumed && !activity.isFinishing
     }
 
