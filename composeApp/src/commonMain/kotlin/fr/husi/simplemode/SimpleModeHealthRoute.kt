@@ -130,12 +130,20 @@ internal object SimpleModeHealthRoute {
 
     fun postConnectMaxAttempts(whitelistOnly: Boolean): Int = if (whitelistOnly) 3 else 1
 
+    internal fun hasWlUplinkDialIface(error: String): Boolean =
+        error.contains("dial rmnet", ignoreCase = true) ||
+            error.contains("dial wlan", ignoreCase = true) ||
+            error.contains("dial eth", ignoreCase = true) ||
+            error.contains("dial ccmni", ignoreCase = true)
+
+    private fun isNetworkHandoffProbeFailure(error: String?): Boolean {
+        if (error.isNullOrBlank()) return false
+        return error.contains("network changed", ignoreCase = true)
+    }
+
     fun isWlTunnelBootstrapFailure(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
-        val hasUplinkIface = error.contains("dial rmnet", ignoreCase = true) ||
-            error.contains("dial wlan", ignoreCase = true) ||
-            error.contains("dial eth", ignoreCase = true)
-        if (!hasUplinkIface) return false
+        if (!hasWlUplinkDialIface(error)) return false
         val e = error.lowercase()
         return e.contains("i/o timeout") ||
             e.contains("connection timed out") ||
@@ -146,10 +154,7 @@ internal object SimpleModeHealthRoute {
 
     fun isLikelyUnderlyingProxyDialFailure(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
-        val hasUplinkIface = error.contains("dial rmnet", ignoreCase = true) ||
-            error.contains("dial wlan", ignoreCase = true) ||
-            error.contains("dial eth", ignoreCase = true)
-        if (!hasUplinkIface) return false
+        if (!hasWlUplinkDialIface(error)) return false
         return !isWlTunnelBootstrapFailure(error)
     }
 
@@ -187,20 +192,22 @@ internal object SimpleModeHealthRoute {
         if (error == SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR) {
             return true
         }
+        if (isNetworkHandoffProbeFailure(error)) {
+            return phase == "post_connect" || phase == "session_periodic" || phase.isBlank()
+        }
         if (isMessengerDnsOrDialFailure(error, probeUrl)) return false
-        // Messenger probe is a "must succeed" signal in simple-mode. When it times out, we
-        // must treat it as a real degradation and allow server re-selection.
-        // Otherwise the client can appear "connected" while Telegram traffic never comes.
+        if (whitelistOnly && isWlTunnelBootstrapFailure(error)) {
+            return phase == "session_periodic" ||
+                phase == "post_connect" ||
+                phase.isBlank()
+        }
+        // Messenger probe is a "must succeed" signal when the tunnel path is stable. Uplink
+        // bootstrap / handoff errors are handled above.
         if (probeUrl == TUNNEL_HEALTH_TELEGRAM) return false
         if (isHttpRateLimitOrTransientResponse(error)) {
             return phase == "post_connect" || phase == "session_periodic" || phase.isBlank()
         }
         if (!whitelistOnly) return false
-        if (isWlTunnelBootstrapFailure(error)) {
-            return phase == "session_periodic" ||
-                phase == "post_connect" ||
-                phase.isBlank()
-        }
         if (isLikelyUnderlyingProxyDialFailure(error)) return true
         if (isWlHttpProbeInconclusive(error)) {
             return phase == "post_connect" || phase == "session_periodic" || phase.isBlank()

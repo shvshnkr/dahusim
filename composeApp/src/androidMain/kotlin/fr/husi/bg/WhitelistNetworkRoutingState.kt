@@ -44,7 +44,14 @@ internal object WhitelistNetworkRoutingState {
         )
         if (requestReloadOnChange) {
             if (DataStore.simpleMode) {
-                SimpleModeVpnCoordinator.scheduleAdaptation("reachability_flip")
+                if (SimpleModeVpnCoordinator.shouldCoalesceReachabilityFlip()) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H26 wl_network_routing_coalesced prev=$prevWl now=$nowWl",
+                    )
+                } else {
+                    SimpleModeVpnCoordinator.scheduleAdaptation("reachability_flip")
+                }
             } else {
                 requestReloadIfConnected("reachability_flip")
             }
