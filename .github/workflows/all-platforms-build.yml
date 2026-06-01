@@ -4,7 +4,7 @@ name: All platforms (auto pre-release)
 # CI/workflows/tests/changelog/VERSION_CODE-only commits do not auto-build (use workflow_dispatch or gh-workflow.sh build).
 on:
   push:
-    branches: [main]
+    branches: [main, redesign]
     paths:
       - "androidApp/**"
       - "composeApp/**"
@@ -143,9 +143,15 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "trigger=manual" >> "$GITHUB_OUTPUT"
             echo "skip_reason=" >> "$GITHUB_OUTPUT"
-            echo "run_android=${{ inputs.android }}" >> "$GITHUB_OUTPUT"
-            echo "run_linux=${{ inputs.linux_desktop }}" >> "$GITHUB_OUTPUT"
-            echo "run_windows=${{ inputs.windows_desktop }}" >> "$GITHUB_OUTPUT"
+            if [ "${{ github.ref_name }}" = "redesign" ]; then
+              echo "run_android=${{ inputs.android }}" >> "$GITHUB_OUTPUT"
+              echo "run_linux=false" >> "$GITHUB_OUTPUT"
+              echo "run_windows=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "run_android=${{ inputs.android }}" >> "$GITHUB_OUTPUT"
+              echo "run_linux=${{ inputs.linux_desktop }}" >> "$GITHUB_OUTPUT"
+              echo "run_windows=${{ inputs.windows_desktop }}" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
 
@@ -180,6 +186,12 @@ jobs:
           fi
           if [ "$shared" = "true" ] || [ "$desktop" = "true" ] || [ "$windows" = "true" ]; then
             run_windows=true
+          fi
+
+          if [ "${{ github.ref_name }}" = "redesign" ]; then
+            run_android=true
+            run_linux=false
+            run_windows=false
           fi
 
           echo "run_android=$run_android" >> "$GITHUB_OUTPUT"

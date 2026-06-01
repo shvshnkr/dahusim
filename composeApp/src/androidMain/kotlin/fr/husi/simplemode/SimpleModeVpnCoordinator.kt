@@ -44,6 +44,7 @@ internal object SimpleModeVpnCoordinator {
     private const val ALL_DEAD_RECOVERY_WINDOW_MS = 90_000L
     private const val ALL_DEAD_MAX_RECOVERY_STEPS = 3
     private const val ALL_DEAD_RETRY_BACKOFF_MS = 1_400L
+    private const val HANDOFF_COALESCE_MS = 8_000L
 
     private enum class HandoffState {
         IDLE,
@@ -63,6 +64,19 @@ internal object SimpleModeVpnCoordinator {
     @Volatile
     private var handoffState = HandoffState.IDLE
 
+    @Volatile
+    private var lastHandoffAdaptScheduledAt = 0L
+
+    fun shouldCoalesceReachabilityFlip(): Boolean {
+        if (adaptJob?.isActive == true) return true
+        val elapsed = System.currentTimeMillis() - lastHandoffAdaptScheduledAt
+        return lastHandoffAdaptScheduledAt > 0L && elapsed < HANDOFF_COALESCE_MS
+    }
+
+    fun markTunnelHealthyAfterProbe() {
+        SimpleModeTunnelRecoveryLimiter.resetOnHealthyConnect()
+    }
+
     fun cancelAdaptation() {
         adaptGeneration.incrementAndGet()
         AutoServerSelector.cancelAdaptPrepare("adapt")
@@ -72,6 +86,9 @@ internal object SimpleModeVpnCoordinator {
 
     fun scheduleAdaptation(reason: String) {
         if (!DataStore.simpleMode) return
+        if (isNetworkHandoffReason(reason)) {
+            lastHandoffAdaptScheduledAt = System.currentTimeMillis()
+        }
         // #region agent log
         simpleModeDebugEvent(
             runId = "handoff-reconnect",
@@ -446,6 +463,14 @@ internal object SimpleModeVpnCoordinator {
     }
 
     private fun requestTunnelReload(whitelistOnly: Boolean, reason: String, profileId: Long) {
+        if (!SimpleModeTunnelRecoveryLimiter.tryConsumeReload(reason)) {
+            simpleModeLog(
+                "SimpleMode",
+                "H30 tunnel_recovery_breaker reason=$reason profileId=$profileId",
+            )
+            scheduleAdaptation("tunnel_recovery_breaker")
+            return
+        }
         DataStore.selectedProxy = profileId
         SimpleModeTunnelRestart.markModeReconnect(whitelistOnly)
         ServiceRegistry.baseService?.reload() ?: resolveRepository().reloadService()

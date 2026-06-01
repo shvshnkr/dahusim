@@ -15,9 +15,16 @@ Upstream (`husi`) живет и развивается на Codeberg, а это�
 
 ### Android APK (pre-release, динамический список)
 
-- [Последние Android pre-release](https://github.com/shvshnkr/dahusim/releases?q=android-play+prerelease%3Atrue)
+- [Последние Android pre-release](https://github.com/shvshnkr/dahusim/releases?q=android-+prerelease%3Atrue+-redesign)
 - Обычно нужен файл `*_arm64_v8a.apk` (для большинства современных телефонов).
 - APK берите из блока `Assets`, не из исходников.
+
+### Android APK — экспериментальный интерфейс (ветка redesign)
+
+- [Pre-release redesign](https://github.com/shvshnkr/dahusim/releases?q=android-redesign+prerelease%3Atrue)
+- Только UI (bottom nav, hub и т.п.); функциональность как на `main`. Канал in-app update **не** обновляет эти сборки.
+- Для повседневного использования — ссылка в блоке выше (main).
+- Подробнее: [docs/REDESIGN_BRANCH.md](docs/REDESIGN_BRANCH.md)
 
 ### Desktop Linux (pre-release, динамический список)
 
@@ -119,6 +126,7 @@ Google объявил о требованиях developer verification для An
 Dahusim is a Russia-oriented fork of husi with a simpler default UX, auto-selection/fallback logic, and network handoff adaptation.  
 Latest pre-releases:
 
-- Android: <https://github.com/shvshnkr/dahusim/releases?q=android-play+prerelease%3Atrue>
+- Android (main): <https://github.com/shvshnkr/dahusim/releases?q=android-+prerelease%3Atrue+-redesign>
+- Android (experimental UI, `redesign` branch): <https://github.com/shvshnkr/dahusim/releases?q=android-redesign+prerelease%3Atrue>
 - Linux desktop: <https://github.com/shvshnkr/dahusim/releases?q=linux-desktop-linux-amd64+prerelease%3Atrue>
 - Windows desktop: <https://github.com/shvshnkr/dahusim/releases?q=windows-desktop-windows-amd64+prerelease%3Atrue>

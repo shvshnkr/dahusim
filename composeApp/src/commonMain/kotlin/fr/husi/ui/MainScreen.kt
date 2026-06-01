@@ -3,8 +3,10 @@
 package fr.husi.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -90,9 +92,9 @@ import fr.husi.resources.location_permission_title
 import fr.husi.resources.menu_about
 import fr.husi.resources.menu_app_update
 import fr.husi.resources.menu_quick_settings
-import fr.husi.resources.menu_configuration
+import fr.husi.resources.menu_library
+import fr.husi.resources.menu_more
 import fr.husi.resources.menu_dashboard
-import fr.husi.resources.menu_group
 import fr.husi.resources.menu_log
 import fr.husi.resources.menu_route
 import fr.husi.resources.menu_tools
@@ -115,6 +117,7 @@ import fr.husi.resources.simple_mode_wait_for_google_action
 import fr.husi.resources.transform
 import fr.husi.resources.update
 import fr.husi.resources.view_list
+import fr.husi.resources.more_vert
 import fr.husi.resources.warning_amber
 import fr.husi.results.LocalResultEventBus
 import fr.husi.results.ResultEventBus
@@ -208,6 +211,7 @@ private fun MainScreenContent(
             backStack.clear()
             backStack.add(NavRoutes.Simple)
         }
+        DataStore.simpleMode = true
         // #region agent log
         simpleModeDebugEvent(
             runId = "cold-start",
@@ -222,6 +226,17 @@ private fun MainScreenContent(
         // #endregion
     }
     val selectedDrawerRoute = navigator.selectedDrawerRoute
+    val selectedBottomNavTab = navigator.selectedBottomNavTab
+    val currentRoute = backStack.lastOrNull() as? NavRoutes
+    val showBottomNav = PlatformInfo.isAndroid &&
+        currentRoute != NavRoutes.Simple &&
+        currentRoute != null &&
+        (currentRoute.isMainBottomNavRoot() || selectedBottomNavTab != null)
+    LaunchedEffect(currentRoute, backStack.size) {
+        if (currentRoute == NavRoutes.Simple && backStack.size > 1) {
+            navigator.navigateToSimpleMode()
+        }
+    }
     val isAtStartDestination = navigator.isAtStartDestination
     val serviceStatus by BackendState.status.collectAsStateWithLifecycle()
     val profilePickerController = remember(koinScope) {
@@ -308,162 +323,11 @@ private fun MainScreenContent(
         }
     }
 
-    NavigationDrawer(
-        drawerStateHolder = drawerStateHolder,
-        drawerContent = {
-            @Composable
-            fun BuildDrawerItem(info: DrawerItemInfo) {
-                DrawerItem(
-                    info = info,
-                    closeDrawer = ::closeDrawer,
-                    selectedDrawerRoute = selectedDrawerRoute,
-                    onNavigate = navigator::navigateToDrawerRoute,
-                )
-            }
-
-            val dividerPadding = 4.dp
-            val items0 = remember {
-                persistentListOf(
-                    DrawerItemInfo(
-                        Res.string.menu_configuration,
-                        Res.drawable.description,
-                        NavRoutes.Configuration,
-                    ),
-                    DrawerItemInfo(
-                        Res.string.menu_group,
-                        Res.drawable.view_list,
-                        NavRoutes.Groups,
-                    ),
-                    DrawerItemInfo(
-                        Res.string.menu_route,
-                        Res.drawable.directions,
-                        NavRoutes.Route,
-                    ),
-                    DrawerItemInfo(
-                        Res.string.settings,
-                        Res.drawable.settings,
-                        NavRoutes.Settings,
-                    ),
-                    DrawerItemInfo(
-                        Res.string.menu_quick_settings,
-                        Res.drawable.developer_mode,
-                        NavRoutes.QuickSettings,
-                    ),
-                    DrawerItemInfo(
-                        Res.string.plugin,
-                        Res.drawable.nfc,
-                        NavRoutes.Plugin,
-                    ),
-                )
-            }
-            for (info in items0) BuildDrawerItem(info)
-            HorizontalDivider(modifier = Modifier.padding(vertical = dividerPadding))
-            val items1 = remember {
-                persistentListOf(
-                    DrawerItemInfo(Res.string.menu_log, Res.drawable.bug_report, NavRoutes.Log),
-                    DrawerItemInfo(
-                        Res.string.menu_dashboard,
-                        Res.drawable.transform,
-                        NavRoutes.Dashboard,
-                    ),
-                    DrawerItemInfo(
-                        Res.string.menu_tools,
-                        Res.drawable.construction,
-                        NavRoutes.Tools,
-                    ),
-                )
-            }
-            for (info in items1) BuildDrawerItem(info)
-            HorizontalDivider(modifier = Modifier.padding(vertical = dividerPadding))
-            DrawerItem(
-                label = { Text(stringResource(Res.string.document)) },
-                selected = false,
-                onClick = {
-                    closeDrawer()
-                    uriHandler.openUri("https://codeberg.org/xchacha20-poly1305/husi/wiki")
-                },
-                icon = {
-                    Icon(vectorResource(Res.drawable.data_usage), null)
-                },
-            )
-            BuildDrawerItem(
-                DrawerItemInfo(
-                    Res.string.menu_app_update,
-                    Res.drawable.update,
-                    NavRoutes.AppUpdate,
-                ),
-            )
-            BuildDrawerItem(
-                DrawerItemInfo(
-                    Res.string.menu_about,
-                    Res.drawable.info,
-                    NavRoutes.About,
-                ),
-            )
-            HorizontalDivider(modifier = Modifier.padding(vertical = dividerPadding))
-            Button(
-                onClick = {
-                    closeDrawer()
-                    DataStore.simpleMode = true
-                    navigator.navigateTo(NavRoutes.Simple)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 52.dp)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Icon(
-                    imageVector = vectorResource(Res.drawable.home),
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = stringResource(Res.string.simple_mode_switch),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
-            if (drawerStateHolder.canCollapse) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = dividerPadding))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 28.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    val tooltipState = rememberTooltipState()
-                    TooltipBox(
-                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                            TooltipAnchorPosition.Above,
-                        ),
-                        tooltip = {
-                            PlainTooltip {
-                                Text(stringResource(Res.string.close))
-                            }
-                        },
-                        state = tooltipState,
-                    ) {
-                        IconButton(
-                            onClick = ::closeDrawer,
-                            modifier = Modifier.size(56.dp),
-                        ) {
-                            Icon(
-                                imageVector = vectorResource(Res.drawable.fast_rewind),
-                                contentDescription = stringResource(Res.string.close),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        },
-    ) {
-        fun onDrawerClick() {
-            if (!drawerStateHolder.canCollapse) {
-                return
-            }
-            scope.launch {
+    fun onDrawerClick() {
+        when {
+            showBottomNav -> return
+            !drawerStateHolder.canCollapse -> return
+            else -> scope.launch {
                 if (drawerStateHolder.isOpen) {
                     drawerStateHolder.close()
                 } else {
@@ -471,13 +335,15 @@ private fun MainScreenContent(
                 }
             }
         }
+    }
 
-        remember(koinScope) {
-            koinScope.get<DrawerController> {
-                parametersOf(::onDrawerClick)
-            }
+    remember(koinScope) {
+        koinScope.get<DrawerController> {
+            parametersOf(::onDrawerClick)
         }
+    }
 
+    val mainNavHost: @Composable () -> Unit = {
         CompositionLocalProvider(
             LocalResultEventBus provides resultBus,
         ) {
@@ -498,6 +364,129 @@ private fun MainScreenContent(
                     onSelected = profilePickerController::select,
                 )
             }
+        }
+    }
+
+    val mainShell: @Composable () -> Unit = {
+        if (PlatformInfo.isAndroid) {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f)) {
+                    mainNavHost()
+                }
+                if (showBottomNav && selectedBottomNavTab != null) {
+                    MainBottomNavigationBar(
+                        selectedTab = selectedBottomNavTab,
+                        onTabSelected = navigator::navigateToDrawerRoute,
+                    )
+                }
+            }
+        } else {
+            mainNavHost()
+        }
+    }
+
+    if (PlatformInfo.isAndroid) {
+        mainShell()
+    } else {
+        NavigationDrawer(
+            drawerStateHolder = drawerStateHolder,
+            drawerContent = {
+                @Composable
+                fun BuildDrawerItem(info: DrawerItemInfo) {
+                    DrawerItem(
+                        info = info,
+                        closeDrawer = ::closeDrawer,
+                        selectedDrawerRoute = selectedDrawerRoute,
+                        onNavigate = navigator::navigateToDrawerRoute,
+                    )
+                }
+
+                val dividerPadding = 4.dp
+                val items0 = remember {
+                    persistentListOf(
+                        DrawerItemInfo(
+                            Res.string.menu_library,
+                            Res.drawable.view_list,
+                            NavRoutes.Library,
+                        ),
+                        DrawerItemInfo(
+                            Res.string.menu_route,
+                            Res.drawable.directions,
+                            NavRoutes.Route,
+                        ),
+                        DrawerItemInfo(
+                            Res.string.settings,
+                            Res.drawable.settings,
+                            NavRoutes.Settings,
+                        ),
+                        DrawerItemInfo(
+                            Res.string.menu_more,
+                            Res.drawable.more_vert,
+                            NavRoutes.More,
+                        ),
+                    )
+                }
+                for (info in items0) BuildDrawerItem(info)
+                HorizontalDivider(modifier = Modifier.padding(vertical = dividerPadding))
+                Button(
+                    onClick = {
+                        closeDrawer()
+                        DataStore.simpleMode = true
+                        navigator.navigateToSimpleMode()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 52.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Icon(
+                        imageVector = vectorResource(Res.drawable.home),
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(Res.string.simple_mode_switch),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                if (drawerStateHolder.canCollapse) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = dividerPadding))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 28.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        val tooltipState = rememberTooltipState()
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                TooltipAnchorPosition.Above,
+                            ),
+                            tooltip = {
+                                PlainTooltip {
+                                    Text(stringResource(Res.string.close))
+                                }
+                            },
+                            state = tooltipState,
+                        ) {
+                            IconButton(
+                                onClick = ::closeDrawer,
+                                modifier = Modifier.size(56.dp),
+                            ) {
+                                Icon(
+                                    imageVector = vectorResource(Res.drawable.fast_rewind),
+                                    contentDescription = stringResource(Res.string.close),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+        ) {
+            mainShell()
         }
     }
 
@@ -691,6 +680,11 @@ private fun NavRoutes?.matchesRoute(
     route: NavRoutes,
 ): Boolean {
     val current = this ?: return false
+    val currentTab = current.bottomNavTab()
+    val routeTab = route.bottomNavTab()
+    if (currentTab != null && routeTab != null) {
+        return currentTab == routeTab
+    }
     return current::class == route::class
 }
 

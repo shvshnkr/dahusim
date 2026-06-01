@@ -207,6 +207,31 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun ccmniDialTimeoutInconclusiveOnWlPostConnectEvenForTelegramProbe() {
+        val err = "dial ccmni1 (15): dial tcp 94.125.102.179:443: i/o timeout"
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                err,
+                whitelistOnly = true,
+                phase = "post_connect",
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+    }
+
+    @Test
+    fun networkChangedInconclusiveOnWlPostConnect() {
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "network changed",
+                whitelistOnly = true,
+                phase = "post_connect",
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+    }
+
+    @Test
     fun rmnetDialTimeoutInconclusiveOnWlTunnelHealth() {
         val err = "dial rmnet_data1 (17): dial tcp 1.2.3.4:443: i/o timeout"
         assertTrue(

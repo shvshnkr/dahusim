@@ -200,6 +200,8 @@ object Key {
     const val SUBSCRIPTION_UA_VERSION_V2RAYTUN = "subscriptionUaVersionV2rayTun"
     const val SUBSCRIPTION_UA_VERSION_INCY = "subscriptionUaVersionIncy"
 
+    const val DAHUSIM_QUICK_ACCESS_ENABLED = "dahusimQuickAccessEnabled"
+
 }
 
 object AlertType {

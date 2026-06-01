@@ -38,7 +38,7 @@ usage() {
 Usage: gh-workflow.sh <command> [options]
 
 Commands:
-  build [--android|--linux|--windows] [--wait]   # manual pre-release (after CI matrices; not auto on test/CI-only pushes)
+  build [--android|--linux|--windows] [--ref BRANCH] [--wait]   # manual pre-release (default ref: main; redesign → Android-only in CI)
   status [--run-id ID]
   promote [--run-id ID] [--dry-run] [--mandatory] [--min-version-code N]
           [--notes TEXT | --notes-file PATH | --from-changelog]
@@ -51,6 +51,7 @@ Commands:
 
 Examples:
   gh-workflow.sh build --wait
+  gh-workflow.sh build --ref redesign --android --wait
   gh-workflow.sh changelog verify
   gh-workflow.sh promote --from-changelog --dry-run
   gh-workflow.sh promote --run-id 26577000000
@@ -64,12 +65,13 @@ cmd_prune_prereleases() {
 }
 
 cmd_build() {
-  local android=true linux=true windows=true wait=false
+  local android=true linux=true windows=true wait=false ref=main
   while [ $# -gt 0 ]; do
     case "$1" in
       --android) android=true; linux=false; windows=false ;;
       --linux) android=false; linux=true; windows=false ;;
       --windows) android=false; linux=false; windows=true ;;
+      --ref) ref="$2"; shift 2 ;;
       --wait) wait=true ;;
       *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
@@ -77,13 +79,13 @@ cmd_build() {
   done
   local repo
   repo="$(resolve_gh_repo)"
-  gh workflow run all-platforms-build.yml --repo "$repo" --ref main \
+  gh workflow run all-platforms-build.yml --repo "$repo" --ref "$ref" \
     -f "android=${android}" -f "linux_desktop=${linux}" -f "windows_desktop=${windows}"
-  echo "Triggered all-platforms-build.yml on $repo"
+  echo "Triggered all-platforms-build.yml on $repo (ref=$ref)"
   if [ "$wait" = true ]; then
     sleep 5
     local run_id
-    run_id="$(gh run list --repo "$repo" --workflow all-platforms-build.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')"
+    run_id="$(gh run list --repo "$repo" --workflow all-platforms-build.yml --branch "$ref" --limit 1 --json databaseId --jq '.[0].databaseId')"
     gh run watch "$run_id" --repo "$repo" --exit-status
   fi
 }

@@ -793,6 +793,19 @@ class BaseService {
                         }
                         val fallback = AutoServerSelector.tryMoveToFallback(profile.id)
                         if (fallback != null) {
+                            if (DataStore.simpleMode &&
+                                !fr.husi.simplemode.SimpleModeTunnelRecoveryLimiter.tryConsumeReload(
+                                    "post_connect_unhealthy_switch",
+                                )
+                            ) {
+                                simpleModeLog(
+                                    "SimpleMode",
+                                    "H30 tunnel_recovery_breaker reason=post_connect_unhealthy_switch " +
+                                        "profileId=${profile.id} nextId=$fallback",
+                                )
+                                SimpleModeVpnCoordinator.scheduleAdaptation("tunnel_recovery_breaker")
+                                return@runOnDefaultDispatcher
+                            }
                             simpleModeLog(
                                 "SimpleMode",
                                 "H10 post_connect_unhealthy_switch profileId=${profile.id} nextId=$fallback",
@@ -843,6 +856,9 @@ class BaseService {
                             "H10 post_connect_healthy_mark_connected profileId=${profile.id}",
                         )
                         WhitelistNetworkRoutingState.markPostConnectHealthy()
+                        if (DataStore.simpleMode) {
+                            SimpleModeVpnCoordinator.markTunnelHealthyAfterProbe()
+                        }
                         if (DataStore.simpleMode && outboundTag.isNotBlank()) {
                             SimpleModeVpnSessionMarker.markActive()
                             SimpleModeSessionHealth.schedule(profile.id, outboundTag)

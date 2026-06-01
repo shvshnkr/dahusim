@@ -5,3 +5,6 @@ import androidx.compose.runtime.Composable
 @Composable
 actual fun ScannerDropdownMenuItem() {
 }
+
+@Composable
+actual fun rememberProfileScannerAction(): (() -> Unit)? = null

@@ -23,7 +23,7 @@ on:
       - "libcore/**"
       - "husi.properties"
   push:
-    branches: [main]
+    branches: [main, redesign]
     paths:
       - "composeApp/**/simplemode/**"
       - "composeApp/**/bg/**"

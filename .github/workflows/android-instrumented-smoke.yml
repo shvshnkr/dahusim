@@ -18,6 +18,24 @@ on:
       - "Makefile"
       - ".github/CRONET_GO_VERSION"
       - ".github/workflows/android-instrumented-smoke.yml"
+  push:
+    branches: [redesign]
+    paths:
+      - "androidApp/**"
+      - "composeApp/**"
+      - "buildSrc/**"
+      - "gradle/**"
+      - "gradle.properties"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "repositories.gradle.kts"
+      - "buildScript/**"
+      - "libcore/**"
+      - "husi.properties"
+      - "run"
+      - "Makefile"
+      - ".github/CRONET_GO_VERSION"
+      - ".github/workflows/android-instrumented-smoke.yml"
   workflow_dispatch:
 
 env:

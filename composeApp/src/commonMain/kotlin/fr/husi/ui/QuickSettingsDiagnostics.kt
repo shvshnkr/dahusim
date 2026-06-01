@@ -24,12 +24,7 @@ import me.zhanghai.compose.preference.Preference
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
 
-internal fun LazyListScope.quickSettingsDiagnostics(
-    showMessage: (String) -> Unit,
-) {
-    item("quick_settings_section_diagnostics", PreferenceType.CATEGORY) {
-        PreferenceCategory(text = { Text(stringResource(Res.string.quick_settings_section_diagnostics)) })
-    }
+internal fun LazyListScope.dahusimDiagnosticsPreferences() {
     if (Probe2kProgress.hasPoolSummary()) {
         item("quick_settings_pool_line", PreferenceType.TEXT_FIELD) {
             Preference(
@@ -49,6 +44,15 @@ internal fun LazyListScope.quickSettingsDiagnostics(
             )
         }
     }
+}
+
+internal fun LazyListScope.quickSettingsDiagnostics(
+    showMessage: (String) -> Unit,
+) {
+    item("quick_settings_section_diagnostics", PreferenceType.CATEGORY) {
+        PreferenceCategory(text = { Text(stringResource(Res.string.quick_settings_section_diagnostics)) })
+    }
+    dahusimDiagnosticsPreferences()
     if (canShareSimpleModeLogs()) {
         item("quick_settings_share_log", PreferenceType.TEXT_FIELD) {
             val scope = rememberCoroutineScope()

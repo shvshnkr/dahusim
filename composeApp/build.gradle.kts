@@ -186,12 +186,12 @@ val skipDesktopLibPreCheck: Boolean =
     (project.findProperty("skipDesktopLibPreCheck")?.toString() == "true")
 
 val desktopPackageName = metadata.getProperty("PACKAGE_NAME").trim()
-val desktopVersion = metadata.getProperty("VERSION_NAME").trim()
+val desktopVersion = metadata.effectiveVersionName()
 val desktopTargetFormats = emptySet<TargetFormat>()
 
 val generateBuildConfig by tasks.registering {
     val outputDir = layout.buildDirectory.dir("generated/buildConfig/kotlin")
-    val versionName = metadata.getProperty("VERSION_NAME")
+    val versionName = metadata.effectiveVersionName()
     val versionCode = metadata.getProperty("VERSION_CODE")
     inputs.property("versionName", versionName)
     inputs.property("versionCode", versionCode)

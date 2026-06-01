@@ -54,6 +54,12 @@ fun Project.requireMetadata(): Properties =
         load(rootProject.file("husi.properties").inputStream())
     }
 
+fun Properties.effectiveVersionName(): String {
+    val base = getProperty("VERSION_NAME").trim()
+    val suffix = getProperty("VERSION_NAME_SUFFIX")?.trim().orEmpty()
+    return if (suffix.isBlank()) base else "$base-$suffix"
+}
+
 @Suppress("NewApi")
 fun Project.requireLocalProperties(): Properties {
     if (!::localProperties.isInitialized) {
@@ -192,7 +198,7 @@ fun Project.setupApp() {
     val pkgName = metadata.getProperty("PACKAGE_NAME")
     val applicationId =
         metadata.getProperty("ANDROID_APPLICATION_ID")?.trim().orEmpty().ifBlank { pkgName }
-    val verName = metadata.getProperty("VERSION_NAME")
+    val verName = metadata.effectiveVersionName()
     val verCode = metadata.getProperty("VERSION_CODE").toInt()
     androidApp.apply {
         defaultConfig {

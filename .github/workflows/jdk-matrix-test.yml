@@ -26,7 +26,7 @@ on:
       - ".github/CRONET_GO_VERSION"
       - ".github/workflows/jdk-matrix-test.yml"
   push:
-    branches: [main]
+    branches: [main, redesign]
     paths:
       - "androidApp/**"
       - "composeApp/**"

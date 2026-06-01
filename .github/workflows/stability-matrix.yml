@@ -19,7 +19,7 @@ on:
       - ".github/CRONET_GO_VERSION"
       - ".github/workflows/stability-matrix.yml"
   push:
-    branches: [main]
+    branches: [main, redesign]
     paths:
       - "composeApp/**"
       - "buildSrc/**"

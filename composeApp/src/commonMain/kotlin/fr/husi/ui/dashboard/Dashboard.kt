@@ -77,7 +77,7 @@ import fr.husi.TrafficSortMode
 import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
 import fr.husi.ui.MainViewModelAlertDialog
-import fr.husi.compose.PlatformMenuIcon
+import fr.husi.ui.MainTopNavigationIcon
 import fr.husi.compose.SagerFab
 import fr.husi.compose.SimpleIconButton
 import fr.husi.compose.StatsBar
@@ -197,11 +197,7 @@ fun DashboardScreen(
                         state = searchBarState,
                         inputField = searchInputField,
                         navigationIcon = {
-                            PlatformMenuIcon(
-                                imageVector = vectorResource(Res.drawable.menu),
-                                contentDescription = stringResource(Res.string.menu),
-                                onClick = onDrawerClick,
-                            )
+                            MainTopNavigationIcon(useBack = true, onClick = onDrawerClick)
                         },
                         actions = {
                             SimpleIconButton(
@@ -357,11 +353,7 @@ fun DashboardScreen(
                     TopAppBar(
                         title = {},
                         navigationIcon = {
-                            PlatformMenuIcon(
-                                imageVector = vectorResource(Res.drawable.menu),
-                                contentDescription = stringResource(Res.string.menu),
-                                onClick = onDrawerClick,
-                            )
+                            MainTopNavigationIcon(useBack = true, onClick = onDrawerClick)
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color.Transparent,

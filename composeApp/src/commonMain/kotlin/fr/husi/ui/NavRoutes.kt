@@ -17,6 +17,9 @@ sealed class NavRoutes : NavKey {
                         subclass(Configuration::class, Configuration.serializer())
                         subclass(Simple::class, Simple.serializer())
                         subclass(Groups::class, Groups.serializer())
+                        subclass(Library::class, Library.serializer())
+                        subclass(More::class, More.serializer())
+                        subclass(LibraryGroup::class, LibraryGroup.serializer())
                         subclass(Route::class, Route.serializer())
                         subclass(Settings::class, Settings.serializer())
                         subclass(Plugin::class, Plugin.serializer())
@@ -31,6 +34,12 @@ sealed class NavRoutes : NavKey {
                         subclass(About::class, About.serializer())
                         subclass(AppUpdate::class, AppUpdate.serializer())
                         subclass(QuickSettings::class, QuickSettings.serializer())
+                        subclass(DahusimHub::class, DahusimHub.serializer())
+                        subclass(DahusimNetwork::class, DahusimNetwork.serializer())
+                        subclass(DahusimSubscriptions::class, DahusimSubscriptions.serializer())
+                        subclass(DahusimAutoselect::class, DahusimAutoselect.serializer())
+                        subclass(DahusimDiagnostics::class, DahusimDiagnostics.serializer())
+                        subclass(DahusimUserAgents::class, DahusimUserAgents.serializer())
                         subclass(Libraries::class, Libraries.serializer())
                         subclass(ProfileEditor::class, ProfileEditor.serializer())
                         subclass(ConnectionsDetail::class, ConnectionsDetail.serializer())
@@ -52,8 +61,20 @@ sealed class NavRoutes : NavKey {
     @Serializable
     data object Simple : NavRoutes()
 
+    /** @deprecated Use [Library]; kept for saved-state compatibility. */
     @Serializable
     data object Groups : NavRoutes()
+
+    @Serializable
+    data object Library : NavRoutes()
+
+    @Serializable
+    data object More : NavRoutes()
+
+    @Serializable
+    data class LibraryGroup(
+        val groupId: Long,
+    ) : NavRoutes()
 
     @Serializable
     data object Route : NavRoutes()
@@ -100,6 +121,24 @@ sealed class NavRoutes : NavKey {
 
     @Serializable
     data object QuickSettings : NavRoutes()
+
+    @Serializable
+    data object DahusimHub : NavRoutes()
+
+    @Serializable
+    data object DahusimNetwork : NavRoutes()
+
+    @Serializable
+    data object DahusimSubscriptions : NavRoutes()
+
+    @Serializable
+    data object DahusimAutoselect : NavRoutes()
+
+    @Serializable
+    data object DahusimDiagnostics : NavRoutes()
+
+    @Serializable
+    data object DahusimUserAgents : NavRoutes()
 
     @Serializable
     data object Libraries : NavRoutes()

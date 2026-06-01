@@ -48,7 +48,7 @@ import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
 import fr.husi.compose.BoxedVerticalScrollbar
 import fr.husi.ui.MainViewModelAlertDialog
-import fr.husi.compose.PlatformMenuIcon
+import fr.husi.ui.MainTopNavigationIcon
 import fr.husi.compose.SagerFab
 import fr.husi.compose.SimpleTopAppBar
 import fr.husi.compose.StatsBar
@@ -119,11 +119,7 @@ fun PluginScreen(
             SimpleTopAppBar(
                 title = { Text(stringResource(Res.string.plugin)) },
                 navigationIcon = {
-                    PlatformMenuIcon(
-                        imageVector = vectorResource(Res.drawable.menu),
-                        contentDescription = stringResource(Res.string.menu),
-                        onClick = onDrawerClick,
-                    )
+                    MainTopNavigationIcon(useBack = true, onClick = onDrawerClick)
                 },
                 windowInsets = windowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                 scrollBehavior = scrollBehavior,
