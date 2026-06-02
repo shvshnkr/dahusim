@@ -218,7 +218,11 @@ class MainViewModel(
         } catch (e: Exception) {
             _uiEvent.emit(alertDialog(StringOrRes.Direct(e.readableMessage)))
             return@launch
-        } ?: return@launch
+        }
+        if (group == null) {
+            _uiEvent.emit(MainViewModelUiEvent.Snackbar(StringOrRes.Res(Res.string.action_import_err)))
+            return@launch
+        }
         showImportSubscriptionDialog(group)
     }
 

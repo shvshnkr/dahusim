@@ -6,7 +6,6 @@ import fr.husi.fmt.v2ray.VMessBean
 import fr.husi.ui.ImportLinkClassifier.HttpImportResolution
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 
 class ImportLinkClassifierClassifyTest {
 
@@ -26,14 +25,14 @@ class ImportLinkClassifierClassifyTest {
     }
 
     @Test
-    fun `classifyParsedProxies single proxy on github is standalone`() {
+    fun `classifyParsedProxies single proxy on github is subscription`() {
         val bean = VLESSBean().apply {
             uuid = FmtTestConstant.VLESS_GRPC_URL.substringAfter("vless://").substringBefore("@")
         }
-        val resolution = ImportLinkClassifier.classifyParsedProxies(listOf(bean), githubList)
-        val standalone = assertIs<HttpImportResolution.Standalone>(resolution)
-        assertEquals(1, standalone.proxies.size)
-        assertEquals("list", standalone.suggestedGroupName)
+        assertEquals(
+            HttpImportResolution.Subscription(githubList),
+            ImportLinkClassifier.classifyParsedProxies(listOf(bean), githubList),
+        )
     }
 
     @Test

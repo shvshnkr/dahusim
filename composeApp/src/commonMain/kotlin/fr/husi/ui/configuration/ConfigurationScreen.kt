@@ -100,6 +100,8 @@ import fr.husi.compose.material3.PrimaryScrollableTabRow
 import fr.husi.compose.material3.Tab
 import fr.husi.compose.material3.Text
 import fr.husi.compose.paddingExceptBottom
+import fr.husi.GroupType
+import fr.husi.group.GroupUpdater
 import fr.husi.database.DataStore
 import fr.husi.database.ProxyEntity
 import fr.husi.database.SagerDatabase
@@ -184,6 +186,8 @@ import fr.husi.ui.MainViewModelUiEvent
 import fr.husi.ui.NavRoutes
 import fr.husi.ui.getStringOrRes
 import fr.husi.ui.library.LibraryActionStrip
+import fr.husi.ui.library.LibraryGroupDetailActionMode
+import fr.husi.ui.library.libraryGroupDetailActionMode
 import fr.husi.ui.library.LibraryBulkActionBar
 import fr.husi.ui.stringOrRes
 import kotlinx.coroutines.flow.first
@@ -265,6 +269,14 @@ fun ConfigurationScreen(
     var bulkMode by remember { mutableStateOf(false) }
     var bulkSelectedIds by remember { mutableStateOf(setOf<Long>()) }
     val activeGroupId = fixedGroupId ?: DataStore.selectedGroup
+    val activeGroup = remember(uiState.groups, activeGroupId) {
+        uiState.groups.find { it.id == activeGroupId }
+    }
+    val libraryActionMode = activeGroup?.type?.let(::libraryGroupDetailActionMode)
+    val isSubscriptionDetail =
+        singleGroupMode && libraryActionMode == LibraryGroupDetailActionMode.Subscription
+    val updatingGroups by GroupUpdater.updatingGroups.collectAsStateWithLifecycle()
+    val isActiveGroupUpdating = activeGroupId in updatingGroups
     LaunchedEffect(fixedGroupId, hasGroups, uiState.groups) {
         if (fixedGroupId == null || !hasGroups) return@LaunchedEffect
         val index = uiState.groups.indexOfFirst { it.id == fixedGroupId }
@@ -428,6 +440,9 @@ fun ConfigurationScreen(
                 if (!keyEvent.isTypeControlPressed || keyEvent.key != Key.V) {
                     return@onPreviewKeyEvent false
                 }
+                if (isSubscriptionDetail) {
+                    return@onPreviewKeyEvent false
+                }
                 importFromClipboard()
                 true
             }
@@ -483,54 +498,56 @@ fun ConfigurationScreen(
                                 },
                             )
                         }
-                        Box {
-                            SimpleIconButton(
-                                imageVector = vectorResource(Res.drawable.note_add),
-                                contentDescription = stringResource(Res.string.add_profile),
-                                onClick = { showAddMenu = true },
-                            )
-                            DropdownMenu(
-                                expanded = showAddMenu,
-                                onDismissRequest = { showAddMenu = false },
-                                containerColor = MenuDefaults.groupStandardContainerColor,
-                                shape = MenuDefaults.standaloneGroupShape,
-                            ) {
-                                ScannerDropdownMenuItem()
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.action_import)) },
-                                    onClick = {
-                                        showAddMenu = false
-                                        importFromClipboard()
-                                    },
+                        if (!isSubscriptionDetail) {
+                            Box {
+                                SimpleIconButton(
+                                    imageVector = vectorResource(Res.drawable.note_add),
+                                    contentDescription = stringResource(Res.string.add_profile),
+                                    onClick = { showAddMenu = true },
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.action_import_file)) },
-                                    onClick = {
-                                        showAddMenu = false
-                                        importFile.launch()
-                                    },
-                                )
-                                ExpandableDropdownMenuItem(
-                                    text = stringResource(Res.string.add_profile_methods_manual_settings),
-                                    onClick = {
-                                        showAddMenu = false
-                                        showAddManualMenu = true
-                                    },
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showAddManualMenu,
-                                onDismissRequest = { showAddManualMenu = false },
-                                containerColor = MenuDefaults.groupStandardContainerColor,
-                                shape = MenuDefaults.standaloneGroupShape,
-                            ) {
-                                manualProfileEntries.forEach { (title, type) ->
+                                DropdownMenu(
+                                    expanded = showAddMenu,
+                                    onDismissRequest = { showAddMenu = false },
+                                    containerColor = MenuDefaults.groupStandardContainerColor,
+                                    shape = MenuDefaults.standaloneGroupShape,
+                                ) {
+                                    ScannerDropdownMenuItem()
                                     DropdownMenuItem(
-                                        text = { Text(stringResource(title)) },
+                                        text = { Text(stringResource(Res.string.action_import)) },
                                         onClick = {
-                                            openProfileEditor(type)
+                                            showAddMenu = false
+                                            importFromClipboard()
                                         },
                                     )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.action_import_file)) },
+                                        onClick = {
+                                            showAddMenu = false
+                                            importFile.launch()
+                                        },
+                                    )
+                                    ExpandableDropdownMenuItem(
+                                        text = stringResource(Res.string.add_profile_methods_manual_settings),
+                                        onClick = {
+                                            showAddMenu = false
+                                            showAddManualMenu = true
+                                        },
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showAddManualMenu,
+                                    onDismissRequest = { showAddManualMenu = false },
+                                    containerColor = MenuDefaults.groupStandardContainerColor,
+                                    shape = MenuDefaults.standaloneGroupShape,
+                                ) {
+                                    manualProfileEntries.forEach { (title, type) ->
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(title)) },
+                                            onClick = {
+                                                openProfileEditor(type)
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -663,9 +680,14 @@ fun ConfigurationScreen(
                 )
                 if (singleGroupMode) {
                     LibraryActionStrip(
+                        mode = libraryActionMode ?: LibraryGroupDetailActionMode.Basic,
                         onImportClipboard = ::importFromClipboard,
                         onImportFile = { importFile.launch() },
                         onScan = profileScannerAction,
+                        onUpdate = activeGroup?.takeIf { it.type == GroupType.SUBSCRIPTION }?.let { group ->
+                            { mainViewModel.updateSubscriptionGroup(group) }
+                        },
+                        updateEnabled = !isActiveGroupUpdating,
                         onTest = {
                             vm.doTest(activeGroupId, TestType.URLTest)
                         },

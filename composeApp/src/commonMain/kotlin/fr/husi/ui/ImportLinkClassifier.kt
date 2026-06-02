@@ -115,6 +115,9 @@ object ImportLinkClassifier {
         proxies: List<fr.husi.fmt.AbstractBean>?,
         sourceUrl: String,
     ): HttpImportResolution = when {
+        looksLikeSubscriptionUrl(sourceUrl) && !proxies.isNullOrEmpty() ->
+            HttpImportResolution.Subscription(sourceUrl)
+
         proxies.isNullOrEmpty() -> {
             if (looksLikeSubscriptionUrl(sourceUrl)) {
                 HttpImportResolution.Subscription(sourceUrl)
@@ -122,10 +125,12 @@ object ImportLinkClassifier {
                 HttpImportResolution.Ambiguous
             }
         }
+
         proxies.size == 1 -> HttpImportResolution.Standalone(
             proxies = proxies,
             suggestedGroupName = suggestImportGroupName(sourceUrl),
         )
+
         else -> HttpImportResolution.Subscription(sourceUrl)
     }
 
