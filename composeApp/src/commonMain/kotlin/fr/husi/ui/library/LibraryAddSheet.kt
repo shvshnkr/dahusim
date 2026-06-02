@@ -37,6 +37,7 @@ import fr.husi.resources.link
 import fr.husi.resources.playlist_add
 import fr.husi.resources.qr_code
 import fr.husi.resources.share_qr_nfc
+import fr.husi.ui.ImportLinkClassifier
 import fr.husi.ui.MainViewModel
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -85,7 +86,15 @@ internal fun LibraryAddSheet(
                 leadingIcon = { Icon(vectorResource(Res.drawable.link), null) },
                 onClick = {
                     onDismiss()
-                    onOpenGroupSettings(0L)
+                    scope.launch {
+                        val clip = clipboard.getPlainText()?.trim()
+                        val firstLine = clip?.lineSequence()?.firstOrNull()?.trim()
+                        if (!firstLine.isNullOrBlank() && ImportLinkClassifier.looksLikeSubscriptionUrl(firstLine)) {
+                            mainViewModel.parseProxy(clip)
+                        } else {
+                            onOpenGroupSettings(0L)
+                        }
+                    }
                 },
             )
             SheetActionRow(
