@@ -49,10 +49,12 @@ fun Project.requireFlavor(): String {
 }
 
 /** Always reloads from disk so `VERSION_CODE` / `VERSION_NAME` edits apply on the next Gradle run. */
-fun Project.requireMetadata(): Properties =
-    Properties().apply {
-        load(rootProject.file("husi.properties").inputStream())
+fun Project.requireMetadata(): Properties {
+    val raw = rootProject.file("husi.properties").readText(Charsets.UTF_8).removePrefix("\uFEFF")
+    return Properties().apply {
+        load(raw.byteInputStream())
     }
+}
 
 fun Properties.effectiveVersionName(): String {
     val base = getProperty("VERSION_NAME").trim()
