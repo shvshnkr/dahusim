@@ -3,8 +3,10 @@
 set -euo pipefail
 
 METADATA="${1:-husi.properties}"
-base="$(awk -F= '$1=="VERSION_NAME"{print $2; exit}' "$METADATA")"
-suffix="$(awk -F= '$1=="VERSION_NAME_SUFFIX"{print $2; exit}' "$METADATA")"
+# UTF-8 BOM on line 1 breaks awk key match (same as Gradle requireMetadata strip).
+meta_lines="$(sed '1s/^\xEF\xBB\xBF//' "$METADATA")"
+base="$(awk -F= '$1=="VERSION_NAME"{print $2; exit}' <<<"$meta_lines")"
+suffix="$(awk -F= '$1=="VERSION_NAME_SUFFIX"{print $2; exit}' <<<"$meta_lines")"
 if [ -z "$base" ]; then
   echo "Missing VERSION_NAME in $METADATA" >&2
   exit 1

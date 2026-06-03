@@ -480,6 +480,31 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun openPostConnectTelegramBootstrapFailureIsInconclusive() {
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "timeout: no recent network activity",
+                whitelistOnly = false,
+                phase = "post_connect",
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "connection refused",
+                whitelistOnly = false,
+                phase = "post_connect",
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+    }
+
+    @Test
+    fun openPostConnectHasTwoAttempts() {
+        assertEquals(2, SimpleModeHealthRoute.postConnectMaxAttempts(whitelistOnly = false))
+    }
+
+    @Test
     fun wl405RegressionUnchanged() {
         assertEquals(
             SimpleModeHealthRoute.WL_URL_PROBE_SYNTHETIC_MS,

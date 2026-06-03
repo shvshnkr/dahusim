@@ -126,9 +126,26 @@ internal object SimpleModeHealthRoute {
             (baseTimeoutMs * 2).coerceIn(5_000, 20_000)
         }
 
-    fun postConnectWarmupMs(whitelistOnly: Boolean): Long = if (whitelistOnly) 2_500L else 400L
+    private const val OPEN_POST_CONNECT_WARMUP_MS = 400L
+    private const val OPEN_POST_CONNECT_RECENT_FULL_PROBE_WARMUP_MS = 1_000L
+    private const val RECENT_FULL_PROBE_FOR_POST_CONNECT_MS = 3L * 60 * 1000
 
-    fun postConnectMaxAttempts(whitelistOnly: Boolean): Int = if (whitelistOnly) 3 else 1
+    fun postConnectWarmupMs(
+        whitelistOnly: Boolean,
+        recentFullProbe: Boolean = isRecentFullProbeForPostConnect(),
+    ): Long = when {
+        whitelistOnly -> 2_500L
+        recentFullProbe -> OPEN_POST_CONNECT_RECENT_FULL_PROBE_WARMUP_MS
+        else -> OPEN_POST_CONNECT_WARMUP_MS
+    }
+
+    fun postConnectMaxAttempts(whitelistOnly: Boolean): Int = if (whitelistOnly) 3 else 2
+
+    fun isRecentFullProbeForPostConnect(): Boolean {
+        val lastProbeAt = DataStore.autoSelectLastFullProbeAt
+        return lastProbeAt > 0L &&
+            System.currentTimeMillis() - lastProbeAt < RECENT_FULL_PROBE_FOR_POST_CONNECT_MS
+    }
 
     internal fun hasWlUplinkDialIface(error: String): Boolean =
         error.contains("dial rmnet", ignoreCase = true) ||
@@ -144,6 +161,16 @@ internal object SimpleModeHealthRoute {
     fun isWlTunnelBootstrapFailure(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
         if (!hasWlUplinkDialIface(error)) return false
+        return isTunnelBootstrapTransportFailure(error)
+    }
+
+    /** OPEN post-connect: TUN cold start without requiring uplink dial iface in the error text. */
+    internal fun isOpenPostConnectTunnelBootstrapFailure(error: String?): Boolean {
+        if (error.isNullOrBlank()) return false
+        return isTunnelBootstrapTransportFailure(error)
+    }
+
+    private fun isTunnelBootstrapTransportFailure(error: String): Boolean {
         val e = error.lowercase()
         return e.contains("i/o timeout") ||
             e.contains("connection timed out") ||
@@ -200,6 +227,13 @@ internal object SimpleModeHealthRoute {
             return phase == "session_periodic" ||
                 phase == "post_connect" ||
                 phase.isBlank()
+        }
+        if (!whitelistOnly &&
+            phase == "post_connect" &&
+            probeUrl == TUNNEL_HEALTH_TELEGRAM &&
+            isOpenPostConnectTunnelBootstrapFailure(error)
+        ) {
+            return true
         }
         // Messenger probe is a "must succeed" signal when the tunnel path is stable. Uplink
         // bootstrap / handoff errors are handled above.

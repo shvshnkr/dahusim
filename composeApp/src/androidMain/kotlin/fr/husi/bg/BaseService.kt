@@ -426,9 +426,9 @@ class BaseService {
             )
         }
 
-        private fun trySimpleModeManualProbeFallback(profileId: Long, whitelistOnly: Boolean): Boolean {
-            if (!DataStore.simpleMode) return false
-            val hadQueue = DataStore.autoSelectFallbackQueue.isNotBlank()
+        private fun tryQueueFallbackAfterProbeFail(profileId: Long, whitelistOnly: Boolean): Boolean {
+            if (DataStore.autoSelectFallbackQueue.isBlank()) return false
+            val hadQueue = true
             AutoServerSelector.recordProbeFailure(profileId)
             val fallback = AutoServerSelector.tryMoveToFallback(profileId)
             if (fallback != null) {
@@ -436,16 +436,22 @@ class BaseService {
                     "SimpleMode",
                     "H17 manual_profile_probe_fallback currentId=$profileId nextId=$fallback wlOnly=$whitelistOnly",
                 )
-                SimpleModeTunnelRestart.markModeReconnect(DataStore.activeWhitelistRestrictedNetwork)
+                SimpleModeConnectCoordinator.markPrepareVerifiedForConnect(fallback)
+                if (DataStore.simpleMode) {
+                    SimpleModeTunnelRestart.markModeReconnect(DataStore.activeWhitelistRestrictedNetwork)
+                }
                 stopRunner(restart = true)
                 return true
             }
-            if (hadQueue) {
+            if (hadQueue && DataStore.simpleMode) {
                 BackendState.emitAlert(AlertType.SIMPLE_MODE_ALL_SERVERS_DEAD, "")
                 SimpleModeVpnSessionMarker.markGracefulStop("manual_profile_probe_exhausted")
             }
             return false
         }
+
+        private fun trySimpleModeManualProbeFallback(profileId: Long, whitelistOnly: Boolean): Boolean =
+            tryQueueFallbackAfterProbeFail(profileId, whitelistOnly)
 
         suspend fun preInit() {
             DefaultNetworkMonitor.start()
@@ -822,6 +828,7 @@ class BaseService {
                                 ),
                             )
                             // #endregion
+                            SimpleModeConnectCoordinator.markPrepareVerifiedForConnect(fallback)
                             if (DataStore.simpleMode) {
                                 SimpleModeTunnelRestart.markReconnect(reachability)
                             }

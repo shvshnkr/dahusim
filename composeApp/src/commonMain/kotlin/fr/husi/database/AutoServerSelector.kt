@@ -54,7 +54,15 @@ object AutoServerSelector {
 
     @Volatile
     private var probeUiActive = false
+    @Volatile
+    private var lastPrepareUrlVerifiedIds: Set<Long> = emptySet()
     private val sessionFallbackSteps = AtomicInteger(0)
+
+    fun peekLastPrepareUrlVerifiedIds(): Set<Long> = lastPrepareUrlVerifiedIds
+
+    internal fun setLastPrepareUrlVerifiedIdsForTest(ids: Set<Long>) {
+        lastPrepareUrlVerifiedIds = ids
+    }
 
     private val prepareMutex = Mutex()
     private val connectPrepareGeneration = AtomicInteger(0)
@@ -785,7 +793,19 @@ object AutoServerSelector {
                         }
                         .thenBy { if (it.id in quickProbePings) 0 else 1 }
                         .thenBy { warmProbeStateRank(probeStates, it.id) }
-                        .thenBy { statusRank(it.status) }
+                        .thenBy {
+                            PrepareConnectSelection.openPreparePathTier(
+                                it.id,
+                                wlUrlProbes,
+                                urlTestDelays,
+                                quickProbePings,
+                            )
+                        }
+                        .thenBy {
+                            statusRank(
+                                PrepareConnectSelection.effectiveStatusForRanking(it, urlTestDelays),
+                            )
+                        }
                         .thenBy {
                             compositeSelectionScore(
                                 it,
@@ -873,7 +893,9 @@ object AutoServerSelector {
             } else {
                 "-"
             }
-            "${proxy.id}|co=$co|url=$ut|tcp=$qp|st=${proxy.status}|ping=${proxy.ping}|tp=${throughputRank(proxy)}"
+            val freshUrl = if (id in urlTestDelays) "y" else "n"
+            val freshTcp = if ((quickProbePings[id] ?: 0) > 0) "y" else "n"
+            "${proxy.id}|co=$co|url=$ut|tcp=$qp|fu=$freshUrl|ft=$freshTcp|st=${proxy.status}|ping=${proxy.ping}|tp=${throughputRank(proxy)}"
         }
 
         if (quickProbePings.isNotEmpty()) {
@@ -916,10 +938,33 @@ object AutoServerSelector {
                 quickProbePings = quickProbePings,
             )
         }
+        var finalBest = if (
+            !wlUrlProbes &&
+            shouldQuickProbe &&
+            quickProbePings.isNotEmpty()
+        ) {
+            val demoted = PrepareConnectSelection.demoteUrlOnlyBestIfNeeded(
+                best = best,
+                rankedFinal = rankedFinal,
+                urlTestDelays = urlTestDelays,
+                quickProbePings = quickProbePings,
+                probeStates = probeStates,
+                isInFailureCooldown = ::isInFailureCooldown,
+            )
+            if (demoted != best) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H22 prepare_select_demoted reason=url_only_no_tcp from=$best to=$demoted",
+                )
+            }
+            demoted
+        } else {
+            best
+        }
         setSimpleModeActivity("Ranking ${rankedFinal.size} servers…")
-        if (selectedBefore != best) {
-            Logs.d("AutoSelect: switch selected profile $selectedBefore -> $best")
-            DataStore.selectedProxy = best
+        if (selectedBefore != finalBest) {
+            Logs.d("AutoSelect: switch selected profile $selectedBefore -> $finalBest")
+            DataStore.selectedProxy = finalBest
         }
         // #region agent log
         simpleModeDebugEvent(
@@ -929,7 +974,7 @@ object AutoServerSelector {
             message = "prepared fallback queue",
             data = mapOf(
                 "selectedBefore" to selectedBefore.toString(),
-                "best" to best.toString(),
+                "best" to finalBest.toString(),
                 "queueSize" to rankedFinal.size.toString(),
                 "groupCount" to connectPool.map { it.groupId }.toSet().size.toString(),
                 "availableCount" to availableCount.toString(),
@@ -937,14 +982,14 @@ object AutoServerSelector {
                 "badCount" to badCount.toString(),
                 "probeAlive" to quickProbeAlive.toString(),
                 "urlTestOk" to urlTestDelays.size.toString(),
-                "bestPing" to (connectPool.firstOrNull { it.id == best }?.ping?.toString() ?: "0"),
+                "bestPing" to (connectPool.firstOrNull { it.id == finalBest }?.ping?.toString() ?: "0"),
                 "rankedHead" to rankedHead,
             ),
         )
         // #endregion
         simpleModeLog(
             "SimpleMode",
-            "H4 queue_prepared before=$selectedBefore best=$best size=${rankedFinal.size} avail=$availableCount initial=$initialCount bad=$badCount probeAlive=$quickProbeAlive urlOk=${urlTestDelays.size} head=$rankedHead",
+            "H4 queue_prepared before=$selectedBefore best=$finalBest size=${rankedFinal.size} avail=$availableCount initial=$initialCount bad=$badCount probeAlive=$quickProbeAlive urlOk=${urlTestDelays.size} head=$rankedHead",
         )
         if (shouldQuickProbe && !effectiveHandoff) {
             AutoServerSelectorProbePolicy.recordFullProbe(proxies, wlUrlProbes)
@@ -959,11 +1004,11 @@ object AutoServerSelector {
             probeStates = probeStates,
         )
         if (wlUrlProbes && shouldQuickProbe && urlTestDelays.isEmpty() &&
-            !AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(best, urlTestDelays, probeStates)
+            !AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(finalBest, urlTestDelays, probeStates)
         ) {
             simpleModeLog(
                 "SimpleMode",
-                "H22 prepare_wl_no_url_ok best=$best tcpAlive=$quickProbeAlive pool=${connectPool.size}",
+                "H22 prepare_wl_no_url_ok best=$finalBest tcpAlive=$quickProbeAlive pool=${connectPool.size}",
             )
             return PrepareForConnectResult.AllProbesDead
         }
@@ -987,19 +1032,20 @@ object AutoServerSelector {
             AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD -> {
                 simpleModeLog(
                     "SimpleMode",
-                    "H22 prepare_open_hard_dead best=$best tcpAlive=$quickProbeAlive pool=${connectPool.size}",
+                    "H22 prepare_open_hard_dead best=$finalBest tcpAlive=$quickProbeAlive pool=${connectPool.size}",
                 )
                 return PrepareForConnectResult.AllProbesDead
             }
             AutoServerSelectorProbePolicy.OpenPrepareDecision.DEGRADED -> {
                 simpleModeLog(
                     "SimpleMode",
-                    "H22 prepare_open_degraded_continue best=$best tcpAlive=$quickProbeAlive pool=${connectPool.size}",
+                    "H22 prepare_open_degraded_continue best=$finalBest tcpAlive=$quickProbeAlive pool=${connectPool.size}",
                 )
             }
             AutoServerSelectorProbePolicy.OpenPrepareDecision.OK -> Unit
         }
-        return PrepareForConnectResult.Success(best)
+        lastPrepareUrlVerifiedIds = urlTestDelays.keys
+        return PrepareForConnectResult.Success(finalBest)
     }
 
     private fun recordPrepareSelectionReason(
@@ -1547,30 +1593,23 @@ object AutoServerSelector {
         urlTestDelays: Map<Long, Int>,
         quickProbePings: Map<Long, Int>,
     ): Long {
-        val viable = rankedFinal.filter {
-            ProbePoolEligibility.isViableFallbackTarget(
-                probeStates[it],
-                isInFailureCooldown(it),
+        if (wlUrlProbes) {
+            return PrepareConnectSelection.selectBestWlProfile(
+                rankedFinal = rankedFinal,
+                profilesById = profilesById,
+                probeStates = probeStates,
+                urlTestDelays = urlTestDelays,
+                isInFailureCooldown = ::isInFailureCooldown,
             )
         }
-        fun preferHealthy(ids: List<Long>): Long? = ids.firstOrNull { id ->
-            val status = profilesById[id]?.status ?: ProxyEntity.STATUS_INITIAL
-            status != ProxyEntity.STATUS_UNAVAILABLE &&
-                status != ProxyEntity.STATUS_INVALID &&
-                status != ProxyEntity.STATUS_UNREACHABLE
-        } ?: ids.firstOrNull()
-        if (wlUrlProbes) {
-            val urlVerified = viable.filter { it in urlTestDelays }
-            preferHealthy(urlVerified)?.let { return it }
-            viable.firstOrNull {
-                AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(it, urlTestDelays, probeStates)
-            }?.let { return it }
-            return rankedFinal.first()
-        }
-        val urlVerified = viable.filter { it in urlTestDelays }
-        return preferHealthy(urlVerified)
-            ?: preferHealthy(viable)
-            ?: rankedFinal.first()
+        return PrepareConnectSelection.selectBestOpenProfile(
+            rankedFinal = rankedFinal,
+            profilesById = profilesById,
+            probeStates = probeStates,
+            urlTestDelays = urlTestDelays,
+            quickProbePings = quickProbePings,
+            isInFailureCooldown = ::isInFailureCooldown,
+        )
     }
 
     private suspend fun urlTestTopCandidates(
