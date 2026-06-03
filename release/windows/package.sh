@@ -114,8 +114,10 @@ load_metadata() {
         exit 1
     fi
 
-    PACKAGE_NAME="$(awk -F= '$1=="PACKAGE_NAME"{print $2; exit}' "$METADATA_FILE")"
-    VERSION_NAME="$(awk -F= '$1=="VERSION_NAME"{print $2; exit}' "$METADATA_FILE")"
+    local meta_lines
+    meta_lines="$(sed '1s/^\xEF\xBB\xBF//' "$METADATA_FILE")"
+    PACKAGE_NAME="$(awk -F= '$1=="PACKAGE_NAME"{print $2; exit}' <<<"$meta_lines")"
+    VERSION_NAME="$(awk -F= '$1=="VERSION_NAME"{print $2; exit}' <<<"$meta_lines")"
 
     if [[ -z "$PACKAGE_NAME" || -z "$VERSION_NAME" ]]; then
         error "Failed to parse PACKAGE_NAME or VERSION_NAME from $METADATA_FILE"

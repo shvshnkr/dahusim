@@ -5,6 +5,7 @@ import fr.husi.bg.ServiceState
 import fr.husi.bg.SubscriptionAutoUpdateRunner
 import fr.husi.bg.SubscriptionUpdateMode
 import fr.husi.database.AutoServerSelector
+import fr.husi.database.AutoServerSelectorSessionFallback
 import fr.husi.database.DataStore
 import fr.husi.database.UserPoolPolicy
 import fr.husi.database.PrepareForConnectResult
@@ -68,6 +69,16 @@ object SimpleModeConnectCoordinator {
             consumeAutoselectPrepareProbe()
             clearPrepareVerifiedProfileIdOnly()
             return true
+        }
+        if (selectedProfileId in AutoServerSelector.peekLastPrepareUrlVerifiedIds()) {
+            val queue = AutoServerSelectorSessionFallback.parseQueue(DataStore.autoSelectFallbackQueue)
+            if (selectedProfileId in queue) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H17 manual_profile_probe_skipped reason=prepare_queue_url_verified profileId=$selectedProfileId",
+                )
+                return true
+            }
         }
         return false
     }

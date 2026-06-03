@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 internal object SimpleModePostConnectHealth {
 
     private const val WL_RETRY_DELAY_MS = 2_000L
+    private const val OPEN_RETRY_DELAY_MS = 1_500L
 
     data class Result(
         val ok: Boolean,
@@ -31,7 +32,12 @@ internal object SimpleModePostConnectHealth {
         var lastError: String? = null
         for (attempt in 1..maxAttempts) {
             if (attempt > 1) {
-                delay(WL_RETRY_DELAY_MS * attempt)
+                val retryDelayMs = if (whitelistOnly) {
+                    WL_RETRY_DELAY_MS * attempt
+                } else {
+                    OPEN_RETRY_DELAY_MS
+                }
+                delay(retryDelayMs)
                 simpleModeLog(
                     "SimpleMode",
                     "H3 post_connect_retry attempt=$attempt/$maxAttempts profileId=${profile.id}",

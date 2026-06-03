@@ -141,8 +141,43 @@ internal object SimpleModeVpnCoordinator {
         lastHealthError: String? = null,
         messengerProbeInvolved: Boolean = false,
     ): Boolean {
-        if (!DataStore.simpleMode) return false
         val whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
+        if (!DataStore.simpleMode) {
+            if (DataStore.autoSelectFallbackQueue.isBlank()) return false
+            val inconclusive = SimpleModeHealthRoute.isProbeFailureInconclusive(
+                error = lastHealthError,
+                whitelistOnly = whitelistOnly,
+                phase = "post_connect",
+                probeUrl = if (messengerProbeInvolved) {
+                    SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM
+                } else {
+                    null
+                },
+            )
+            if (inconclusive) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H30 session_recover_inconclusive_skip profileId=$failedProfileId " +
+                        "error=${lastHealthError.orEmpty()} simpleMode=false",
+                )
+                AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError)
+                DataStore.simpleModeActivity = ""
+                return true
+            }
+            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError)
+            val fallback = AutoServerSelector.tryMoveToFallback(failedProfileId)
+            if (fallback != null) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H30 session_recover_fallback simpleMode=false failedProfileId=$failedProfileId nextId=$fallback",
+                )
+                DataStore.selectedProxy = fallback
+                SimpleModeConnectCoordinator.markPrepareVerifiedForConnect(fallback)
+                requestTunnelReload(whitelistOnly, "session_recover_fallback", fallback)
+                return true
+            }
+            return false
+        }
         if (whitelistOnly) {
             DataStore.autoConnectPausedUntilGoogle = false
         }
