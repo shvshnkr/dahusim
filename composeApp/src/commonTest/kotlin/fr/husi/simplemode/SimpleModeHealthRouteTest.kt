@@ -447,7 +447,7 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
-    fun stallProbeErrorIsInconclusiveRegardlessOfPhase() {
+    fun stallProbeErrorInconclusiveOnlyOnPostConnectPhase() {
         assertTrue(
             SimpleModeHealthRoute.isProbeFailureInconclusive(
                 SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR,
@@ -455,7 +455,7 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
                 phase = "post_connect",
             ),
         )
-        assertTrue(
+        assertFalse(
             SimpleModeHealthRoute.isProbeFailureInconclusive(
                 SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR,
                 whitelistOnly = false,

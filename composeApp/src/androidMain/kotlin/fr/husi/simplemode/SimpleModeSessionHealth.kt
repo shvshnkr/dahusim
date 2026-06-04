@@ -37,6 +37,7 @@ internal object SimpleModeSessionHealth {
     private var lastHealthFailAt: Long = 0L
     private val lastCheckCompletedAt = AtomicLong(0L)
     private val stallRecoveryInFlight = AtomicBoolean(false)
+    private val stallDeferTracker = StallDeferTracker()
 
     fun schedule(
         profileId: Long,
@@ -49,6 +50,7 @@ internal object SimpleModeSessionHealth {
         monitoredOutboundTag = outboundTag
         consecutiveFails = 0
         lastHealthFailAt = 0L
+        stallDeferTracker.reset()
         lastCheckCompletedAt.set(System.currentTimeMillis())
         stallWatchdogJob = scope.launch {
             while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
@@ -96,11 +98,13 @@ internal object SimpleModeSessionHealth {
             logQuickCheckSkipped(reason, "not_connected")
             return
         }
-        if (SimpleModeSessionHealthPolicy.shouldRescheduleMonitoringWhenSessionMissing(reason)) {
-            ensureMonitoring(reason)
+        ensureMonitoring(reason)
+        var profileId = monitoredProfileId
+        var outboundTag = monitoredOutboundTag
+        if (profileId <= 0L || outboundTag.isBlank()) {
+            profileId = DataStore.selectedProxy
+            outboundTag = resolveMonitoredOutboundTag(profileId)
         }
-        val profileId = monitoredProfileId
-        val outboundTag = monitoredOutboundTag
         if (profileId <= 0L || outboundTag.isBlank()) {
             logQuickCheckSkipped(reason, "no_monitored_session")
             return
@@ -141,6 +145,7 @@ internal object SimpleModeSessionHealth {
         lastHealthFailAt = 0L
         lastCheckCompletedAt.set(0L)
         stallRecoveryInFlight.set(false)
+        stallDeferTracker.reset()
     }
 
     private fun ensureMonitoring(reason: String) {
@@ -226,7 +231,9 @@ internal object SimpleModeSessionHealth {
         try {
             lastHealthError = SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR
             lastHealthFailAt = System.currentTimeMillis()
-            val deferRecovery = SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+            val nowMs = System.currentTimeMillis()
+            val deferRecovery = stallDeferTracker.tryDefer(
+                nowMs = nowMs,
                 warmReserveVerifiedRecently = WarmReserveSessionCache.hasRecentVerifySuccess(
                     SimpleModeSessionHealthPolicy.WARM_STALL_DEFER_MS,
                 ),
@@ -244,16 +251,7 @@ internal object SimpleModeSessionHealth {
                 "SimpleMode",
                 "H34 session_health_stall_recovery profileId=$profileId stalledMs=$stalledMs",
             )
-            handleUnhealthySession(profileId)
-            if (DataStore.serviceState.connected &&
-                SimpleModeHealthRoute.isProbeFailureInconclusive(
-                    error = lastHealthError,
-                    whitelistOnly = DataStore.activeWhitelistRestrictedNetwork,
-                    phase = "session_periodic",
-                )
-            ) {
-                ensureMonitoring("stall_inconclusive")
-            }
+            handleUnhealthySession(profileId, SessionRecoverContext.StallWatchdog)
         } finally {
             lastCheckCompletedAt.set(System.currentTimeMillis())
             stallRecoveryInFlight.set(false)
@@ -301,17 +299,28 @@ internal object SimpleModeSessionHealth {
         }
     }
 
-    private suspend fun handleUnhealthySession(profileId: Long) {
+    private suspend fun handleUnhealthySession(
+        profileId: Long,
+        context: SessionRecoverContext = SessionRecoverContext.SessionHealth,
+    ) {
         if (!DataStore.serviceState.connected) return
-        AutoServerSelector.recordHealthProbeFailure(profileId, error = lastHealthError)
-        DataStore.simpleModeActivity = "Server degraded, switching…"
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
-        if (SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
+        AutoServerSelector.recordHealthProbeFailure(profileId, error = lastHealthError, whitelistOnly = wlOnly)
+        DataStore.simpleModeActivity = "Server degraded, switching…"
+        val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = wlOnly)
+        val messengerInvolved = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM in healthUrls
+        when (
+            SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                 failedProfileId = profileId,
                 lastHealthError = lastHealthError,
-                messengerProbeInvolved = wlOnly,
-            )) {
-            return
+                messengerProbeInvolved = messengerInvolved,
+                context = context,
+            )
+        ) {
+            SessionRecoverOutcome.SoftKeepConnected,
+            SessionRecoverOutcome.HardRecovered,
+            -> return
+            SessionRecoverOutcome.NotRecovered -> Unit
         }
         WarmReserveMaintainer.runOnceReplenishIfDue(profileId)
         val next = AutoServerSelector.tryMoveToFallback(profileId)

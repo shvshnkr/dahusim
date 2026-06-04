@@ -46,6 +46,8 @@ import fr.husi.simplemode.SimpleModeVpnSessionMarker
 import fr.husi.simplemode.WarmReserveMaintainer
 import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.simplemode.SimpleModeTunnelRestart
+import fr.husi.simplemode.SessionRecoverContext
+import fr.husi.simplemode.SessionRecoverOutcome
 import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.resources.*
 import fr.husi.utils.simpleModeDebugEvent
@@ -762,30 +764,35 @@ class BaseService {
                         if (DataStore.simpleMode) {
                             val messengerProbeInvolved =
                                 postConnectUrls.any { it == SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM }
-                            val recovered = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
+                            val recoverOutcome = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                                 failedProfileId = profile.id,
                                 lastHealthError = postConnectLastError,
                                 messengerProbeInvolved = messengerProbeInvolved,
+                                context = SessionRecoverContext.PostConnectExhausted,
                             )
-                            if (recovered) {
-                                AutoServerSelector.markConnected(profile.id, recordUrlVerified = false)
-                                simpleModeLog(
-                                    "SimpleMode",
-                                    "H10 post_connect_inconclusive_connected profileId=${profile.id}",
-                                )
-                                if (outboundTag.isNotBlank()) {
-                                    SimpleModeVpnSessionMarker.markActive()
-                                    SimpleModeSessionHealth.schedule(profile.id, outboundTag)
-                                    WarmReserveMaintainer.schedule(profile.id)
+                            when (recoverOutcome) {
+                                SessionRecoverOutcome.SoftKeepConnected -> {
+                                    AutoServerSelector.markConnected(profile.id, recordUrlVerified = false)
+                                    simpleModeLog(
+                                        "SimpleMode",
+                                        "H10 post_connect_inconclusive_connected profileId=${profile.id}",
+                                    )
+                                    if (outboundTag.isNotBlank()) {
+                                        SimpleModeVpnSessionMarker.markActive()
+                                        SimpleModeSessionHealth.schedule(profile.id, outboundTag)
+                                        WarmReserveMaintainer.schedule(profile.id)
+                                    }
+                                    SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
+                                        profileId = profile.id,
+                                        postConnectLatencyMs = 1,
+                                        connectWhitelistOnly = wlOnly,
+                                        googleReachable = reachability.googleReachable,
+                                        whitelistSourceReachable = reachability.whitelistSourceReachable,
+                                    )
+                                    return@runOnDefaultDispatcher
                                 }
-                                SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
-                                    profileId = profile.id,
-                                    postConnectLatencyMs = 1,
-                                    connectWhitelistOnly = wlOnly,
-                                    googleReachable = reachability.googleReachable,
-                                    whitelistSourceReachable = reachability.whitelistSourceReachable,
-                                )
-                                return@runOnDefaultDispatcher
+                                SessionRecoverOutcome.HardRecovered -> return@runOnDefaultDispatcher
+                                SessionRecoverOutcome.NotRecovered -> Unit
                             }
                         }
                         runCatching {

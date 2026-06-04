@@ -140,31 +140,29 @@ internal object SimpleModeVpnCoordinator {
         failedProfileId: Long,
         lastHealthError: String? = null,
         messengerProbeInvolved: Boolean = false,
-    ): Boolean {
+        context: SessionRecoverContext = SessionRecoverContext.SessionHealth,
+    ): SessionRecoverOutcome {
         val whitelistOnly = DataStore.activeWhitelistRestrictedNetwork
+        val probeUrl = if (messengerProbeInvolved) {
+            SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM
+        } else {
+            null
+        }
         if (!DataStore.simpleMode) {
-            if (DataStore.autoSelectFallbackQueue.isBlank()) return false
-            val inconclusive = SimpleModeHealthRoute.isProbeFailureInconclusive(
-                error = lastHealthError,
-                whitelistOnly = whitelistOnly,
-                phase = "post_connect",
-                probeUrl = if (messengerProbeInvolved) {
-                    SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM
-                } else {
-                    null
-                },
-            )
-            if (inconclusive) {
+            if (DataStore.autoSelectFallbackQueue.isBlank()) return SessionRecoverOutcome.NotRecovered
+            if (SimpleModeHealthRoute.allowsInconclusiveSoftRecover(
+                    context, lastHealthError, whitelistOnly, probeUrl,
+                )) {
                 simpleModeLog(
                     "SimpleMode",
                     "H30 session_recover_inconclusive_skip profileId=$failedProfileId " +
-                        "error=${lastHealthError.orEmpty()} simpleMode=false",
+                        "error=${lastHealthError.orEmpty()} simpleMode=false ctx=$context",
                 )
-                AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError)
+                AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
                 DataStore.simpleModeActivity = ""
-                return true
+                return SessionRecoverOutcome.SoftKeepConnected
             }
-            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError)
+            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
             val fallback = AutoServerSelector.tryMoveToFallback(failedProfileId)
             if (fallback != null) {
                 simpleModeLog(
@@ -174,27 +172,24 @@ internal object SimpleModeVpnCoordinator {
                 DataStore.selectedProxy = fallback
                 SimpleModeConnectCoordinator.markPrepareVerifiedForConnect(fallback)
                 requestTunnelReload(whitelistOnly, "session_recover_fallback", fallback)
-                return true
+                return SessionRecoverOutcome.HardRecovered
             }
-            return false
+            return SessionRecoverOutcome.NotRecovered
         }
         if (whitelistOnly) {
             DataStore.autoConnectPausedUntilGoogle = false
         }
-        val inconclusive = SimpleModeHealthRoute.isProbeFailureInconclusive(
-            error = lastHealthError,
-            whitelistOnly = whitelistOnly,
-            phase = "post_connect",
-            probeUrl = if (messengerProbeInvolved) SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM else null,
-        )
-        if (inconclusive) {
+        if (SimpleModeHealthRoute.allowsInconclusiveSoftRecover(
+                context, lastHealthError, whitelistOnly, probeUrl,
+            )) {
             simpleModeLog(
                 "SimpleMode",
-                "H30 session_recover_inconclusive_skip profileId=$failedProfileId error=${lastHealthError.orEmpty()}",
+                "H30 session_recover_inconclusive_skip profileId=$failedProfileId " +
+                    "error=${lastHealthError.orEmpty()} ctx=$context",
             )
-            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError)
+            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
             DataStore.simpleModeActivity = ""
-            return true
+            return SessionRecoverOutcome.SoftKeepConnected
         }
         DataStore.simpleModeActivity = if (whitelistOnly) {
             "Restricted network: trying another server…"
@@ -203,9 +198,9 @@ internal object SimpleModeVpnCoordinator {
         }
         simpleModeLog(
             "SimpleMode",
-            "H30 session_recover start failedProfileId=$failedProfileId wl=$whitelistOnly",
+            "H30 session_recover start failedProfileId=$failedProfileId wl=$whitelistOnly ctx=$context",
         )
-        AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError)
+        AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
         val fallback = AutoServerSelector.tryMoveToFallback(failedProfileId)
         if (fallback != null) {
             simpleModeLog(
@@ -214,14 +209,14 @@ internal object SimpleModeVpnCoordinator {
             )
             DataStore.selectedProxy = fallback
             requestTunnelReload(whitelistOnly, "session_recover_fallback", fallback)
-            return true
+            return SessionRecoverOutcome.HardRecovered
         }
         val recoverGen = adaptGeneration.incrementAndGet()
         AutoServerSelector.cancelAdaptPrepare("session_recover")
         if (applyReselectAndRestart("session_unhealthy", whitelistOnly, failedProfileId, recoverGen)) {
-            return true
+            return SessionRecoverOutcome.HardRecovered
         }
-        return false
+        return SessionRecoverOutcome.NotRecovered
     }
 
     private suspend fun adaptLocked(reason: String, adaptGen: Int) {

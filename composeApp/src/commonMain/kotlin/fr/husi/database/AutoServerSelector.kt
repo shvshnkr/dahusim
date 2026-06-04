@@ -1224,8 +1224,12 @@ object AutoServerSelector {
         return walk.nextId
     }
 
-    fun recordHealthProbeFailure(profileId: Long, error: String?) {
-        recordProbeFailure(profileId, SimpleModeHealthRoute.probeFailureSkipReason(error))
+    fun recordHealthProbeFailure(
+        profileId: Long,
+        error: String?,
+        whitelistOnly: Boolean = DataStore.activeWhitelistRestrictedNetwork,
+    ) {
+        recordProbeFailure(profileId, SimpleModeHealthRoute.probeFailureSkipReason(error, whitelistOnly))
     }
 
     fun syncFallbackIndexForConnected(profileId: Long) {

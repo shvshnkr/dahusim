@@ -185,14 +185,40 @@ internal object SimpleModeHealthRoute {
         return !isWlTunnelBootstrapFailure(error)
     }
 
-    fun probeFailureSkipReason(error: String?): String? =
+    fun probeFailureSkipReason(error: String?, whitelistOnly: Boolean): String? =
         when {
-            isProbeFailureInconclusive(error, whitelistOnly = true, phase = "post_connect") ->
-                "wl_tunnel_bootstrap"
-            isProbeFailureInconclusive(error, whitelistOnly = true) ->
-                "underlying_proxy_dial"
+            error == SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR ->
+                if (whitelistOnly) "wl_tunnel_bootstrap" else "session_health_probe_stall"
+            isProbeFailureInconclusive(error, whitelistOnly = whitelistOnly, phase = "post_connect") ->
+                if (whitelistOnly) "wl_tunnel_bootstrap" else null
+            isProbeFailureInconclusive(error, whitelistOnly = whitelistOnly) ->
+                if (whitelistOnly) "underlying_proxy_dial" else null
             else -> null
         }
+
+    fun recoverProbePhase(context: SessionRecoverContext): String = when (context) {
+        SessionRecoverContext.PostConnectBootstrap,
+        SessionRecoverContext.PostConnectExhausted,
+        -> "post_connect"
+        SessionRecoverContext.SessionHealth,
+        SessionRecoverContext.StallWatchdog,
+        -> "session_periodic"
+    }
+
+    fun allowsInconclusiveSoftRecover(
+        context: SessionRecoverContext,
+        error: String?,
+        whitelistOnly: Boolean,
+        probeUrl: String?,
+    ): Boolean {
+        if (context != SessionRecoverContext.PostConnectBootstrap) return false
+        return isProbeFailureInconclusive(
+            error = error,
+            whitelistOnly = whitelistOnly,
+            phase = recoverProbePhase(context),
+            probeUrl = probeUrl,
+        )
+    }
 
     private fun isProxyAuthenticationFailure(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
@@ -217,7 +243,7 @@ internal object SimpleModeHealthRoute {
     ): Boolean {
         if (error.isNullOrBlank()) return false
         if (error == SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR) {
-            return true
+            return phase == "post_connect" || phase.isBlank()
         }
         if (isNetworkHandoffProbeFailure(error)) {
             return phase == "post_connect" || phase == "session_periodic" || phase.isBlank()

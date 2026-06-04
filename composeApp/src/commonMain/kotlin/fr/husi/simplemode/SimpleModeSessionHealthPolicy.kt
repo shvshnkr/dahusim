@@ -26,6 +26,9 @@ internal object SimpleModeSessionHealthPolicy {
     /** First periodic check after connect — after post-connect warmup, before post_connect verify returns. */
     const val CONNECT_FIRST_CHECK_DELAY_MS = 12_000L
 
+    const val MAX_STALL_DEFER_PER_WINDOW = 2
+    const val STALL_DEFER_WINDOW_MS = 120_000L
+
     fun isMonitoringStale(lastCheckCompletedAt: Long, nowMs: Long): Boolean {
         if (lastCheckCompletedAt <= 0L) return true
         return nowMs - lastCheckCompletedAt >= MONITORING_STALE_MS
@@ -51,4 +54,28 @@ internal object SimpleModeSessionHealthPolicy {
         } else {
             ON_DEMAND_MIN_GAP_MS
         }
+}
+
+class StallDeferTracker(
+    private val maxDefers: Int = SimpleModeSessionHealthPolicy.MAX_STALL_DEFER_PER_WINDOW,
+    private val windowMs: Long = SimpleModeSessionHealthPolicy.STALL_DEFER_WINDOW_MS,
+) {
+    private var windowStartMs = 0L
+    private var deferCount = 0
+
+    fun reset() {
+        windowStartMs = 0L
+        deferCount = 0
+    }
+
+    fun tryDefer(nowMs: Long, warmReserveVerifiedRecently: Boolean, profileSessionLive: Boolean): Boolean {
+        if (!warmReserveVerifiedRecently && !profileSessionLive) return false
+        if (windowStartMs == 0L || nowMs - windowStartMs > windowMs) {
+            windowStartMs = nowMs
+            deferCount = 0
+        }
+        if (deferCount >= maxDefers) return false
+        deferCount++
+        return true
+    }
 }
