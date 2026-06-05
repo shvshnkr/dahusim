@@ -505,6 +505,34 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun softRecoveryEligibleMatrix() {
+        assertTrue(
+            SimpleModeHealthRoute.isSoftRecoveryEligible(
+                "probe_watchdog_timeout",
+                whitelistOnly = false,
+            ),
+        )
+        assertTrue(
+            SimpleModeHealthRoute.isSoftRecoveryEligible(
+                "network changed",
+                whitelistOnly = true,
+            ),
+        )
+        assertFalse(
+            SimpleModeHealthRoute.isSoftRecoveryEligible(
+                "connection refused",
+                whitelistOnly = false,
+            ),
+        )
+        assertFalse(
+            SimpleModeHealthRoute.isSoftRecoveryEligible(
+                "connection: authentication failed",
+                whitelistOnly = true,
+            ),
+        )
+    }
+
+    @Test
     fun wl405RegressionUnchanged() {
         assertEquals(
             SimpleModeHealthRoute.WL_URL_PROBE_SYNTHETIC_MS,

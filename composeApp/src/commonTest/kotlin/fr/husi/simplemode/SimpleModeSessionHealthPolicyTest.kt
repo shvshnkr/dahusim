@@ -88,28 +88,6 @@ class SimpleModeSessionHealthPolicyTest {
     }
 
     @Test
-    fun deferStallWhenWarmReserveOrSessionLive() {
-        assertTrue(
-            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
-                warmReserveVerifiedRecently = true,
-                profileSessionLive = false,
-            ),
-        )
-        assertTrue(
-            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
-                warmReserveVerifiedRecently = false,
-                profileSessionLive = true,
-            ),
-        )
-        assertFalse(
-            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
-                warmReserveVerifiedRecently = false,
-                profileSessionLive = false,
-            ),
-        )
-    }
-
-    @Test
     fun monitoringStaleBeforeStallRecovery() {
         assertTrue(
             SimpleModeSessionHealthPolicy.MONITORING_STALE_MS <
@@ -117,14 +95,3 @@ class SimpleModeSessionHealthPolicyTest {
         )
     }
 }
-
-    @Test
-    fun stallDeferCapWithinWindow() {
-        val tracker = StallDeferTracker(maxDefers = 2, windowMs = 60_000L)
-        val now = 1_000_000L
-        assertTrue(tracker.tryDefer(now, warmReserveVerifiedRecently = true, profileSessionLive = false))
-        assertTrue(tracker.tryDefer(now + 1, warmReserveVerifiedRecently = false, profileSessionLive = true))
-        assertFalse(tracker.tryDefer(now + 2, warmReserveVerifiedRecently = true, profileSessionLive = true))
-        tracker.reset()
-        assertTrue(tracker.tryDefer(now + 120_000, warmReserveVerifiedRecently = true, profileSessionLive = false))
-    }

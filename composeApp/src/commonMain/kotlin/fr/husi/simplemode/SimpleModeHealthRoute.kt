@@ -86,6 +86,7 @@ internal object SimpleModeHealthRoute {
         probeUrlPlan(phase = "prepare", whitelistOnly = whitelistOnly, tier = ProbeTier.PRIMARY)
 
     fun shouldEscalateToConfirm(ctx: ProbeEscalationContext): Boolean {
+        if (ctx.phase == SimpleModeTunnelSoftRecoveryPolicy.SOFT_REPROBE_PHASE) return false
         if (!ctx.whitelistOnly && ctx.phase != "prepare" && ctx.phase != "post_connect") return false
         if (!ctx.whitelistOnly && ctx.phase == "post_connect" && ctx.primaryProbeFailed) {
             return true
@@ -170,7 +171,29 @@ internal object SimpleModeHealthRoute {
         return isTunnelBootstrapTransportFailure(error)
     }
 
-    private fun isTunnelBootstrapTransportFailure(error: String): Boolean {
+    fun isSoftRecoveryEligible(
+        error: String?,
+        whitelistOnly: Boolean,
+        probeUrl: String? = null,
+    ): Boolean {
+        if (error.isNullOrBlank()) return false
+        if (isProxyAuthenticationFailure(error)) return false
+        if (error.lowercase().contains("connection refused")) return false
+        if (isWlHttpProbeInconclusive(error)) return false
+        if (isHttpRateLimitOrTransientResponse(error)) return false
+        if (error == SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR) return true
+        if (error.contains("probe_watchdog_timeout", ignoreCase = true)) return true
+        if (isNetworkHandoffProbeFailure(error)) return true
+        if (isTunnelBootstrapTransportFailure(error)) return true
+        if (whitelistOnly) {
+            if (isWlTunnelBootstrapFailure(error)) return true
+            if (isLikelyUnderlyingProxyDialFailure(error)) return true
+        }
+        if (isMessengerDnsOrDialFailure(error, probeUrl)) return false
+        return false
+    }
+
+    internal fun isTunnelBootstrapTransportFailure(error: String): Boolean {
         val e = error.lowercase()
         return e.contains("i/o timeout") ||
             e.contains("connection timed out") ||

@@ -21,23 +21,13 @@ internal object SimpleModeSessionHealthPolicy {
      * Shorter than [STALL_RECOVERY_MS] so ui_attach can restart monitoring before stall tears down VPN.
      */
     const val MONITORING_STALE_MS = CHECK_INTERVAL_MS + 10_000L
-    /** Recent warm-reserve URL verify implies the tunnel still routes; defer stall recovery. */
-    const val WARM_STALL_DEFER_MS = 120_000L
     /** First periodic check after connect — after post-connect warmup, before post_connect verify returns. */
     const val CONNECT_FIRST_CHECK_DELAY_MS = 12_000L
-
-    const val MAX_STALL_DEFER_PER_WINDOW = 2
-    const val STALL_DEFER_WINDOW_MS = 120_000L
 
     fun isMonitoringStale(lastCheckCompletedAt: Long, nowMs: Long): Boolean {
         if (lastCheckCompletedAt <= 0L) return true
         return nowMs - lastCheckCompletedAt >= MONITORING_STALE_MS
     }
-
-    fun shouldDeferStallRecovery(
-        warmReserveVerifiedRecently: Boolean,
-        profileSessionLive: Boolean,
-    ): Boolean = warmReserveVerifiedRecently || profileSessionLive
 
     fun nextCheckDelayMs(consecutiveFails: Int, whitelistRestricted: Boolean): Long {
         if (whitelistRestricted || consecutiveFails != 1) return CHECK_INTERVAL_MS
@@ -54,28 +44,4 @@ internal object SimpleModeSessionHealthPolicy {
         } else {
             ON_DEMAND_MIN_GAP_MS
         }
-}
-
-class StallDeferTracker(
-    private val maxDefers: Int = SimpleModeSessionHealthPolicy.MAX_STALL_DEFER_PER_WINDOW,
-    private val windowMs: Long = SimpleModeSessionHealthPolicy.STALL_DEFER_WINDOW_MS,
-) {
-    private var windowStartMs = 0L
-    private var deferCount = 0
-
-    fun reset() {
-        windowStartMs = 0L
-        deferCount = 0
-    }
-
-    fun tryDefer(nowMs: Long, warmReserveVerifiedRecently: Boolean, profileSessionLive: Boolean): Boolean {
-        if (!warmReserveVerifiedRecently && !profileSessionLive) return false
-        if (windowStartMs == 0L || nowMs - windowStartMs > windowMs) {
-            windowStartMs = nowMs
-            deferCount = 0
-        }
-        if (deferCount >= maxDefers) return false
-        deferCount++
-        return true
-    }
 }

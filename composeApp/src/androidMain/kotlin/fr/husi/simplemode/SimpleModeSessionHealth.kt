@@ -34,10 +34,18 @@ internal object SimpleModeSessionHealth {
     private var consecutiveFails: Int = 0
     private var lastOnDemandAt: Long = 0L
     private var lastHealthError: String? = null
+    private var lastHealthProbeUrl: String? = null
     private var lastHealthFailAt: Long = 0L
     private val lastCheckCompletedAt = AtomicLong(0L)
     private val stallRecoveryInFlight = AtomicBoolean(false)
-    private val stallDeferTracker = StallDeferTracker()
+
+    private data class UrlHealthProbeOptions(
+        val phase: String = "session_periodic",
+        val forceProbe: Boolean = false,
+        val skipWarmup: Boolean = false,
+        val urls: List<String>? = null,
+        val timeoutMs: Int? = null,
+    )
 
     fun schedule(
         profileId: Long,
@@ -50,7 +58,7 @@ internal object SimpleModeSessionHealth {
         monitoredOutboundTag = outboundTag
         consecutiveFails = 0
         lastHealthFailAt = 0L
-        stallDeferTracker.reset()
+        SimpleModeTunnelSoftRecoveryPolicy.resetDebounce()
         lastCheckCompletedAt.set(System.currentTimeMillis())
         stallWatchdogJob = scope.launch {
             while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
@@ -142,10 +150,11 @@ internal object SimpleModeSessionHealth {
         consecutiveFails = 0
         lastOnDemandAt = 0L
         lastHealthError = null
+        lastHealthProbeUrl = null
         lastHealthFailAt = 0L
         lastCheckCompletedAt.set(0L)
         stallRecoveryInFlight.set(false)
-        stallDeferTracker.reset()
+        SimpleModeTunnelSoftRecoveryPolicy.resetDebounce()
     }
 
     private fun ensureMonitoring(reason: String) {
@@ -189,10 +198,24 @@ internal object SimpleModeSessionHealth {
         if (!DataStore.simpleMode || !DataStore.serviceState.connected) return@withLock false
         if (DataStore.selectedProxy != profileId) return@withLock false
         val ok = runUrlHealthCheck(profileId, outboundTag)
+        if (!ok) {
+            if (trySoftUpstreamRecovery(
+                    profileId = profileId,
+                    outboundTag = outboundTag,
+                    reason = "health_fail",
+                    lastError = lastHealthError,
+                    probeUrl = lastHealthProbeUrl,
+                )
+            ) {
+                lastCheckCompletedAt.set(System.currentTimeMillis())
+                return@withLock true
+            }
+        }
         lastCheckCompletedAt.set(System.currentTimeMillis())
         if (ok) {
             consecutiveFails = 0
             lastHealthError = null
+            lastHealthProbeUrl = null
             WarmReserveSessionCache.markLive(profileId)
             SimpleModeVpnSessionMarker.touchHeartbeat()
             if (DataStore.simpleModeActivity == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING) {
@@ -230,27 +253,26 @@ internal object SimpleModeSessionHealth {
         if (!stallRecoveryInFlight.compareAndSet(false, true)) return
         try {
             lastHealthError = SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR
+            lastHealthProbeUrl = null
             lastHealthFailAt = System.currentTimeMillis()
-            val nowMs = System.currentTimeMillis()
-            val deferRecovery = stallDeferTracker.tryDefer(
-                nowMs = nowMs,
-                warmReserveVerifiedRecently = WarmReserveSessionCache.hasRecentVerifySuccess(
-                    SimpleModeSessionHealthPolicy.WARM_STALL_DEFER_MS,
-                ),
-                profileSessionLive = WarmReserveSessionCache.isSessionLive(profileId),
-            )
-            if (deferRecovery) {
-                simpleModeLog(
-                    "SimpleMode",
-                    "H34 session_health_stall_deferred profileId=$profileId stalledMs=$stalledMs",
-                )
-                ensureMonitoring("stall_deferred")
-                return
-            }
+            val outboundTag = resolveMonitoredOutboundTag(profileId)
+            if (outboundTag.isBlank()) return
             simpleModeLog(
                 "SimpleMode",
                 "H34 session_health_stall_recovery profileId=$profileId stalledMs=$stalledMs",
             )
+            if (trySoftUpstreamRecovery(
+                    profileId = profileId,
+                    outboundTag = outboundTag,
+                    reason = "stall_watchdog",
+                    lastError = lastHealthError,
+                    probeUrl = lastHealthProbeUrl,
+                    forceProbe = true,
+                )
+            ) {
+                ensureMonitoring("stall_soft_ok")
+                return
+            }
             handleUnhealthySession(profileId, SessionRecoverContext.StallWatchdog)
         } finally {
             lastCheckCompletedAt.set(System.currentTimeMillis())
@@ -258,18 +280,26 @@ internal object SimpleModeSessionHealth {
         }
     }
 
-    private suspend fun runUrlHealthCheck(profileId: Long, outboundTag: String): Boolean {
+    private suspend fun runUrlHealthCheck(
+        profileId: Long,
+        outboundTag: String,
+        options: UrlHealthProbeOptions = UrlHealthProbeOptions(),
+    ): Boolean {
         val reachability = NetworkReachabilityProbe.probe(fast = true)
         DataStore.activeWhitelistRestrictedNetwork = reachability.whitelistOnly
         val wlOnly = reachability.whitelistOnly
-        if (SimpleModeHealthRoute.skipTunnelHealthCheck(wlOnly)) {
+        if (SimpleModeHealthRoute.skipTunnelHealthCheck(wlOnly) && !options.forceProbe) {
             return true
         }
-        delay(SimpleModeHealthRoute.postConnectWarmupMs(wlOnly))
-        val timeoutMs = (DataStore.connectionTestTimeout * 2).coerceIn(5000, 12_000)
-        val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = wlOnly)
+        if (!options.skipWarmup) {
+            delay(SimpleModeHealthRoute.postConnectWarmupMs(wlOnly))
+        }
+        val baseTimeout = DataStore.connectionTestTimeout * 2
+        val timeoutMs = options.timeoutMs
+            ?: baseTimeout.coerceIn(5000, 12_000)
+        val healthUrls = options.urls ?: SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = wlOnly)
         SimpleModeHealthRoute.logProbeConfig(
-            phase = "session_periodic",
+            phase = options.phase,
             whitelistOnly = wlOnly,
             route = SimpleModeHealthRoute.Route.TUNNEL_OUTBOUND,
             outboundTag = outboundTag,
@@ -277,13 +307,14 @@ internal object SimpleModeSessionHealth {
             timeoutMs = timeoutMs,
         )
         val tunnel = SimpleModeTunnelHealthCheck.probeTunnel(
-            phase = "session_periodic",
+            phase = options.phase,
             whitelistOnly = wlOnly,
             outboundTag = outboundTag,
             urls = healthUrls,
             timeoutMs = timeoutMs,
         )
         lastHealthError = tunnel.lastError
+        lastHealthProbeUrl = tunnel.lastProbeUrl
         return when (
             SimpleModeHealthRoute.classifyTunnelProbe(
                 latencyMs = tunnel.latencyMs,
@@ -297,6 +328,72 @@ internal object SimpleModeSessionHealth {
 
             is SimpleModeHealthRoute.TunnelHealthOutcome.HardFail -> false
         }
+    }
+
+    private suspend fun trySoftUpstreamRecovery(
+        profileId: Long,
+        outboundTag: String,
+        reason: String,
+        lastError: String?,
+        probeUrl: String?,
+        forceProbe: Boolean = false,
+    ): Boolean {
+        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return false
+        if (DataStore.selectedProxy != profileId) return false
+        val wlOnly = DataStore.activeWhitelistRestrictedNetwork
+        val nowMs = System.currentTimeMillis()
+        if (!SimpleModeTunnelSoftRecoveryPolicy.shouldAttemptSoftRecovery(
+                error = lastError,
+                whitelistOnly = wlOnly,
+                probeUrl = probeUrl,
+                nowMs = nowMs,
+                simpleMode = DataStore.simpleMode,
+                connected = DataStore.serviceState.connected,
+            )
+        ) {
+            return false
+        }
+        SimpleModeTunnelSoftRecoveryPolicy.markAttempt(nowMs)
+        simpleModeLog(
+            "SimpleMode",
+            "H36 soft_upstream_recovery start profileId=$profileId wl=$wlOnly reason=$reason " +
+                "error=${lastError.orEmpty()}",
+        )
+        ServiceRegistry.baseService?.data?.resetNetwork()
+        val baseTimeout = DataStore.connectionTestTimeout * 2
+        delay(SimpleModeTunnelSoftRecoveryPolicy.reprobeWarmupMs(wlOnly))
+        val reprobeOptions = UrlHealthProbeOptions(
+            phase = SimpleModeTunnelSoftRecoveryPolicy.SOFT_REPROBE_PHASE,
+            forceProbe = forceProbe,
+            skipWarmup = true,
+            urls = SimpleModeTunnelSoftRecoveryPolicy.reprobeUrls(wlOnly),
+            timeoutMs = SimpleModeTunnelSoftRecoveryPolicy.reprobeTimeoutMs(wlOnly, baseTimeout),
+        )
+        val ok = runUrlHealthCheck(profileId, outboundTag, reprobeOptions)
+        if (ok) {
+            consecutiveFails = 0
+            lastHealthError = null
+            lastHealthProbeUrl = null
+            WarmReserveSessionCache.markLive(profileId)
+            SimpleModeVpnSessionMarker.touchHeartbeat()
+            if (DataStore.simpleModeActivity == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING) {
+                DataStore.simpleModeActivity = ""
+            }
+            simpleModeLog(
+                "SimpleMode",
+                "H36 soft_upstream_recovery ok profileId=$profileId wl=$wlOnly reason=$reason",
+            )
+            return true
+        }
+        if (!wlOnly) {
+            DataStore.simpleModeActivity = ACTIVITY_CONNECTION_UNSTABLE_RECHECKING
+        }
+        simpleModeLog(
+            "SimpleMode",
+            "H36 soft_upstream_recovery fail profileId=$profileId wl=$wlOnly reason=$reason " +
+                "error=${lastHealthError.orEmpty()}",
+        )
+        return false
     }
 
     private suspend fun handleUnhealthySession(
