@@ -71,6 +71,12 @@ object SubscriptionCatalogDefaults {
             poolRole = ConnectPoolRole.WL,
         ),
         CatalogSeed(
+            sourceKey = "wl-standalone",
+            name = "WL standalone",
+            link = "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/wl-standalone.txt",
+            poolRole = ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
             "white-lattice",
             "WhiteLattice",
             "https://raw.githubusercontent.com/HikaruApps/WhiteLattice/refs/heads/main/subscriptions/config.txt",

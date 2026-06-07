@@ -1,0 +1,4 @@
+#profile-title: WL standalone
+#profile-update-interval: 24
+
+socks5://95.163.232.231:10808#RU BS SOCKS relay
