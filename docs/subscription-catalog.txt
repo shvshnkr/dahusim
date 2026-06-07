@@ -1,5 +1,5 @@
 HUSI_SUBSCRIPTION_CATALOG_V1
-generation=3
+generation=4
 allow_empty=false
 UPSERT|mifa-main|Mifa Main|https://mifa.world/vless|RAW|default|open
 UPSERT|mifa-hysteria|Mifa Hysteria|https://mifa.world/hysteria|RAW|default|open
@@ -11,6 +11,7 @@ UPSERT|aetris-vpn|AetrisVPN|https://gist.githubusercontent.com/flaafix/c79a81037
 REMOVE|tri-228
 UPSERT|tri-228-open|tri_228 open|https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/tri_228-open.txt|RAW|default|open
 UPSERT|tri-228-wl|tri_228 wl|https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/tri_228-wl.txt|RAW|default|wl
+UPSERT|wl-standalone|WL standalone|https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/wl-standalone.txt|RAW|default|wl
 UPSERT|white-lattice|WhiteLattice|https://raw.githubusercontent.com/HikaruApps/WhiteLattice/refs/heads/main/subscriptions/config.txt|RAW|default|wl
 UPSERT|white-list-vpn-black|WhiteListVpn BlackList|https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/BlackList.txt|RAW|default|wl
 UPSERT|wlrus-blackl|wlrus blackl|https://wlrus.lol/confs/blackl.txt|RAW|default|wl

@@ -88,6 +88,8 @@ PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 `tri_228-open.txt` and `tri_228-wl.txt` are split from upstream `tri_228.txt` (open: `#для wifi и моб инет без бс` … `#для обхода бс`; wl: BS-bypass section and below). When upstream changes, rebuild both files manually and bump catalog `generation` if URLs or `source_id` change.
 
+`wl-standalone.txt` is a curated WL feed for single-node relays (SOCKS, VLESS, etc.); add profiles one line per URI and bump catalog `generation` when the feed URL or catalog entry changes.
+
 ## Degraded feed / jail
 
 Auto-update tracks **group-level** health in Room (`subscription_update_states`), separate from per-profile probe jail:

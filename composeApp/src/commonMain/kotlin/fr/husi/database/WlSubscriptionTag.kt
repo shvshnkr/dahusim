@@ -19,6 +19,7 @@ internal object WlSubscriptionTag {
         "vless-wl-rus-mobile",
         "vless-wl-rus-mobile-2",
         "tri-228-wl",
+        "wl-standalone",
     )
 
     data class Resolution(
