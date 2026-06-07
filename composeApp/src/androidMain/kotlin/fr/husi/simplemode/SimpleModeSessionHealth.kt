@@ -36,8 +36,10 @@ internal object SimpleModeSessionHealth {
     private var lastHealthError: String? = null
     private var lastHealthProbeUrl: String? = null
     private var lastHealthFailAt: Long = 0L
+    private var lastHealthOkAt: Long = 0L
     private val lastCheckCompletedAt = AtomicLong(0L)
     private val stallRecoveryInFlight = AtomicBoolean(false)
+    private val stallDeferTracker = StallDeferTracker()
 
     private data class UrlHealthProbeOptions(
         val phase: String = "session_periodic",
@@ -58,6 +60,8 @@ internal object SimpleModeSessionHealth {
         monitoredOutboundTag = outboundTag
         consecutiveFails = 0
         lastHealthFailAt = 0L
+        lastHealthOkAt = 0L
+        stallDeferTracker.reset()
         SimpleModeTunnelSoftRecoveryPolicy.resetDebounce()
         lastCheckCompletedAt.set(System.currentTimeMillis())
         stallWatchdogJob = scope.launch {
@@ -152,8 +156,10 @@ internal object SimpleModeSessionHealth {
         lastHealthError = null
         lastHealthProbeUrl = null
         lastHealthFailAt = 0L
+        lastHealthOkAt = 0L
         lastCheckCompletedAt.set(0L)
         stallRecoveryInFlight.set(false)
+        stallDeferTracker.reset()
         SimpleModeTunnelSoftRecoveryPolicy.resetDebounce()
     }
 
@@ -216,6 +222,7 @@ internal object SimpleModeSessionHealth {
             consecutiveFails = 0
             lastHealthError = null
             lastHealthProbeUrl = null
+            lastHealthOkAt = System.currentTimeMillis()
             WarmReserveSessionCache.markLive(profileId)
             SimpleModeVpnSessionMarker.touchHeartbeat()
             if (DataStore.simpleModeActivity == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING) {
@@ -252,6 +259,26 @@ internal object SimpleModeSessionHealth {
         if (stalledMs < SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS) return
         if (!stallRecoveryInFlight.compareAndSet(false, true)) return
         try {
+            val nowMs = System.currentTimeMillis()
+            val wlOnly = DataStore.activeWhitelistRestrictedNetwork
+            val deferRecovery = SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                tracker = stallDeferTracker,
+                nowMs = nowMs,
+                consecutiveFails = consecutiveFails,
+                lastHealthOkAt = lastHealthOkAt,
+                warmReserveVerifiedRecently = WarmReserveSessionCache.hasRecentVerifySuccess(
+                    SimpleModeSessionHealthPolicy.WARM_STALL_DEFER_MS,
+                ),
+                profileSessionLive = WarmReserveSessionCache.isSessionLive(profileId),
+                whitelistOnly = wlOnly,
+            )
+            if (deferRecovery) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H34 stall_deferred profileId=$profileId stalledMs=$stalledMs wl=$wlOnly",
+                )
+                return
+            }
             lastHealthError = SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR
             lastHealthProbeUrl = null
             lastHealthFailAt = System.currentTimeMillis()
@@ -374,6 +401,7 @@ internal object SimpleModeSessionHealth {
             consecutiveFails = 0
             lastHealthError = null
             lastHealthProbeUrl = null
+            lastHealthOkAt = System.currentTimeMillis()
             WarmReserveSessionCache.markLive(profileId)
             SimpleModeVpnSessionMarker.touchHeartbeat()
             if (DataStore.simpleModeActivity == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING) {

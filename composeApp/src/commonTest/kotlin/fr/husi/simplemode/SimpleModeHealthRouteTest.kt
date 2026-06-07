@@ -505,6 +505,18 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun postConnectHardFailUsesSingleAttempt() {
+        assertEquals(
+            1,
+            SimpleModeHealthRoute.postConnectMaxAttempts(
+                whitelistOnly = false,
+                lastError = "connection refused",
+            ),
+        )
+        assertTrue(SimpleModeHealthRoute.isPostConnectHardFail("x509: certificate signed by unknown authority"))
+    }
+
+    @Test
     fun softRecoveryEligibleMatrix() {
         assertTrue(
             SimpleModeHealthRoute.isSoftRecoveryEligible(

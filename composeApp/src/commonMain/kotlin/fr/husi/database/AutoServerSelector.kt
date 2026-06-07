@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -400,7 +401,8 @@ object AutoServerSelector {
             )
         }
         if (!effectiveHandoff && forceFullProbeReason?.contains("proxy_set_changed") != true &&
-            forceFullProbeReason?.contains("wl_to_open") != true
+            forceFullProbeReason?.contains("wl_to_open") != true &&
+            forceFullProbeReason?.contains("open_to_wl") != true
         ) {
             tryLastKnownGoodFastPath(
                 proxies = connectPool,
@@ -924,7 +926,7 @@ object AutoServerSelector {
             selectedBefore > 0L &&
             selectedBefore in rankedFinal &&
             !isInFailureCooldown(selectedBefore) &&
-            AutoServerSelectorProbePolicy.isHandoffPreserveFresh()
+            PrepareConnectSelection.hasFreshPrepareUrl(selectedBefore, urlTestDelays)
         ) {
             simpleModeLog("SimpleMode", "H33 handoff_prefer_current profileId=$selectedBefore")
             selectedBefore
@@ -938,11 +940,7 @@ object AutoServerSelector {
                 quickProbePings = quickProbePings,
             )
         }
-        var finalBest = if (
-            !wlUrlProbes &&
-            shouldQuickProbe &&
-            quickProbePings.isNotEmpty()
-        ) {
+        var finalBest = if (!wlUrlProbes && shouldQuickProbe) {
             val demoted = PrepareConnectSelection.demoteUrlOnlyBestIfNeeded(
                 best = best,
                 rankedFinal = rankedFinal,
@@ -1091,6 +1089,29 @@ object AutoServerSelector {
     }
 
     fun tryMoveToFallback(currentId: Long): Long? {
+        var walkFromId = currentId
+        repeat(8) {
+            val picked = pickNextFallbackCandidate(walkFromId) ?: return null
+            if (!reprobeFallbackCandidate(picked.nextId)) {
+                WarmReserveSessionCache.markWarmFailed(picked.nextId)
+                walkFromId = picked.nextId
+                return@repeat
+            }
+            commitFallbackSelection(currentId, picked)
+            return picked.nextId
+        }
+        return null
+    }
+
+    private data class FallbackPick(
+        val nextId: Long,
+        val nextIndex: Int,
+        val queueSize: Int,
+        val source: String,
+        val walkStats: AutoServerSelectorSessionFallback.FallbackWalkResult? = null,
+    )
+
+    private fun pickNextFallbackCandidate(currentId: Long): FallbackPick? {
         val maxSteps = WlAutoselectPolicy.maxSessionFallbackSteps(
             DataStore.activeWhitelistRestrictedNetwork,
         )
@@ -1107,7 +1128,6 @@ object AutoServerSelector {
         }
         val queue = AutoServerSelectorSessionFallback.parseQueue(DataStore.autoSelectFallbackQueue)
         if (queue.isEmpty()) {
-            // #region agent log
             simpleModeDebugEvent(
                 runId = "run1",
                 hypothesisId = "H1",
@@ -1115,7 +1135,6 @@ object AutoServerSelector {
                 message = "fallback queue empty",
                 data = mapOf("currentId" to currentId.toString()),
             )
-            // #endregion
             simpleModeLog("SimpleMode", "H1 fallback_queue_empty currentId=$currentId")
             return null
         }
@@ -1124,7 +1143,6 @@ object AutoServerSelector {
         } else {
             emptyMap()
         }
-
         val currentIndex = queue.indexOf(currentId).takeIf { it >= 0 } ?: DataStore.autoSelectFallbackIndex
         val startIndex = currentIndex + 1
         val strictFreshFallback = WarmReservePool.isFeatureEnabled()
@@ -1136,18 +1154,13 @@ object AutoServerSelector {
                 if (candidate == currentId || isInFailureCooldown(candidate)) continue
                 val state = probeStates[candidate]
                 if (state?.state == ProbeState.CEMETERY || state?.state == ProbeState.DEAD) continue
-                sessionFallbackSteps.incrementAndGet()
                 val nextIndex = queue.indexOf(candidate).takeIf { it >= 0 } ?: startIndex
-                DataStore.autoSelectFallbackIndex = nextIndex
-                DataStore.selectedProxy = candidate
-                AutoServerSelectorSessionFallback.syncIndexForConnected(candidate)
-                setSimpleModeActivity("Trying next server ${nextIndex + 1}/${queue.size}")
-                Logs.w("AutoSelect fallback: move to session-live profile $candidate")
-                simpleModeLog(
-                    "SimpleMode",
-                    "H37 warm_reserve_fallback_session_live currentId=$currentId nextId=$candidate",
+                return FallbackPick(
+                    nextId = candidate,
+                    nextIndex = nextIndex,
+                    queueSize = queue.size,
+                    source = "warm_live",
                 )
-                return candidate
             }
         }
         val walk = AutoServerSelectorSessionFallback.findNextFallbackCandidate(
@@ -1173,7 +1186,6 @@ object AutoServerSelector {
             }
         }
         if (walk == null) {
-            // #region agent log
             simpleModeDebugEvent(
                 runId = "run1",
                 hypothesisId = "H1",
@@ -1185,7 +1197,6 @@ object AutoServerSelector {
                     "queueSize" to queue.size.toString(),
                 ),
             )
-            // #endregion
             simpleModeLog(
                 "SimpleMode",
                 "H1 fallback_exhausted currentId=$currentId currentIndex=$currentIndex size=${queue.size} " +
@@ -1193,35 +1204,70 @@ object AutoServerSelector {
             )
             return null
         }
-
-        sessionFallbackSteps.incrementAndGet()
-        DataStore.autoSelectFallbackIndex = walk.nextIndex
-        DataStore.selectedProxy = walk.nextId
-        AutoServerSelectorSessionFallback.syncIndexForConnected(walk.nextId)
-        setSimpleModeActivity("Trying next server ${walk.nextIndex + 1}/${queue.size}")
-        Logs.w("AutoSelect fallback: move to profile ${walk.nextId}")
-        // #region agent log
-        simpleModeDebugEvent(
-            runId = "run1",
-            hypothesisId = "H1",
-            location = "AutoServerSelector.kt:tryMoveToFallback",
-            message = "fallback moved",
-            data = mapOf(
-                "currentId" to currentId.toString(),
-                "nextId" to walk.nextId.toString(),
-                "nextIndex" to walk.nextIndex.toString(),
-                "queueSize" to queue.size.toString(),
-            ),
+        return FallbackPick(
+            nextId = walk.nextId,
+            nextIndex = walk.nextIndex,
+            queueSize = queue.size,
+            source = "queue_walk",
+            walkStats = walk,
         )
-        // #endregion
+    }
+
+    private fun commitFallbackSelection(currentId: Long, picked: FallbackPick) {
+        sessionFallbackSteps.incrementAndGet()
+        DataStore.autoSelectFallbackIndex = picked.nextIndex
+        DataStore.selectedProxy = picked.nextId
+        AutoServerSelectorSessionFallback.syncIndexForConnected(picked.nextId)
+        setSimpleModeActivity("Trying next server ${picked.nextIndex + 1}/${picked.queueSize}")
+        Logs.w("AutoSelect fallback: move to profile ${picked.nextId}")
+        when (picked.source) {
+            "warm_live" -> simpleModeLog(
+                "SimpleMode",
+                "H37 warm_reserve_fallback_session_live currentId=$currentId nextId=${picked.nextId}",
+            )
+            else -> {
+                val walk = picked.walkStats
+                simpleModeDebugEvent(
+                    runId = "run1",
+                    hypothesisId = "H1",
+                    location = "AutoServerSelector.kt:tryMoveToFallback",
+                    message = "fallback moved",
+                    data = mapOf(
+                        "currentId" to currentId.toString(),
+                        "nextId" to picked.nextId.toString(),
+                        "nextIndex" to picked.nextIndex.toString(),
+                        "queueSize" to picked.queueSize.toString(),
+                    ),
+                )
+                simpleModeLog(
+                    "SimpleMode",
+                    "H1 fallback_moved currentId=$currentId nextId=${picked.nextId} nextIndex=${picked.nextIndex} " +
+                        "size=${picked.queueSize} sessionStep=${sessionFallbackSteps.get()} " +
+                        if (walk != null) {
+                            "skip=jail:${walk.skippedJail} dead:${walk.skippedDead} cooldown:${walk.skippedCooldown} " +
+                                "notFresh:${walk.skippedNotFresh} warmFailed:${walk.skippedWarmFailed}"
+                        } else {
+                            ""
+                        },
+                )
+            }
+        }
+    }
+
+    private fun reprobeFallbackCandidate(profileId: Long): Boolean {
+        val wlOnly = DataStore.activeWhitelistRestrictedNetwork
+        val proxy = runBlocking { SagerDatabase.proxyDao.getById(profileId) } ?: return false
+        val delayMs = runBlocking {
+            withTimeoutOrNull(Probe2kDefaults.FALLBACK_REPROBE_BUDGET_MS) {
+                DirectProfileUrlProbe.urlTestDelay(proxy, whitelistOnly = wlOnly)
+            }
+        }
+        val ok = delayMs != null && delayMs > 0
         simpleModeLog(
             "SimpleMode",
-            "H1 fallback_moved currentId=$currentId nextId=${walk.nextId} nextIndex=${walk.nextIndex} " +
-                "size=${queue.size} sessionStep=${sessionFallbackSteps.get()} " +
-                "skip=jail:${walk.skippedJail} dead:${walk.skippedDead} cooldown:${walk.skippedCooldown} " +
-                "notFresh:${walk.skippedNotFresh} warmFailed:${walk.skippedWarmFailed}",
+            "H30 fallback_reprobe id=$profileId ok=$ok${delayMs?.let { " ms=$it" } ?: ""} wl=$wlOnly",
         )
-        return walk.nextId
+        return ok
     }
 
     fun recordHealthProbeFailure(

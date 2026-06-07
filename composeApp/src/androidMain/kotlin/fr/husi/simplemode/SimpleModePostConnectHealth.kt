@@ -28,8 +28,8 @@ internal object SimpleModePostConnectHealth {
     ): Result {
         delay(warmupMs)
         val useDirect = healthRoute == SimpleModeHealthRoute.Route.DIRECT_PROFILE
-        val maxAttempts = SimpleModeHealthRoute.postConnectMaxAttempts(whitelistOnly)
         var lastError: String? = null
+        var maxAttempts = SimpleModeHealthRoute.postConnectMaxAttempts(whitelistOnly)
         for (attempt in 1..maxAttempts) {
             if (attempt > 1) {
                 val retryDelayMs = if (whitelistOnly) {
@@ -88,6 +88,10 @@ internal object SimpleModePostConnectHealth {
                 }
                 lastError = tunnel.lastError ?: "post-connect tunnel url test failed"
             }
+            if (SimpleModeHealthRoute.isPostConnectHardFail(lastError)) {
+                break
+            }
+            maxAttempts = SimpleModeHealthRoute.postConnectMaxAttempts(whitelistOnly, lastError)
             if (!SimpleModeHealthRoute.isProbeFailureInconclusive(lastError, whitelistOnly, "post_connect")) {
                 break
             }

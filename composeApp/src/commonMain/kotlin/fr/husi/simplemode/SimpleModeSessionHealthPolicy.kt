@@ -23,6 +23,12 @@ internal object SimpleModeSessionHealthPolicy {
     const val MONITORING_STALE_MS = CHECK_INTERVAL_MS + 10_000L
     /** First periodic check after connect — after post-connect warmup, before post_connect verify returns. */
     const val CONNECT_FIRST_CHECK_DELAY_MS = 12_000L
+    const val MAX_STALL_DEFER_PER_WINDOW = 2
+    const val STALL_DEFER_WINDOW_MS = 120_000L
+    const val STALL_DEFER_PRIMARY_OK_MS = 60_000L
+    const val WARM_STALL_DEFER_MS = 45_000L
+    /** Post-connect verify must finish within this window or trigger fallback. */
+    const val POST_CONNECT_WATCHDOG_MS = 28_000L
 
     fun isMonitoringStale(lastCheckCompletedAt: Long, nowMs: Long): Boolean {
         if (lastCheckCompletedAt <= 0L) return true
@@ -44,4 +50,48 @@ internal object SimpleModeSessionHealthPolicy {
         } else {
             ON_DEMAND_MIN_GAP_MS
         }
+
+    fun shouldDeferStallRecovery(
+        tracker: StallDeferTracker,
+        nowMs: Long,
+        consecutiveFails: Int,
+        lastHealthOkAt: Long,
+        warmReserveVerifiedRecently: Boolean,
+        profileSessionLive: Boolean,
+        whitelistOnly: Boolean,
+    ): Boolean {
+        if (consecutiveFails > 0) return false
+        if (!warmReserveVerifiedRecently && !profileSessionLive) return false
+        if (!whitelistOnly) {
+            if (lastHealthOkAt <= 0L || nowMs - lastHealthOkAt >= STALL_DEFER_PRIMARY_OK_MS) {
+                return false
+            }
+            if (!warmReserveVerifiedRecently) return false
+        }
+        return tracker.tryDefer(nowMs, warmReserveVerifiedRecently, profileSessionLive)
+    }
+}
+
+class StallDeferTracker(
+    private val maxDefers: Int = SimpleModeSessionHealthPolicy.MAX_STALL_DEFER_PER_WINDOW,
+    private val windowMs: Long = SimpleModeSessionHealthPolicy.STALL_DEFER_WINDOW_MS,
+) {
+    private var windowStartMs = 0L
+    private var deferCount = 0
+
+    fun reset() {
+        windowStartMs = 0L
+        deferCount = 0
+    }
+
+    fun tryDefer(nowMs: Long, warmReserveVerifiedRecently: Boolean, profileSessionLive: Boolean): Boolean {
+        if (!warmReserveVerifiedRecently && !profileSessionLive) return false
+        if (windowStartMs == 0L || nowMs - windowStartMs > windowMs) {
+            windowStartMs = nowMs
+            deferCount = 0
+        }
+        if (deferCount >= maxDefers) return false
+        deferCount++
+        return true
+    }
 }

@@ -94,4 +94,68 @@ class SimpleModeSessionHealthPolicyTest {
                 SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS,
         )
     }
+
+    @Test
+    fun stallDeferCapWithinWindow() {
+        val tracker = StallDeferTracker(maxDefers = 2, windowMs = 60_000L)
+        val now = 1_000_000L
+        assertTrue(
+            tracker.tryDefer(now, warmReserveVerifiedRecently = true, profileSessionLive = false),
+        )
+        assertTrue(
+            tracker.tryDefer(now + 1, warmReserveVerifiedRecently = false, profileSessionLive = true),
+        )
+        assertFalse(
+            tracker.tryDefer(now + 2, warmReserveVerifiedRecently = true, profileSessionLive = true),
+        )
+        tracker.reset()
+        assertTrue(
+            tracker.tryDefer(now + 120_000, warmReserveVerifiedRecently = true, profileSessionLive = false),
+        )
+    }
+
+    @Test
+    fun stallDeferBlockedOnFailStreak() {
+        val tracker = StallDeferTracker()
+        val now = 1_000_000L
+        assertFalse(
+            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                tracker = tracker,
+                nowMs = now,
+                consecutiveFails = 1,
+                lastHealthOkAt = now - 1_000L,
+                warmReserveVerifiedRecently = true,
+                profileSessionLive = true,
+                whitelistOnly = false,
+            ),
+        )
+    }
+
+    @Test
+    fun openStallDeferRequiresRecentPrimaryOk() {
+        val tracker = StallDeferTracker()
+        val now = 1_000_000L
+        assertFalse(
+            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                tracker = tracker,
+                nowMs = now,
+                consecutiveFails = 0,
+                lastHealthOkAt = now - 120_000L,
+                warmReserveVerifiedRecently = true,
+                profileSessionLive = false,
+                whitelistOnly = false,
+            ),
+        )
+        assertTrue(
+            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                tracker = tracker,
+                nowMs = now,
+                consecutiveFails = 0,
+                lastHealthOkAt = now - 30_000L,
+                warmReserveVerifiedRecently = true,
+                profileSessionLive = false,
+                whitelistOnly = false,
+            ),
+        )
+    }
 }
