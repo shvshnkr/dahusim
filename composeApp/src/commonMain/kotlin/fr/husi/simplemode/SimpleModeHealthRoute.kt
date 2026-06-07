@@ -140,7 +140,20 @@ internal object SimpleModeHealthRoute {
         else -> OPEN_POST_CONNECT_WARMUP_MS
     }
 
-    fun postConnectMaxAttempts(whitelistOnly: Boolean): Int = if (whitelistOnly) 3 else 2
+    fun postConnectMaxAttempts(whitelistOnly: Boolean, lastError: String? = null): Int =
+        when {
+            isPostConnectHardFail(lastError) -> 1
+            whitelistOnly -> 3
+            else -> 2
+        }
+
+    fun isPostConnectHardFail(error: String?): Boolean {
+        if (error.isNullOrBlank()) return false
+        val e = error.lowercase()
+        return e.contains("connection refused") ||
+            e.contains("x509") ||
+            e.contains("not a valid tls")
+    }
 
     fun isRecentFullProbeForPostConnect(): Boolean {
         val lastProbeAt = DataStore.autoSelectLastFullProbeAt

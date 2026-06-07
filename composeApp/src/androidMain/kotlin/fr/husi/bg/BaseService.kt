@@ -42,8 +42,10 @@ import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.simplemode.SimpleModePostConnectHealth
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.simplemode.SimpleModeSessionHealth
+import fr.husi.simplemode.SimpleModeSessionHealthPolicy
 import fr.husi.simplemode.SimpleModeVpnSessionMarker
 import fr.husi.simplemode.WarmReserveMaintainer
+import fr.husi.simplemode.WarmReserveSessionCache
 import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.simplemode.SimpleModeTunnelRestart
 import fr.husi.simplemode.SessionRecoverContext
@@ -656,9 +658,6 @@ class BaseService {
                     simpleModeLog("SimpleMode", "H9 connected_profile id=${profile.id}")
                     DataStore.simpleModeActivity = "Verifying internet access..."
                     val outboundTag = data.proxy?.config?.mainTag.orEmpty()
-                    if (DataStore.simpleMode && outboundTag.isNotBlank()) {
-                        SimpleModeSessionHealth.scheduleOnConnect(profile.id, outboundTag)
-                    }
                     var postConnectHealthy = true
                     var postConnectRecordUrlVerified = true
                     var postConnectLatencyMs = 0
@@ -721,16 +720,29 @@ class BaseService {
                             "H3b post_connect_probe_cfg baseTimeoutMs=$baseTimeoutMs postTimeoutMs=$postConnectTimeoutMs " +
                                 "outboundTagLen=${outboundTag.length} warmupMs=$warmupMs",
                         )
-                        val postConnectProbe = SimpleModePostConnectHealth.verify(
-                            profile = profile,
-                            whitelistOnly = reachability.whitelistOnly,
-                            healthRoute = healthRoute,
-                            outboundTag = outboundTag,
-                            urls = postConnectUrls,
-                            postConnectTimeoutMs = postConnectTimeoutMs,
-                            warmupMs = warmupMs,
-                        )
-                        if (postConnectProbe.ok) {
+                        val postConnectProbe = withTimeoutOrNull(
+                            SimpleModeSessionHealthPolicy.POST_CONNECT_WATCHDOG_MS,
+                        ) {
+                            SimpleModePostConnectHealth.verify(
+                                profile = profile,
+                                whitelistOnly = reachability.whitelistOnly,
+                                healthRoute = healthRoute,
+                                outboundTag = outboundTag,
+                                urls = postConnectUrls,
+                                postConnectTimeoutMs = postConnectTimeoutMs,
+                                warmupMs = warmupMs,
+                            )
+                        }
+                        if (postConnectProbe == null) {
+                            simpleModeLog(
+                                "SimpleMode",
+                                "H3 post_connect_watchdog_timeout profileId=${profile.id} " +
+                                    "budgetMs=${SimpleModeSessionHealthPolicy.POST_CONNECT_WATCHDOG_MS}",
+                            )
+                            postConnectLastError = "probe_watchdog_timeout"
+                            DataStore.simpleModeActivity = "Server unstable, switching..."
+                            postConnectHealthy = false
+                        } else if (postConnectProbe.ok) {
                             postConnectLatencyMs = postConnectProbe.latencyMs.coerceAtLeast(0)
                             postConnectRecordUrlVerified = postConnectProbe.recordUrlVerified
                             if (postConnectProbe.recordUrlVerified) {
@@ -756,6 +768,7 @@ class BaseService {
                             postConnectLastError = postConnectProbe.lastError
                             DataStore.simpleModeActivity = "Server unstable, switching..."
                             postConnectHealthy = false
+                            WarmReserveSessionCache.markWarmFailed(profile.id)
                         }
                     }
                     if (!postConnectHealthy) {
@@ -864,6 +877,11 @@ class BaseService {
                         profile.id,
                         recordUrlVerified = postConnectRecordUrlVerified,
                     )
+                    if (postConnectHealthy && DataStore.simpleMode && outboundTag.isNotBlank()) {
+                        SimpleModeVpnSessionMarker.markActive()
+                        SimpleModeSessionHealth.schedule(profile.id, outboundTag)
+                        WarmReserveMaintainer.schedule(profile.id)
+                    }
                     if (postConnectRecordUrlVerified) {
                         simpleModeLog(
                             "SimpleMode",
@@ -873,11 +891,8 @@ class BaseService {
                         if (DataStore.simpleMode) {
                             SimpleModeVpnCoordinator.markTunnelHealthyAfterProbe()
                         }
-                        if (DataStore.simpleMode && outboundTag.isNotBlank()) {
-                            SimpleModeVpnSessionMarker.markActive()
-                            SimpleModeSessionHealth.schedule(profile.id, outboundTag)
-                            WarmReserveMaintainer.schedule(profile.id)
-                        }
+                    }
+                    if (postConnectHealthy) {
                         SimpleModeConnectedMaintenance.scheduleAfterHealthyConnect(
                             profileId = profile.id,
                             postConnectLatencyMs = postConnectLatencyMs,

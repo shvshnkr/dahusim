@@ -139,10 +139,14 @@ object WarmReserveMaintainer {
                 )
                 var promoted = 0
                 var scanIdx = 0
+                var scanRound = 0
+                var replenishFailBatch = 0
+                var replenishOkBatch = 0
                 while (
                     liveAlive < target &&
                     scanIdx < candidates.size &&
-                    DataStore.serviceState.connected
+                    DataStore.serviceState.connected &&
+                    scanRound < Probe2kDefaults.WARM_REPLENISH_MAX_SCAN_ROUNDS
                 ) {
                     val batch = candidates.drop(scanIdx).take(Probe2kDefaults.WARM_SWITCH_LIVE_PARALLELISM)
                     scanIdx += batch.size
@@ -154,16 +158,19 @@ object WarmReserveMaintainer {
                     replenishResults.forEach { (id, ms) ->
                         if (ms != null) {
                             promoted++
+                            replenishOkBatch++
                             WarmReserveSessionCache.noteWarmVerifySuccess()
-                            simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=true ms=$ms")
                         } else {
-                            simpleModeLog("SimpleMode", "H37 warm_reserve_replenish id=$id ok=false")
+                            replenishFailBatch++
                         }
                     }
                     probeStates = ProxyProbeStateStore.loadMap(queue)
                     reserveIds = WarmReservePool.liveReserveIds(queue, connectedProfileId, cache, probeStates, target)
                     liveAlive = WarmReservePool.countSessionLive(reserveIds, cache)
                     if (liveAlive < target && scanIdx >= candidates.size) {
+                        if (promoted == 0) break
+                        scanRound++
+                        if (scanRound >= Probe2kDefaults.WARM_REPLENISH_MAX_SCAN_ROUNDS) break
                         candidates = WarmReservePool.replenishScanCandidates(
                             queue = queue,
                             connectedId = connectedProfileId,
@@ -179,7 +186,8 @@ object WarmReserveMaintainer {
                 freshAlive = WarmReservePool.countFreshUrlAlive(reserveIds, probeStates)
                 simpleModeLog(
                     "SimpleMode",
-                    "H37 warm_reserve_replenish scanLimit=$scanLimit promoted=$promoted liveAlive=$liveAlive",
+                    "H37 warm_reserve_replenish scanLimit=$scanLimit scanRounds=$scanRound " +
+                        "promoted=$promoted ok=$replenishOkBatch fail=$replenishFailBatch liveAlive=$liveAlive",
                 )
             }
         }

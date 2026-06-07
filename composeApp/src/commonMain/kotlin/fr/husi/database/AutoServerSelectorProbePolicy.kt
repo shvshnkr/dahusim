@@ -164,6 +164,11 @@ internal object AutoServerSelectorProbePolicy {
                 reasons += "interval"
             }
         }
+        if (networkHandoff &&
+            DataStore.autoSelectLastProbeWhitelistOnly != whitelistBuiltinOnly
+        ) {
+            reasons += if (whitelistBuiltinOnly) "open_to_wl" else "wl_to_open"
+        }
         if (!networkHandoff) {
             if (storedHash != 0L && hash != storedHash) {
                 val recentProbe = lastProbeAt > 0L && now - lastProbeAt < PROXY_SET_CHANGE_GRACE_MS
@@ -174,6 +179,9 @@ internal object AutoServerSelectorProbePolicy {
             }
             if (DataStore.autoSelectLastProbeWhitelistOnly && !whitelistBuiltinOnly) {
                 reasons += "wl_to_open"
+            }
+            if (!DataStore.autoSelectLastProbeWhitelistOnly && whitelistBuiltinOnly) {
+                reasons += "open_to_wl"
             }
         }
         if (goodId > 0L && !lkgFresh) {
