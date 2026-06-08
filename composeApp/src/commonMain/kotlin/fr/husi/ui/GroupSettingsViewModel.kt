@@ -19,7 +19,7 @@ import fr.husi.group.SubscriptionSourceKind
 import fr.husi.group.SubscriptionUserAgentPresets
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.ktx.blankAsNull
-import fr.husi.ktx.runOnIoDispatcher
+import fr.husi.subscription.UserSubscriptionAddCoordinator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -121,27 +121,46 @@ internal class GroupSettingsViewModel(
         }
     }
 
-    fun delete() = runOnIoDispatcher {
-        val entity = SagerDatabase.groupDao.getById(editingID).firstOrNull() ?: return@runOnIoDispatcher
-        if (!entity.isGroupDeletable()) return@runOnIoDispatcher
+    fun delete() = viewModelScope.launch {
+        val entity = SagerDatabase.groupDao.getById(editingID).firstOrNull() ?: return@launch
+        if (!entity.isGroupDeletable()) return@launch
         GroupManager.deleteGroup(editingID)
     }
 
-    fun save() = runOnIoDispatcher {
+    fun save(onComplete: (() -> Unit)? = null) = viewModelScope.launch {
+        saveSuspend()
+        onComplete?.invoke()
+    }
+
+    private suspend fun saveSuspend() {
         if (isNew) {
-            GroupManager.createGroup(
-                ProxyGroup().apply {
-                    loadFromUiState(uiState.value)
+            val state = _uiState.value
+            if (state.type == GroupType.SUBSCRIPTION) {
+                val group = ProxyGroup().apply {
+                    loadFromUiState(state)
                     origin = GroupOrigin.USER
                     originSourceId = ""
-                },
-            )
-            return@runOnIoDispatcher
+                }
+                UserSubscriptionAddCoordinator.add(
+                    parsed = group,
+                    byUser = true,
+                    updateImmediately = state.subscriptionLink.isNotBlank(),
+                )
+            } else {
+                GroupManager.createGroup(
+                    ProxyGroup().apply {
+                        loadFromUiState(state)
+                        origin = GroupOrigin.USER
+                        originSourceId = ""
+                    },
+                )
+            }
+            return
         }
-        if (!isDirty.value) return@runOnIoDispatcher
+        if (!isDirty.value) return
         val entity =
-            SagerDatabase.groupDao.getById(editingID).firstOrNull() ?: return@runOnIoDispatcher
-        if (!entity.isGroupDeletable()) return@runOnIoDispatcher
+            SagerDatabase.groupDao.getById(editingID).firstOrNull() ?: return
+        if (!entity.isGroupDeletable()) return
         val state = _uiState.value
         val keepUserInfo = entity.type == GroupType.SUBSCRIPTION
                 && initialState.value?.type == GroupType.SUBSCRIPTION

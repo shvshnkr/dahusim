@@ -1,0 +1,9 @@
+{
+  "id": "20260310_sub_ownership_drift",
+  "buildCode": 715,
+  "networkHints": ["whitelistOnly=false"],
+  "hTagSequence": ["H0", "H16", "H29"],
+  "markers": {"catalogOwnership": "USER", "origin": "GH_MANAGED"},
+  "classifiedFailure": "sub_ownership_drift",
+  "linkedJourney": "sub_survives_bootstrap"
+}

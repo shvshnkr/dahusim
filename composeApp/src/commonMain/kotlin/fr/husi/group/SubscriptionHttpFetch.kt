@@ -56,6 +56,14 @@ object SubscriptionHttpFetch {
         require(request.transport == SubscriptionFetchTransport.TextFeed) {
             "SubscriptionHttpFetch.fetchText supports TextFeed only; JsonPanel is not implemented"
         }
+        SubscriptionFetchTestHooks.bodyFor(request.canonicalLink)?.let { body ->
+            return buildTextFeedResponse(
+                raw = body,
+                canonicalLink = request.canonicalLink,
+                fetchLink = request.canonicalLink,
+                subscriptionUserInfo = null,
+            )
+        }
         val whitelistRestricted = request.whitelistRestricted
             ?: DataStore.activeWhitelistRestrictedNetwork
         val vpnConnected = when {

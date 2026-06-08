@@ -15,6 +15,11 @@ failure behavior, verification). Before merge, review **symmetry D1–D7** again
 distinct failure UI, WL/BS HTTP routing, documented ops outside APK. «Manual works» is not acceptance
 for auto paths — add an invariant test in `composeApp/src/commonTest/` with the change.
 
+User-visible import/settings/subscription/library flows also require a **feature journey** entry in
+[`FeatureJourneys.kt`](composeApp/src/commonTest/kotlin/fr/husi/scenario/journey/FeatureJourneys.kt)
+and a green `featureJourneyTest` on CI (see [`docs/FEATURE_JOURNEYS.md`](docs/FEATURE_JOURNEYS.md)).
+Symmetry D1–D7 alone is not enough when the change touches a registered user promise.
+
 
 Truly readable code is more than just clear—it's understandable even without context (**contextless readability**).
 

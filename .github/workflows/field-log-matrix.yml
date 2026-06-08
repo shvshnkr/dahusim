@@ -1,0 +1,86 @@
+name: Field log matrix
+
+on:
+  pull_request:
+    paths:
+      - "composeApp/src/commonTest/resources/field-log-scenarios/**"
+      - "composeApp/**/scenario/fieldlog/**"
+      - "composeApp/**/scenario/journey/FeatureJourneys.kt"
+      - "docs/FIELD_LOG_SYMPTOMS.toml"
+      - "buildScript/ci/mine-field-logs.py"
+      - ".github/workflows/field-log-matrix.yml"
+  push:
+    branches: [main, redesign]
+    paths:
+      - "composeApp/src/commonTest/resources/field-log-scenarios/**"
+      - "composeApp/**/scenario/fieldlog/**"
+      - "composeApp/**/scenario/journey/FeatureJourneys.kt"
+      - "docs/FIELD_LOG_SYMPTOMS.toml"
+      - "buildScript/ci/mine-field-logs.py"
+      - ".github/workflows/field-log-matrix.yml"
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: field-log-matrix-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  field-log-scenario-tests:
+    name: field log scenario matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: ./.github/actions/setup-dahusim-gradle
+
+      - name: Geo / Gradle init assets
+        run: ./run init action gradle
+
+      - name: Packaging tools (headless desktop tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Write local.properties
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          echo "sdk.dir=${SDK}" > local.properties
+
+      - name: Run field log scenario matrix
+        env:
+          BUILD_PLUGIN: none
+          GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
+        run: |
+          xvfb-run -a --server-args="-screen 0 1280x720x24" \
+            ./gradlew :composeApp:fieldLogScenarioTest --no-daemon
+
+      - name: Publish JUnit report in Checks
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "composeApp/build/test-results/fieldLogScenarioTest/**/*.xml"
+          check_name: "Field log scenario matrix"
+          detailed_summary: true
+          include_passed: false
+          fail_on_failure: false
+          annotate_only: true

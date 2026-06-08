@@ -9,6 +9,8 @@ Program of layered CI gates for network uplink modes, handoff/reconnect policy, 
 | **L0** | [stability-matrix.yml](../.github/workflows/stability-matrix.yml) | `./gradlew :composeApp:matrixTest` | Policy tables: network switch, pool degradation, recovery, in-scan flap, handoff, session health, subscription fetch |
 | **L1** | [network-scenario-matrix.yml](../.github/workflows/network-scenario-matrix.yml) | `./gradlew :composeApp:networkScenarioTest` | Uplink snapshots (open / WL / no inet), handoff sequences, WL subscription fetch, H36 ruleset retry |
 | **L2** | [integration-scenario-matrix.yml](../.github/workflows/integration-scenario-matrix.yml) | `./gradlew :composeApp:integrationScenarioTest` | Catalog sync invariants, route quick profile, coordinator glue |
+| **L2.5** | [integration-scenario-matrix.yml](../.github/workflows/integration-scenario-matrix.yml) | `./gradlew :composeApp:featureJourneyTest` | User journeys (import, settings, bootstrap, pool) — registry in [`FEATURE_JOURNEYS.md`](./FEATURE_JOURNEYS.md) |
+| **L2.6** | [field-log-matrix.yml](../.github/workflows/field-log-matrix.yml) | `./gradlew :composeApp:fieldLogScenarioTest` | Redacted field-log fingerprints do not regress |
 | **L3** | (optional, v2) | manual / instrumented | Real BS uplink on device |
 
 L1 does **not** replace [jdk-matrix-test.yml](../.github/workflows/jdk-matrix-test.yml) (full `desktopTest` × JDK). It only runs `fr.husi.scenario.network.*`.
@@ -49,7 +51,9 @@ Implementation: `composeApp/src/commonTest/kotlin/fr/husi/scenario/network/`. De
 - `docs/SCENARIO_MATRICES.md`
 - `.github/workflows/network-scenario-matrix.yml`
 
-**integration-scenario-matrix** additionally watches `subscription/**`, `scenario/integration/**`, and its workflow file.
+**integration-scenario-matrix** additionally watches `subscription/**`, `scenario/integration/**`, `scenario/journey/**`, `ui/**`, and its workflow file.
+
+**field-log-matrix** runs on `field-log-scenarios/**`, `scenario/fieldlog/**`, `FIELD_LOG_SYMPTOMS.toml`, and the miner script.
 
 ## Before push
 
@@ -57,6 +61,13 @@ Implementation: `composeApp/src/commonTest/kotlin/fr/husi/scenario/network/`. De
 ./gradlew :composeApp:networkScenarioTest
 ./gradlew :composeApp:matrixTest          # optional L0
 ./gradlew :composeApp:integrationScenarioTest  # when touching catalog/route glue
+./gradlew :composeApp:fieldLogScenarioTest      # when touching field-log fixtures
+```
+
+Do not run `./gradlew :composeApp:featureJourneyTest` locally by default — use GitHub CI. Registry-only smoke:
+
+```bash
+./gradlew :composeApp:desktopTest --tests "fr.husi.scenario.journey.FeatureJourneyRegistryTest"
 ```
 
 Target: L1 completes in under ~5 minutes on CI.

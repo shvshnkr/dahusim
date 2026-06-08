@@ -537,3 +537,32 @@ val integrationScenarioTest by tasks.registering(Test::class) {
         includeTestsMatching("fr.husi.scenario.integration.*")
     }
 }
+
+val featureJourneyTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Run feature journey matrix (user-facing import/settings/bootstrap flows)"
+    val desktopTest = tasks.named<Test>("desktopTest")
+    dependsOn("desktopTestClasses")
+    testClassesDirs = desktopTest.get().testClassesDirs
+    classpath = desktopTest.get().classpath
+    useJUnitPlatform()
+    systemProperty("husi.unitTest", "true")
+    systemProperty("husi.journeyTest", "true")
+    filter {
+        includeTestsMatching("fr.husi.scenario.journey.*")
+    }
+}
+
+val fieldLogScenarioTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Run field-log scenario matrix (redacted log fingerprints, no libcore HTTP)"
+    val desktopTest = tasks.named<Test>("desktopTest")
+    dependsOn("desktopTestClasses")
+    testClassesDirs = desktopTest.get().testClassesDirs
+    classpath = desktopTest.get().classpath
+    useJUnitPlatform()
+    systemProperty("husi.unitTest", "true")
+    filter {
+        includeTestsMatching("fr.husi.scenario.fieldlog.*")
+    }
+}

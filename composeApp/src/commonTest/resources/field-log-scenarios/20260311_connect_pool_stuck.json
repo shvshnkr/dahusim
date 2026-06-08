@@ -1,0 +1,9 @@
+{
+  "id": "20260311_connect_pool_stuck",
+  "buildCode": 716,
+  "networkHints": ["whitelistOnly=true", "H4 no_proxies", "H24 subsWlMarked=0"],
+  "hTagSequence": ["H0", "H4", "H24", "H39"],
+  "markers": {"poolMode": "PRIORITY"},
+  "classifiedFailure": "connect_pool_stuck",
+  "linkedJourney": "connect_user_pool_priority"
+}
