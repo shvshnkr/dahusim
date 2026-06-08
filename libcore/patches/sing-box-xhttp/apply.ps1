@@ -10,6 +10,7 @@ $Overlay = Join-Path $PSScriptRoot "overlay"
 
 Push-Location $LibcoreRoot
 try {
+    $env:GOTOOLCHAIN = "auto"
     $modCache = (go env GOMODCACHE).Trim()
     $upstream = Join-Path $modCache "github.com\sagernet\sing-box@${SingBoxVersion}"
     if (Test-Path $upstream) {

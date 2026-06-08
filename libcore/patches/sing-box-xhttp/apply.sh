@@ -11,6 +11,8 @@ DEPS_DIR="${ROOT}/deps/sing-box"
 
 cd "$ROOT"
 
+export GOTOOLCHAIN=auto
+
 mod_cache="$(go env GOMODCACHE)"
 upstream="${mod_cache}/github.com/sagernet/sing-box@${SING_BOX_VERSION}"
 if [ -d "${upstream}" ]; then
