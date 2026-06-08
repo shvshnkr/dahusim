@@ -49,6 +49,12 @@ object AutoServerSelector {
     @Volatile
     var ignoreSessionFallbackForManualConnect: Boolean = false
 
+    /** Fallback queue ids after [UserPoolPolicy] membership filter (EXCLUSIVE / user-first pass). */
+    fun parseEffectiveFallbackQueue(): List<Long> =
+        filterFallbackQueueForUserPool(
+            AutoServerSelectorSessionFallback.parseQueue(DataStore.autoSelectFallbackQueue),
+        )
+
     private const val TCP_PROBE_BATCH_CAP = 128
     private const val URL_BATCH_CAP = 32
     /** Upper bound on connect-time TCP rounds (128 × 16 ≈ 2k profiles per prepare). */
@@ -864,7 +870,7 @@ object AutoServerSelector {
                 },
             )
             .map { it.id }
-        val rankedFinal = ProbePoolEligibility.orderFallbackQueue(ranked, probeStates)
+        val rankedFinal = finalizeFallbackQueueOrder(ranked, probeStates, connectPool, userMode)
         val quickProbeAlive = quickProbePings.size
         if (initialCount == connectPool.size) {
             // #region agent log
@@ -1137,7 +1143,7 @@ object AutoServerSelector {
             }
             return null
         }
-        val queue = AutoServerSelectorSessionFallback.parseQueue(DataStore.autoSelectFallbackQueue)
+        val queue = parseEffectiveFallbackQueue()
         if (queue.isEmpty()) {
             simpleModeDebugEvent(
                 runId = "run1",
@@ -1222,6 +1228,50 @@ object AutoServerSelector {
             source = "queue_walk",
             walkStats = walk,
         )
+    }
+
+    private fun finalizeFallbackQueueOrder(
+        rankedIds: List<Long>,
+        probeStates: Map<Long, ProxyProbeState>,
+        proxies: List<ProxyEntity>,
+        userMode: UserPoolMode,
+    ): List<Long> {
+        var queue = ProbePoolEligibility.orderFallbackQueue(rankedIds, probeStates)
+        if (BuiltinFallbackCapPolicy.shouldApply(userMode)) {
+            queue = BuiltinFallbackCapPolicy.applyCap(queue, proxies.associateBy { it.id })
+        }
+        return queue
+    }
+
+    fun clearPersistedFallbackQueueIfNeeded(reason: String) {
+        if (!UserPoolPolicy.shouldClearPersistedFallbackQueue()) return
+        if (DataStore.autoSelectFallbackQueue.isBlank()) return
+        DataStore.autoSelectFallbackQueue = ""
+        DataStore.autoSelectFallbackIndex = 0
+        simpleModeLog(
+            "SimpleMode",
+            "H39 user_pool_queue_cleared reason=$reason mode=${UserPoolPolicy.effectiveMode().name}",
+        )
+    }
+
+    private fun filterFallbackQueueForUserPool(rawQueue: List<Long>): List<Long> {
+        if (rawQueue.isEmpty()) return rawQueue
+        val mode = UserPoolPolicy.effectiveMode()
+        if (mode == UserPoolMode.OFF || mode == UserPoolMode.PRIORITY) return rawQueue
+        val userTag = runBlocking {
+            UserSubscriptionTag.resolve(
+                SagerDatabase.proxyDao.getAll(),
+                SagerDatabase.groupDao.allGroups().first(),
+            )
+        }
+        val filtered = UserPoolPolicy.filterProxyIds(mode, rawQueue, userTag.userProxyIds)
+        if (filtered.size != rawQueue.size) {
+            simpleModeLog(
+                "SimpleMode",
+                "H39 user_pool_queue_filtered mode=${mode.name} before=${rawQueue.size} after=${filtered.size}",
+            )
+        }
+        return filtered
     }
 
     private fun commitFallbackSelection(currentId: Long, picked: FallbackPick) {
@@ -1483,7 +1533,7 @@ object AutoServerSelector {
         } else {
             emptyMap()
         }
-        val ordered = ProbePoolEligibility.orderFallbackQueue(ranked, probeStates)
+        val ordered = finalizeFallbackQueueOrder(ranked, probeStates, proxies, userMode)
         DataStore.autoSelectFallbackQueue = ordered.joinToString(",")
         DataStore.autoSelectFallbackIndex = 0
         sessionFallbackSteps.set(0)
