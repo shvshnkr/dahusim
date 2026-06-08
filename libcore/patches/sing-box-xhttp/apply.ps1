@@ -28,7 +28,10 @@ try {
     }
     New-Item -ItemType Directory -Path $DepsDir | Out-Null
     Copy-Item -Recurse -Force (Join-Path $upstream "*") $DepsDir
+    Get-ChildItem -Path $DepsDir -Recurse | ForEach-Object { $_.IsReadOnly = $false }
 
+    Remove-Item -Recurse -Force (Join-Path $DepsDir "common\xray") -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force (Join-Path $DepsDir "transport\v2rayxhttp") -ErrorAction SilentlyContinue
     Copy-Item -Recurse -Force (Join-Path $xhttpSource "common\xray") (Join-Path $DepsDir "common\xray")
     Copy-Item -Recurse -Force (Join-Path $xhttpSource "transport\v2rayxhttp") (Join-Path $DepsDir "transport\v2rayxhttp")
 

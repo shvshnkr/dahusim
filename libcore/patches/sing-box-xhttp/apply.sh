@@ -31,7 +31,9 @@ fi
 rm -rf "${DEPS_DIR}"
 mkdir -p "${DEPS_DIR}"
 cp -R "${upstream}/." "${DEPS_DIR}/"
+chmod -R u+w "${DEPS_DIR}"
 
+rm -rf "${DEPS_DIR}/common/xray" "${DEPS_DIR}/transport/v2rayxhttp"
 cp -R "${xhttp_source}/common/xray" "${DEPS_DIR}/common/xray"
 cp -R "${xhttp_source}/transport/v2rayxhttp" "${DEPS_DIR}/transport/v2rayxhttp"
 
