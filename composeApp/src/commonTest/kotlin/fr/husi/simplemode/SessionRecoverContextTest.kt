@@ -1,5 +1,6 @@
 ﻿package fr.husi.simplemode
 
+import fr.husi.bg.UnderlyingCarrierState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,6 +28,48 @@ class SessionRecoverContextTest {
                 error = "timeout: no recent network activity",
                 whitelistOnly = false,
                 probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+    }
+
+    @Test
+    fun carrierOutageErrorsAllowSoftRecoverDuringAwaitingRestore() {
+        UnderlyingCarrierState.clear()
+        try {
+            UnderlyingCarrierState.markAwaitingRestoreForTest()
+            assertTrue(
+                SimpleModeHealthRoute.isCarrierOutageProbeFailure("no available network interface"),
+            )
+            assertTrue(
+                SimpleModeHealthRoute.allowsInconclusiveSoftRecover(
+                    context = SessionRecoverContext.SessionHealth,
+                    error = "resource temporarily unavailable",
+                    whitelistOnly = false,
+                    probeUrl = null,
+                ),
+            )
+            assertTrue(
+                SimpleModeHealthRoute.allowsInconclusiveSoftRecover(
+                    context = SessionRecoverContext.StallWatchdog,
+                    error = "network changed",
+                    whitelistOnly = false,
+                    probeUrl = null,
+                ),
+            )
+        } finally {
+            UnderlyingCarrierState.clear()
+        }
+    }
+
+    @Test
+    fun carrierOutageSoftRecoverRequiresAwaitingRestore() {
+        UnderlyingCarrierState.clear()
+        assertFalse(
+            SimpleModeHealthRoute.allowsInconclusiveSoftRecover(
+                context = SessionRecoverContext.SessionHealth,
+                error = "no available network interface",
+                whitelistOnly = false,
+                probeUrl = null,
             ),
         )
     }

@@ -434,6 +434,7 @@ internal fun LazyListScope.transportSettings(
                 SingBoxOptions.TRANSPORT_HTTP,
                 SingBoxOptions.TRANSPORT_GRPC,
                 SingBoxOptions.TRANSPORT_HTTPUPGRADE,
+                SingBoxOptions.TRANSPORT_XHTTP,
                 SingBoxOptions.TRANSPORT_QUIC,
             ),
             onValueChange = { viewModel.setTransport(it) },
@@ -572,6 +573,60 @@ internal fun LazyListScope.transportSettings(
         }
 
         SingBoxOptions.TRANSPORT_HTTPUPGRADE -> {
+            item("host") {
+                TextFieldPreference(
+                    value = state.host,
+                    onValueChange = { viewModel.setHost(it) },
+                    title = { Text(stringResource(Res.string.http_upgrade_host)) },
+                    textToValue = { it },
+                    icon = { Icon(vectorResource(Res.drawable.language), null) },
+                    summary = { Text(contentOrUnset(state.host)) },
+                    valueToText = { it },
+                    textField = { value, onValueChange, onOk ->
+                        MultilineTextField(value, onValueChange, onOk)
+                    },
+                )
+            }
+            item("path") {
+                TextFieldPreference(
+                    value = state.path,
+                    onValueChange = { viewModel.setPath(it) },
+                    title = { Text(stringResource(Res.string.http_upgrade_path)) },
+                    textToValue = { it },
+                    icon = { Icon(vectorResource(Res.drawable.assistant_direction), null) },
+                    summary = { Text(contentOrUnset(state.path)) },
+                    valueToText = { it },
+                )
+            }
+            item("headers") {
+                TextFieldPreference(
+                    value = state.headers,
+                    onValueChange = { viewModel.setHeaders(it) },
+                    title = { Text(stringResource(Res.string.http_headers)) },
+                    textToValue = { it },
+                    icon = { Icon(vectorResource(Res.drawable.code), null) },
+                    summary = { Text(contentOrUnset(state.headers)) },
+                    valueToText = { it },
+                    textField = { value, onValueChange, onOk ->
+                        MultilineTextField(value, onValueChange, onOk)
+                    },
+                )
+            }
+        }
+
+        SingBoxOptions.TRANSPORT_XHTTP -> {
+            item("xhttp_mode") {
+                ListPreference(
+                    value = state.xhttpMode,
+                    values = listOf("auto", "packet-up", "stream-up", "stream-one"),
+                    onValueChange = { viewModel.setXHTTPMode(it) },
+                    title = { Text("XHTTP mode") },
+                    icon = { Icon(vectorResource(Res.drawable.type_specimen), null) },
+                    summary = { Text(contentOrUnset(state.xhttpMode)) },
+                    type = ListPreferenceType.DROPDOWN_MENU,
+                    valueToText = { AnnotatedString(it) },
+                )
+            }
             item("host") {
                 TextFieldPreference(
                     value = state.host,

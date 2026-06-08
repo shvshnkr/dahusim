@@ -22,6 +22,8 @@ internal data class VLESSUiState(
     override val headers: String = "",
     override val wsMaxEarlyData: Int = 0,
     override val wsEarlyDataHeaderName: String = "",
+    override val xhttpMode: String = "auto",
+    override val xhttpExtra: String = "",
 
     override val security: String = "",
     override val sni: String = "",
@@ -79,6 +81,8 @@ internal class VLESSSettingsViewModel : StandardV2RaySettingsViewModel<VLESSBean
                 headers = headers,
                 wsMaxEarlyData = wsMaxEarlyData,
                 wsEarlyDataHeaderName = earlyDataHeaderName,
+                xhttpMode = xhttpMode,
+                xhttpExtra = xhttpExtra,
 
                 security = security,
                 sni = sni,
@@ -130,6 +134,8 @@ internal class VLESSSettingsViewModel : StandardV2RaySettingsViewModel<VLESSBean
         headers = state.headers
         wsMaxEarlyData = state.wsMaxEarlyData
         earlyDataHeaderName = state.wsEarlyDataHeaderName
+        xhttpMode = state.xhttpMode
+        xhttpExtra = state.xhttpExtra
 
         security = state.security
         sni = state.sni
@@ -208,6 +214,14 @@ internal class VLESSSettingsViewModel : StandardV2RaySettingsViewModel<VLESSBean
 
     override fun setWsEarlyDataHeaderName(headerName: String) {
         _uiState.update { it.copy(wsEarlyDataHeaderName = headerName) }
+    }
+
+    override fun setXHTTPMode(mode: String) {
+        _uiState.update { it.copy(xhttpMode = mode) }
+    }
+
+    override fun setXHTTPExtra(extra: String) {
+        _uiState.update { it.copy(xhttpExtra = extra) }
     }
 
     override fun setSecurity(security: String) {

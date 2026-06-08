@@ -2,6 +2,7 @@ package fr.husi.bg
 
 import android.net.Network
 import fr.husi.database.DataStore
+import fr.husi.simplemode.SimpleModeCarrierReconnect
 import fr.husi.simplemode.SimpleModeSessionHealth
 import fr.husi.libcore.InterfaceUpdateListener
 import fr.husi.repository.resolveAndroidRepository
@@ -9,8 +10,10 @@ import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,6 +36,15 @@ object DefaultNetworkMonitor {
     private val monitorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val interfaceCheckGeneration = AtomicInteger(0)
     private var lastHandoffDispatchAt = 0L
+    private var restoreWatchdogJob: Job? = null
+
+    private const val RESTORE_WATCHDOG_POLL_MS = 2_000L
+    private const val RESTORE_WATCHDOG_MAX_MS = 120_000L
+
+    private data class PolledInterface(
+        val interfaceName: String,
+        val interfaceIndex: Int,
+    )
 
     suspend fun start() {
         access.withLock {
@@ -49,6 +61,7 @@ object DefaultNetworkMonitor {
         access.withLock {
             if (refCount == 0) return
             if (--refCount > 0) return
+            stopCarrierRestoreWatchdog()
             AndroidDefaultNetworkListener.stop(this)
         }
     }
@@ -80,6 +93,138 @@ object DefaultNetworkMonitor {
         monitorScope.launch {
             checkDefaultInterfaceUpdate(newNetwork, generation)
         }
+    }
+
+    private fun shouldContinueRestoreWatchdog(): Boolean =
+        UnderlyingCarrierState.awaitingRestore || SimpleModeCarrierReconnect.isPendingValid()
+
+    private fun startCarrierRestoreWatchdog() {
+        restoreWatchdogJob?.cancel()
+        restoreWatchdogJob = monitorScope.launch {
+            val startedAt = System.currentTimeMillis()
+            while (isActive && System.currentTimeMillis() - startedAt < RESTORE_WATCHDOG_MAX_MS) {
+                if (!shouldContinueRestoreWatchdog()) break
+                delay(RESTORE_WATCHDOG_POLL_MS)
+                if (!shouldContinueRestoreWatchdog()) break
+                val polled = pollActiveUnderlyingNetwork() ?: continue
+                simpleModeLog(
+                    "SimpleMode",
+                    "H15 carrier_restore_watchdog_poll iface=${polled.interfaceName} index=${polled.interfaceIndex} " +
+                        "connected=${DataStore.serviceState.connected}",
+                )
+                val vpnSessionActive = DataStore.serviceState.connected ||
+                    DataStore.serviceState == ServiceState.Connecting
+                val handoffReason = UnderlyingNetworkHandoffPolicy.evaluate(
+                    UnderlyingNetworkHandoffPolicy.Snapshot(
+                        vpnSessionActive = vpnSessionActive,
+                        interfaceName = polled.interfaceName,
+                        interfaceIndex = polled.interfaceIndex,
+                        lastInterfaceName = lastInterfaceName,
+                        lastInterfaceIndex = lastInterfaceIndex,
+                        previousInterfaceForHandoff = previousInterfaceForHandoff,
+                        underlyingCarrierLostWhileConnected = underlyingCarrierLostWhileConnected,
+                    ),
+                )
+                if (handoffReason != null && DataStore.serviceState.connected) {
+                    dispatchUnderlyingHandoff(
+                        interfaceName = polled.interfaceName,
+                        interfaceIndex = polled.interfaceIndex,
+                        handoffReason = handoffReason,
+                        source = "watchdog",
+                    )
+                    break
+                }
+                finishCarrierRestore(
+                    interfaceName = polled.interfaceName,
+                    interfaceIndex = polled.interfaceIndex,
+                )
+                if (!DataStore.serviceState.connected) {
+                    SimpleModeCarrierReconnect.tryResumeIfDue("watchdog")
+                }
+                break
+            }
+            restoreWatchdogJob = null
+        }
+    }
+
+    private fun stopCarrierRestoreWatchdog() {
+        restoreWatchdogJob?.cancel()
+        restoreWatchdogJob = null
+    }
+
+    private fun pollActiveUnderlyingNetwork(): PolledInterface? {
+        val network = resolveAndroidRepository().connectivity.activeNetwork ?: return null
+        val interfaceName =
+            resolveAndroidRepository().connectivity.getLinkProperties(network)?.interfaceName
+                ?: return null
+        val interfaceIndex = try {
+            NetworkInterface.getByName(interfaceName)?.index ?: return null
+        } catch (_: Exception) {
+            return null
+        }
+        return PolledInterface(interfaceName, interfaceIndex)
+    }
+
+    private fun finishCarrierRestore(interfaceName: String, interfaceIndex: Int) {
+        UnderlyingCarrierState.onCarrierRestored()
+        underlyingCarrierLostWhileConnected = false
+        underlyingCarrierLostAtMs = 0L
+        lastInterfaceName = interfaceName
+        lastInterfaceIndex = interfaceIndex
+        previousInterfaceForHandoff = interfaceName
+        stopCarrierRestoreWatchdog()
+    }
+
+    private fun dispatchUnderlyingHandoff(
+        interfaceName: String?,
+        interfaceIndex: Int,
+        handoffReason: String,
+        source: String,
+        ifaceChanged: Boolean = true,
+    ) {
+        val now = System.currentTimeMillis()
+        if (now - lastHandoffDispatchAt < 1_200L) {
+            simpleModeLog(
+                "SimpleMode",
+                "H-D2 network_handoff_coalesced reason=$handoffReason iface=${interfaceName ?: "unknown"} source=$source",
+            )
+            return
+        }
+        lastHandoffDispatchAt = now
+        val elapsedFromLossMs = if (underlyingCarrierLostAtMs > 0L) {
+            (now - underlyingCarrierLostAtMs).coerceAtLeast(0L)
+        } else {
+            -1L
+        }
+        if (DataStore.simpleMode && DataStore.serviceState.connected && elapsedFromLossMs >= 10_000L) {
+            SimpleModeSessionHealth.triggerQuickCheck(
+                "net_available_after_loss gapMs=$elapsedFromLossMs",
+            )
+        }
+        val interfaceRebound = handoffReason == UnderlyingNetworkHandoffPolicy.REASON_LINK_REBOUND
+        simpleModeLog(
+            "SimpleMode",
+            "H-D2 network_handoff_triggered from=${previousInterfaceForHandoff ?: "none"} " +
+                "to=$interfaceName reason=$handoffReason lossMs=$elapsedFromLossMs " +
+                "rebound=$interfaceRebound source=$source",
+        )
+        if (interfaceName != null) {
+            previousInterfaceForHandoff = interfaceName
+        }
+        if (ifaceChanged && interfaceName != null) {
+            lastInterfaceName = interfaceName
+            lastInterfaceIndex = interfaceIndex
+        }
+        UnderlyingCarrierState.onCarrierRestored()
+        underlyingCarrierLostWhileConnected = false
+        underlyingCarrierLostAtMs = 0L
+        stopCarrierRestoreWatchdog()
+        WhitelistNetworkRoutingState.onUnderlyingInterfaceHandoff(
+            iface = interfaceName,
+            handoffReason = handoffReason,
+            elapsedFromLossMs = elapsedFromLossMs,
+            interfaceRebound = interfaceRebound,
+        )
     }
 
     private suspend fun checkDefaultInterfaceUpdate(newNetwork: Network?, generation: Int) {
@@ -156,40 +301,17 @@ object DefaultNetworkMonitor {
                     // #endregion
                 }
                 if (handoffReason != null) {
-                    val now = System.currentTimeMillis()
-                    if (now - lastHandoffDispatchAt < 1_200L) {
-                        simpleModeLog(
-                            "SimpleMode",
-                            "H-D2 network_handoff_coalesced reason=$handoffReason iface=${interfaceName ?: "unknown"}",
-                        )
-                    } else {
-                        lastHandoffDispatchAt = now
-                        val elapsedFromLossMs = if (underlyingCarrierLostAtMs > 0L) {
-                            (now - underlyingCarrierLostAtMs).coerceAtLeast(0L)
-                        } else {
-                            -1L
-                        }
-                        if (DataStore.simpleMode && DataStore.serviceState.connected && elapsedFromLossMs >= 10_000L) {
-                            SimpleModeSessionHealth.triggerQuickCheck(
-                                "net_available_after_loss gapMs=$elapsedFromLossMs",
-                            )
-                        }
-                        val interfaceRebound =
-                            handoffReason == UnderlyingNetworkHandoffPolicy.REASON_LINK_REBOUND
-                        simpleModeLog(
-                            "SimpleMode",
-                            "H-D2 network_handoff_triggered from=${previousInterfaceForHandoff ?: "none"} " +
-                                "to=$interfaceName reason=$handoffReason lossMs=$elapsedFromLossMs " +
-                                "rebound=$interfaceRebound",
-                        )
-                        underlyingCarrierLostWhileConnected = false
-                        underlyingCarrierLostAtMs = 0L
-                        WhitelistNetworkRoutingState.onUnderlyingInterfaceHandoff(
-                            iface = interfaceName,
-                            handoffReason = handoffReason,
-                            elapsedFromLossMs = elapsedFromLossMs,
-                            interfaceRebound = interfaceRebound,
-                        )
+                    dispatchUnderlyingHandoff(
+                        interfaceName = interfaceName,
+                        interfaceIndex = interfaceIndex,
+                        handoffReason = handoffReason,
+                        source = "callback",
+                        ifaceChanged = ifaceChanged,
+                    )
+                } else if (underlyingCarrierLostWhileConnected && interfaceName != null) {
+                    finishCarrierRestore(interfaceName, interfaceIndex)
+                    if (!DataStore.serviceState.connected) {
+                        SimpleModeCarrierReconnect.tryResumeIfDue("callback_restore")
                     }
                 }
                 if (interfaceName != null) {
@@ -199,6 +321,7 @@ object DefaultNetworkMonitor {
                 lastInterfaceIndex = interfaceIndex
                 lastConnectedState = DataStore.serviceState.connected
                 listener.updateDefaultInterface(interfaceName, interfaceIndex)
+                break
             }
         } else {
             // #region agent log
@@ -222,10 +345,13 @@ object DefaultNetworkMonitor {
             if (DataStore.serviceState.connected) {
                 underlyingCarrierLostWhileConnected = true
                 underlyingCarrierLostAtMs = System.currentTimeMillis()
+                UnderlyingCarrierState.onCarrierLost(vpnConnected = true)
+                startCarrierRestoreWatchdog()
             } else {
                 previousInterfaceForHandoff = null
                 underlyingCarrierLostWhileConnected = false
                 underlyingCarrierLostAtMs = 0L
+                UnderlyingCarrierState.onCarrierLost(vpnConnected = false)
             }
             lastInterfaceName = null
             lastInterfaceIndex = -1

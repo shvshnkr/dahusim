@@ -22,6 +22,8 @@ internal data class TrojanUiState(
     override val headers: String = "",
     override val wsMaxEarlyData: Int = 0,
     override val wsEarlyDataHeaderName: String = "",
+    override val xhttpMode: String = "auto",
+    override val xhttpExtra: String = "",
 
     override val security: String = "tls",
     override val sni: String = "",
@@ -75,6 +77,8 @@ internal class TrojanSettingsViewModel : StandardV2RaySettingsViewModel<TrojanBe
                 headers = headers,
                 wsMaxEarlyData = wsMaxEarlyData,
                 wsEarlyDataHeaderName = earlyDataHeaderName,
+                xhttpMode = xhttpMode,
+                xhttpExtra = xhttpExtra,
 
                 security = security,
                 sni = sni,
@@ -123,6 +127,8 @@ internal class TrojanSettingsViewModel : StandardV2RaySettingsViewModel<TrojanBe
         headers = state.headers
         wsMaxEarlyData = state.wsMaxEarlyData
         earlyDataHeaderName = state.wsEarlyDataHeaderName
+        xhttpMode = state.xhttpMode
+        xhttpExtra = state.xhttpExtra
 
         security = state.security
         sni = state.sni
@@ -198,6 +204,14 @@ internal class TrojanSettingsViewModel : StandardV2RaySettingsViewModel<TrojanBe
 
     override fun setWsEarlyDataHeaderName(headerName: String) {
         _uiState.update { it.copy(wsEarlyDataHeaderName = headerName) }
+    }
+
+    override fun setXHTTPMode(mode: String) {
+        _uiState.update { it.copy(xhttpMode = mode) }
+    }
+
+    override fun setXHTTPExtra(extra: String) {
+        _uiState.update { it.copy(xhttpExtra = extra) }
     }
 
     override fun setSecurity(security: String) {

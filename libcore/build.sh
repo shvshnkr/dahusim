@@ -354,6 +354,10 @@ if [ "$PLATFORM_SPECIFIED" == "0" ]; then
     BUILD_ANDROID=1
 fi
 
+if [ ! -f "deps/sing-box/option/v2ray_transport.go" ]; then
+    bash patches/sing-box-xhttp/apply.sh
+fi
+
 # Just install anja & anjb if not have or version not same
 go install tool
 

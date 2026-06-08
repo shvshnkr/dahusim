@@ -205,6 +205,12 @@ internal object SimpleModeSessionHealth {
         if (DataStore.selectedProxy != profileId) return@withLock false
         val ok = runUrlHealthCheck(profileId, outboundTag)
         if (!ok) {
+            if (SimpleModeHealthRoute.isCarrierOutageProbeFailure(lastHealthError)) {
+                consecutiveFails = 0
+                DataStore.simpleModeActivity = "Network changed, reconnecting…"
+                lastCheckCompletedAt.set(System.currentTimeMillis())
+                return@withLock true
+            }
             if (trySoftUpstreamRecovery(
                     profileId = profileId,
                     outboundTag = outboundTag,
@@ -445,7 +451,16 @@ internal object SimpleModeSessionHealth {
             SessionRecoverOutcome.SoftKeepConnected,
             SessionRecoverOutcome.HardRecovered,
             -> return
-            SessionRecoverOutcome.NotRecovered -> Unit
+            SessionRecoverOutcome.NotRecovered -> {
+                if (SimpleModeHealthRoute.isCarrierOutageProbeFailure(lastHealthError)) {
+                    DataStore.simpleModeActivity = "Network changed, reconnecting…"
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H34 session_health_deferred_carrier_outage profileId=$profileId",
+                    )
+                    return
+                }
+            }
         }
         WarmReserveMaintainer.runOnceReplenishIfDue(profileId)
         val next = AutoServerSelector.tryMoveToFallback(profileId)

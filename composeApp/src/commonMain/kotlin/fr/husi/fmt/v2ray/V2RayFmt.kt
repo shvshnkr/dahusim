@@ -17,6 +17,7 @@ import fr.husi.fmt.SingBoxOptions.TRANSPORT_HTTP
 import fr.husi.fmt.SingBoxOptions.TRANSPORT_HTTPUPGRADE
 import fr.husi.fmt.SingBoxOptions.TRANSPORT_QUIC
 import fr.husi.fmt.SingBoxOptions.TRANSPORT_WS
+import fr.husi.fmt.SingBoxOptions.TRANSPORT_XHTTP
 import fr.husi.fmt.SingBoxOptions.V2RayTransportOptions
 import fr.husi.fmt.SingBoxOptions.V2RayTransportOptions_V2RayGRPCOptions
 import fr.husi.fmt.SingBoxOptions.V2RayTransportOptions_V2RayHTTPOptions
@@ -36,12 +37,15 @@ import fr.husi.ktx.Logs
 import fr.husi.ktx.b64Decode
 import fr.husi.ktx.b64DecodeToString
 import fr.husi.ktx.blankAsNull
+import fr.husi.ktx.mergeJson
+import fr.husi.ktx.toJsonMapKxs
 import fr.husi.ktx.toJsonObjectKxs
 import fr.husi.ktx.listByLineOrComma
 import fr.husi.ktx.queryParameterNotBlank
 import fr.husi.ktx.queryParameterUnescapeNotBlank
 import fr.husi.ktx.readableMessage
 import fr.husi.ktx.kxs
+import kotlinx.serialization.json.JsonObject
 import fr.husi.libcore.Libcore
 import fr.husi.libcore.URL
 import kotlinx.serialization.Serializable
@@ -183,6 +187,15 @@ fun StandardV2RayBean.parseDuckSoft(url: URL) {
         "httpupgrade" -> {
             host = url.queryParameter("host")
             path = url.queryParameter("path")
+        }
+
+        "xhttp" -> {
+            xhttpMode = url.queryParameterNotBlank("mode") ?: "auto"
+            host = url.queryParameter("host").orEmpty()
+            path = url.queryParameter("path").orEmpty()
+            url.queryParameterUnescapeNotBlank("extra")?.let { extra ->
+                if (extra != "null") xhttpExtra = extra
+            }
         }
     }
 
@@ -364,6 +377,19 @@ fun StandardV2RayBean.toUriVMessVLESSTrojan(): String {
                 builder.setQueryParameter("serviceName", path)
             }
         }
+
+        "xhttp" -> {
+            builder.addQueryParameter("mode", xhttpMode.blankAsNull() ?: "auto")
+            if (host.isNotBlank()) {
+                builder.addQueryParameter("host", host)
+            }
+            if (path.isNotBlank()) {
+                builder.addQueryParameter("path", path)
+            }
+            if (xhttpExtra.isNotBlank()) {
+                builder.addQueryParameter("extra", xhttpExtra)
+            }
+        }
     }
 
     if (security.isNotBlank() && security != "none") {
@@ -476,9 +502,60 @@ fun buildSingBoxOutboundStreamSettings(bean: StandardV2RayBean): V2RayTransportO
                 headers = bean.headers.blankAsNull()?.let(::buildHeader)?.toMutableMap()
             }
         }
+
+        "xhttp" -> {
+            return null
+        }
     }
 
     return null
+}
+
+fun buildSingBoxOutboundTransport(bean: StandardV2RayBean): JsonObject? {
+    if (bean.v2rayTransport == "xhttp") {
+        return buildSingBoxOutboundXHTTPTransport(bean)
+    }
+    return buildSingBoxOutboundStreamSettings(bean)?.toJsonObjectKxs()
+}
+
+private fun buildSingBoxOutboundXHTTPTransport(bean: StandardV2RayBean): JsonObject {
+    val transport = linkedMapOf<String, Any?>()
+    if (bean.xhttpExtra.isNotBlank()) {
+        runCatching { bean.xhttpExtra.toJsonMapKxs() }.onSuccess { extra ->
+            mergeJson(extra, transport)
+        }.onFailure {
+            Logs.w("Ignore invalid xhttp extra JSON: ${it.readableMessage}")
+        }
+    }
+    transport["type"] = TRANSPORT_XHTTP
+    transport["mode"] = bean.xhttpMode.blankAsNull() ?: "auto"
+    if (bean.host.isNotBlank()) transport["host"] = bean.host
+    if (bean.path.isNotBlank()) transport["path"] = bean.path
+    bean.headers.blankAsNull()?.let(::buildHeader)?.takeIf { it.isNotEmpty() }?.let {
+        transport["headers"] = it
+    }
+    return transport.toJsonObjectKxs()
+}
+
+private fun parseXHTTPTransport(json: JSONMap, bean: StandardV2RayBean) {
+    bean.v2rayTransport = TRANSPORT_XHTTP
+    bean.xhttpMode = json["mode"]?.toString()?.blankAsNull() ?: "auto"
+    bean.host = json["host"]?.toString().orEmpty()
+    bean.path = json["path"]?.toString().orEmpty()
+    (json["headers"] as? JSONMap)?.let { headers ->
+        bean.headers = headers.map { (key, value) ->
+            "$key:${value.toString().trim('"')}"
+        }.joinToString("\n")
+    }
+    val extra = linkedMapOf<String, Any?>()
+    json.forEach { (key, value) ->
+        if (key !in setOf("type", "mode", "host", "path", "headers")) {
+            extra[key] = value
+        }
+    }
+    if (extra.isNotEmpty()) {
+        bean.xhttpExtra = extra.toJsonObjectKxs().toString()
+    }
 }
 
 fun buildSingBoxOutboundTLS(bean: StandardV2RayBean): OutboundTLSOptions? {
@@ -552,7 +629,7 @@ fun buildSingBoxOutboundStandardV2RayBean(bean: StandardV2RayBean): Outbound = w
             else -> null
         }
         tls = buildSingBoxOutboundTLS(bean)
-        transport = buildSingBoxOutboundStreamSettings(bean)?.toJsonObjectKxs()
+        transport = buildSingBoxOutboundTransport(bean)
         if (bean.shouldMux()) multiplex = buildSingBoxMux(bean)
 
         global_padding = true
@@ -572,7 +649,7 @@ fun buildSingBoxOutboundStandardV2RayBean(bean: StandardV2RayBean): Outbound = w
             else -> null
         }
         tls = buildSingBoxOutboundTLS(bean)
-        transport = buildSingBoxOutboundStreamSettings(bean)?.toJsonObjectKxs()
+        transport = buildSingBoxOutboundTransport(bean)
         if (bean.shouldMux()) multiplex = buildSingBoxMux(bean)
     }
 
@@ -582,7 +659,7 @@ fun buildSingBoxOutboundStandardV2RayBean(bean: StandardV2RayBean): Outbound = w
         server_port = bean.serverPort
         password = bean.password
         tls = buildSingBoxOutboundTLS(bean)
-        transport = buildSingBoxOutboundStreamSettings(bean)?.toJsonObjectKxs()
+        transport = buildSingBoxOutboundTransport(bean)
         if (bean.shouldMux()) multiplex = buildSingBoxMux(bean)
     }
 
@@ -630,7 +707,13 @@ fun parseStandardV2RayOutbound(json: JSONMap): StandardV2RayBean {
             }
 
             "transport" -> {
-                val transport = parseTransport(value as JSONMap) ?: return@parseBoxOutbound
+                val transportJson = value as JSONMap
+                if (transportJson["type"]?.toString() == TRANSPORT_XHTTP) {
+                    parseXHTTPTransport(transportJson, bean)
+                    return@parseBoxOutbound
+                }
+
+                val transport = parseTransport(transportJson) ?: return@parseBoxOutbound
 
                 bean.v2rayTransport = transport.type.orEmpty()
                 when (transport) {
