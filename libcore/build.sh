@@ -357,6 +357,7 @@ fi
 if [ ! -f "deps/sing-box/option/v2ray_transport.go" ]; then
     bash patches/sing-box-xhttp/apply.sh
 fi
+go mod edit -replace=github.com/sagernet/sing-box=./deps/sing-box
 
 # Just install anja & anjb if not have or version not same
 go install tool

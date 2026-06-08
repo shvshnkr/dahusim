@@ -30,8 +30,6 @@ tool (
 
 // replace github.com/sagernet/sing-box => ../../sing-box
 
-replace github.com/sagernet/sing-box => ./deps/sing-box
-
 replace github.com/sagernet/sing-vmess => github.com/xchacha20-poly1305/sing-vmess v0.2.7-0.20260305142916-7ad18fe0e78b
 
 // cmd
