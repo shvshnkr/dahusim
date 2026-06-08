@@ -48,6 +48,7 @@ object SingBoxOptions {
     const val TRANSPORT_HTTP = "http"
     const val TRANSPORT_QUIC = "quic"
     const val TRANSPORT_GRPC = "grpc"
+    const val TRANSPORT_XHTTP = "xhttp"
 
     const val TYPE_LOGICAL = "logical"
 

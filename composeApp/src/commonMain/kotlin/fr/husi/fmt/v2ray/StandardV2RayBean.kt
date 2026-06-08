@@ -42,6 +42,8 @@ abstract class StandardV2RayBean : AbstractBean() {
     var echQueryServerName: String = ""
     var wsMaxEarlyData: Int = 0
     var earlyDataHeaderName: String = ""
+    var xhttpMode: String = "auto"
+    var xhttpExtra: String = ""
     var packetEncoding: Int = PACKET_ENCODING_NONE
 
     override fun initializeDefaultValues() {
@@ -55,7 +57,7 @@ abstract class StandardV2RayBean : AbstractBean() {
     }
 
     override fun serialize(output: ByteBufferOutput) {
-        output.writeInt(11)
+        output.writeInt(12)
         super.serialize(output)
 
         output.writeString(uuid)
@@ -94,6 +96,14 @@ abstract class StandardV2RayBean : AbstractBean() {
                 output.writeString(host)
                 output.writeString(path)
                 output.writeString(headers)
+            }
+
+            "xhttp" -> {
+                output.writeString(xhttpMode)
+                output.writeString(host)
+                output.writeString(path)
+                output.writeString(headers)
+                output.writeString(xhttpExtra)
             }
         }
 
@@ -172,6 +182,16 @@ abstract class StandardV2RayBean : AbstractBean() {
                 host = input.readString()
                 path = input.readString()
                 if (version >= 5) headers = input.readString()
+            }
+
+            "xhttp" -> {
+                if (version >= 12) {
+                    xhttpMode = input.readString()
+                    host = input.readString()
+                    path = input.readString()
+                    headers = input.readString()
+                    xhttpExtra = input.readString()
+                }
             }
         }
 

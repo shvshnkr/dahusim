@@ -16,6 +16,8 @@ internal sealed interface StandardV2RayUiState : ProfileEditorUiState {
     val headers: String
     val wsMaxEarlyData: Int
     val wsEarlyDataHeaderName: String
+    val xhttpMode: String
+    val xhttpExtra: String
 
     val security: String
     val sni: String
@@ -57,6 +59,8 @@ internal abstract class StandardV2RaySettingsViewModel<T : StandardV2RayBean> :
     abstract fun setHeaders(headers: String)
     abstract fun setWsMaxEarlyData(maxEarlyData: Int)
     abstract fun setWsEarlyDataHeaderName(headerName: String)
+    abstract fun setXHTTPMode(mode: String)
+    abstract fun setXHTTPExtra(extra: String)
     abstract fun setSecurity(security: String)
     abstract fun setSni(sni: String)
     abstract fun setAlpn(alpn: String)

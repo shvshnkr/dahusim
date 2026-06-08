@@ -297,4 +297,42 @@ class V2RayFmtTest {
         assertEquals("test-uuid", bean.uuid)
         assertEquals("xtls-rprx-vision", bean.flow)
     }
+
+    @Test
+    fun `parseV2Ray should parse vless xhttp url`() {
+        val url =
+            "vless://121cd573-3612-4aff-8b3e-076058c565be@185.71.67.130:443" +
+                "?type=xhttp&encryption=none&security=tls&sni=net.cloud134.ru&fp=chrome#xhttp-node"
+
+        val bean = parseV2Ray(url)
+
+        assertIs<VLESSBean>(bean)
+        assertEquals("xhttp", bean.v2rayTransport)
+        assertEquals("auto", bean.xhttpMode)
+        assertEquals("net.cloud134.ru", bean.sni)
+        assertEquals("chrome", bean.utlsFingerprint)
+        assertEquals("xhttp-node", bean.name)
+    }
+
+    @Test
+    fun `buildSingBoxOutboundStandardV2RayBean should build vless xhttp transport`() {
+        val bean = VLESSBean().apply {
+            serverAddress = "185.71.67.130"
+            serverPort = 443
+            uuid = "121cd573-3612-4aff-8b3e-076058c565be"
+            v2rayTransport = "xhttp"
+            xhttpMode = "auto"
+            path = "/xhttppath"
+            security = "tls"
+            sni = "net.cloud134.ru"
+        }
+
+        val outbound = buildSingBoxOutboundStandardV2RayBean(bean)
+        val vless = assertIs<SingBoxOptions.Outbound_VLESSOptions>(outbound)
+        val transport = assertNotNull(vless.transport).asKxsMap()
+
+        assertEquals("xhttp", transport["type"])
+        assertEquals("auto", transport["mode"])
+        assertEquals("/xhttppath", transport["path"])
+    }
 }
