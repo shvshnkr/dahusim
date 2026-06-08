@@ -71,7 +71,7 @@ object SimpleModeConnectCoordinator {
             return true
         }
         if (selectedProfileId in AutoServerSelector.peekLastPrepareUrlVerifiedIds()) {
-            val queue = AutoServerSelectorSessionFallback.parseQueue(DataStore.autoSelectFallbackQueue)
+            val queue = AutoServerSelector.parseEffectiveFallbackQueue()
             if (selectedProfileId in queue) {
                 simpleModeLog(
                     "SimpleMode",
@@ -95,6 +95,7 @@ object SimpleModeConnectCoordinator {
     }
 
     fun takeOverByFullUi(reason: String = "full_manual_connect") {
+        AutoServerSelector.clearPersistedFallbackQueueIfNeeded(reason)
         if (!isInFlight()) return
         simpleModeLog("SimpleMode", "handoff_takeover_by_full_ui reason=$reason")
         cancel(reason)

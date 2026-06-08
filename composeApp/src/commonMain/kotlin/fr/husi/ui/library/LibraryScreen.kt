@@ -101,6 +101,7 @@ import fr.husi.resources.confirm
 import fr.husi.resources.delete
 import fr.husi.resources.edit
 import fr.husi.resources.group_create
+import fr.husi.resources.library_manage_folders
 import fr.husi.resources.group_status_empty
 import fr.husi.resources.group_status_empty_subscription
 import fr.husi.resources.group_status_proxies
@@ -144,6 +145,7 @@ import fr.husi.ui.GroupScreenViewModel
 import fr.husi.ui.MainViewModel
 import fr.husi.ui.MainViewModelAlertDialog
 import fr.husi.ui.MainViewModelUiEvent
+import fr.husi.ui.NavRoutes
 import fr.husi.ui.getStringOrRes
 import fr.husi.compose.QRCodeDialog
 import io.github.oikvpqya.compose.fastscroller.material3.defaultMaterialScrollbarStyle
@@ -181,6 +183,7 @@ fun LibraryScreen(
     onDrawerClick: () -> Unit,
     openGroup: (Long) -> Unit,
     openGroupSettings: (Long) -> Unit,
+    openProfileEditor: (NavRoutes.ProfileEditor) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val snackbarState = remember { SnackbarHostState() }
@@ -195,8 +198,11 @@ fun LibraryScreen(
     var deleteGroupConfirm by remember { mutableStateOf<Long?>(null) }
     var showAlertDialog by remember { mutableStateOf<MainViewModelUiEvent.AlertDialog?>(null) }
     var reorderMode by rememberSaveable { mutableStateOf(false) }
+    var showManageFolders by remember { mutableStateOf(false) }
     var showAddSheet by remember { mutableStateOf(false) }
     val configImportVm = viewModel(key = "library-file-import") { ConfigurationScreenViewModel() }
+    val manualViewModel = viewModel(key = "library-manual") { ManualServersViewModel() }
+    val manualUiState by manualViewModel.uiState.collectAsStateWithLifecycle()
     val scannerAction = rememberLibraryScannerAction()
     val importFile = rememberFilePickerLauncher { file ->
         if (file != null) {
@@ -254,6 +260,23 @@ fun LibraryScreen(
         }
     }
 
+    LaunchedEffect(manualUiState.hiddenProfiles) {
+        if (manualUiState.hiddenProfiles > 0) {
+            val result = snackbarState.showAndDismissOld(
+                message = resolveRepository().getPluralString(
+                    Res.plurals.removed,
+                    manualUiState.hiddenProfiles,
+                    manualUiState.hiddenProfiles,
+                ),
+                actionLabel = resolveRepository().getString(Res.string.undo),
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                manualViewModel.undo()
+            }
+        }
+    }
+
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val windowInsets = WindowInsets.safeDrawing
     val listState = rememberLazyListState()
@@ -280,7 +303,7 @@ fun LibraryScreen(
                     )
                 },
                 actions = {
-                    if (filteredGroups.isNotEmpty()) {
+                    if (filteredGroups.isNotEmpty() && segment != LibrarySegment.Manual) {
                         TextButton(
                             stringResource(
                                 if (reorderMode) {
@@ -390,6 +413,18 @@ fun LibraryScreen(
                         },
                     )
                 }
+            } else if (segment == LibrarySegment.Manual && !reorderMode) {
+                ManualServersContent(
+                    modifier = listModifier,
+                    contentPadding = contentPadding,
+                    segment = segment,
+                    onSegmentSelect = { segmentIndex = it.ordinal },
+                    configViewModel = configImportVm,
+                    onAdd = { showAddSheet = true },
+                    onManageFolders = { showManageFolders = true },
+                    onOpenProfileEditor = openProfileEditor,
+                    manualViewModel = manualViewModel,
+                )
             } else {
                 Box(modifier = listModifier) {
                     LibraryGroupList(
@@ -439,6 +474,46 @@ fun LibraryScreen(
         onImportFile = { importFile.launch() },
         onScan = scannerAction,
     )
+
+    if (showManageFolders) {
+        val manageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val folderGroups = uiState.groups.filter {
+            it.matchesSegment(LibrarySegment.Manual) && !it.group.ungrouped
+        }
+        ModalBottomSheet(
+            onDismissRequest = { showManageFolders = false },
+            sheetState = manageSheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.library_manage_folders),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                folderGroups.forEach { item ->
+                    SheetActionRow(
+                        text = item.group.displayName(),
+                        onClick = {
+                            showManageFolders = false
+                            openGroupSettings(item.group.id)
+                        },
+                    )
+                }
+                SheetActionRow(
+                    text = stringResource(Res.string.group_create),
+                    leadingIcon = { Icon(vectorResource(Res.drawable.playlist_add), null) },
+                    onClick = {
+                        showManageFolders = false
+                        openGroupSettings(0L)
+                    },
+                )
+            }
+        }
+    }
 
     if (showUpdateAll) {
         AlertDialog(
@@ -641,21 +716,27 @@ private fun LibraryGroupList(
 }
 
 @Composable
-private fun LibraryEmptyState(
+internal fun LibraryEmptyState(
     segment: LibrarySegment,
     onAdd: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
+    titleRes: org.jetbrains.compose.resources.StringResource? = null,
+    actionRes: org.jetbrains.compose.resources.StringResource? = null,
 ) {
-    val (title, action) = when (segment) {
-        LibrarySegment.Subscriptions ->
-            Res.string.library_empty_subscriptions to Res.string.library_empty_subscriptions_action
+    val (title, action) = if (titleRes != null && actionRes != null) {
+        titleRes to actionRes
+    } else {
+        when (segment) {
+            LibrarySegment.Subscriptions ->
+                Res.string.library_empty_subscriptions to Res.string.library_empty_subscriptions_action
 
-        LibrarySegment.Manual ->
-            Res.string.library_empty_manual to Res.string.library_empty_manual_action
+            LibrarySegment.Manual ->
+                Res.string.library_empty_manual to Res.string.library_empty_manual_action
 
-        LibrarySegment.System ->
-            Res.string.library_empty_system to Res.string.library_empty_system_action
+            LibrarySegment.System ->
+                Res.string.library_empty_system to Res.string.library_empty_system_action
+        }
     }
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -684,7 +765,7 @@ private fun LibraryEmptyState(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LibrarySegmentRow(
+internal fun LibrarySegmentRow(
     selected: LibrarySegment,
     onSelect: (LibrarySegment) -> Unit,
     modifier: Modifier = Modifier,

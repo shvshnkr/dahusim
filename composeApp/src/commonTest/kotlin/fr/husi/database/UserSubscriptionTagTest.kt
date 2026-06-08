@@ -3,6 +3,7 @@ package fr.husi.database
 import fr.husi.GroupType
 import fr.husi.SubscriptionType
 import fr.husi.fmt.trojan.TrojanBean
+import fr.husi.ui.ImportTargetResolver.applyUserImportOwnership
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -59,6 +60,28 @@ class UserSubscriptionTagTest {
         )
         assertEquals(setOf(10L, 12L), resolution.userGroupIds)
         assertEquals(setOf(1L, 3L), resolution.userProxyIds)
+    }
+
+    @Test
+    fun importedSubscriptionOwnershipEntersUserPool() {
+        val group = ProxyGroup(name = "Imported", type = GroupType.SUBSCRIPTION).apply {
+            id = 20L
+            origin = GroupOrigin.GH_MANAGED
+            subscription = SubscriptionBean().apply {
+                type = SubscriptionType.RAW
+                link = "https://example.com/sub"
+                catalogOwnership = CatalogOwnership.GH_MANAGED
+                managedByRemote = true
+                sourceId = "gh:seed"
+            }
+        }
+        group.applyUserImportOwnership()
+        assertTrue(UserSubscriptionTag.isUserOwnedGroup(group))
+        val resolution = UserSubscriptionTag.resolve(
+            listOf(proxy(50L, 20L)),
+            listOf(group),
+        )
+        assertEquals(setOf(50L), resolution.userProxyIds)
     }
 
     @Test

@@ -99,19 +99,18 @@ object UserPoolPolicy {
         else -> true
     }
 
-    fun backgroundProbeProxyIds(
-        mode: UserPoolMode,
-        proxyIds: List<Long>,
-        userProxyIds: Set<Long>,
-    ): List<Long> = when (mode) {
-        UserPoolMode.EXCLUSIVE -> proxyIds.filter { it in userProxyIds }
-        UserPoolMode.PRIORITY_FALLBACK ->
-            if (!simpleModeUserPoolFallbackUsed) {
-                proxyIds.filter { it in userProxyIds }
-            } else {
-                proxyIds
-            }
-        else -> proxyIds
+    /** Whether a persisted autoselect fallback queue should be cleared on full-manual connect. */
+    fun shouldClearPersistedFallbackQueue(
+        mode: UserPoolMode = effectiveMode(),
+        simpleMode: Boolean = DataStore.simpleMode,
+        expertRecoverEnabled: Boolean = DataStore.expertConnectRecoverEnabled,
+    ): Boolean {
+        if (!simpleMode && !expertRecoverEnabled) return true
+        return when (mode) {
+            UserPoolMode.EXCLUSIVE -> true
+            UserPoolMode.PRIORITY_FALLBACK -> !simpleModeUserPoolFallbackUsed
+            else -> false
+        }
     }
 
     /** Hide user-owned groups in configuration UI (data kept in DB). */

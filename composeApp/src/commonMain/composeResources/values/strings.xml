@@ -33,6 +33,11 @@
     <string name="library_empty_subscriptions_action">Pull down to refresh or tap Add</string>
     <string name="library_empty_manual">No manual groups yet</string>
     <string name="library_empty_manual_action">Create a group with Add</string>
+    <string name="library_empty_manual_profiles">No manual servers yet</string>
+    <string name="library_empty_manual_profiles_action">Import a server link with Add</string>
+    <string name="library_manual_filter_all">All</string>
+    <string name="library_manual_no_folder">Ungrouped</string>
+    <string name="library_manage_folders">Manage folders</string>
     <string name="subscription_import_preview">%1$d server(s) found in preview</string>
     <string name="expert_connect_recover_enabled">Auto-switch on probe failure</string>
     <string name="expert_connect_recover_summary">In full mode, try the next server from the prepare queue when a manual connect probe or post-connect check fails</string>

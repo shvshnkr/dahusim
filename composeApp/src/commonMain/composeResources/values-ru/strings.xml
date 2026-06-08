@@ -189,6 +189,11 @@
     <string name="library_empty_subscriptions_action">Потяните вниз для обновления или нажмите «Добавить»</string>
     <string name="library_empty_manual">Ручных групп пока нет</string>
     <string name="library_empty_manual_action">Создайте группу через «Добавить»</string>
+    <string name="library_empty_manual_profiles">Ручных серверов пока нет</string>
+    <string name="library_empty_manual_profiles_action">Импортируйте ссылку через «Добавить»</string>
+    <string name="library_manual_filter_all">Все</string>
+    <string name="library_manual_no_folder">Без папки</string>
+    <string name="library_manage_folders">Управление папками</string>
     <string name="subscription_import_preview">В preview найдено серверов: %1$d</string>
     <string name="expert_connect_recover_enabled">Автопереключение при падении probe</string>
     <string name="expert_connect_recover_summary">В полном режиме пробовать следующий сервер из очереди prepare при падении probe или post-connect проверки</string>
