@@ -10,7 +10,6 @@ import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
 import fr.husi.fmt.AbstractBean
 import fr.husi.fmt.KryoConverters
-import fr.husi.group.GroupUpdater
 import fr.husi.group.SubscriptionUserAgentPresets
 import fr.husi.ktx.b64Decode
 import fr.husi.ktx.blankAsNull
@@ -18,6 +17,7 @@ import fr.husi.ktx.defaultOr
 import fr.husi.ktx.parseProxies
 import fr.husi.ktx.zlibDecompress
 import fr.husi.libcore.Libcore
+import fr.husi.subscription.UserSubscriptionAddCoordinator
 import fr.husi.ui.ImportTargetResolver.applyUserImportOwnership
 import fr.husi.ui.ImportTargetResolver.createUserSubscriptionGroup
 import fr.husi.ui.ImportTargetResolver.resolveStandaloneImportGroupId
@@ -95,8 +95,7 @@ class ImportLinkInteractor {
         createUserSubscriptionGroup(group.applyUserImportOwnership())
 
     suspend fun importSubscription(group: ProxyGroup) {
-        val createdGroup = createSubscriptionGroup(group)
-        GroupUpdater.executeUpdate(createdGroup, true)
+        UserSubscriptionAddCoordinator.add(group, byUser = true, updateImmediately = true)
     }
 
     suspend fun importProfiles(proxies: List<AbstractBean>): Int =

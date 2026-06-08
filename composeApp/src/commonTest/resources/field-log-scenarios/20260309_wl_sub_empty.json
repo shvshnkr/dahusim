@@ -1,0 +1,9 @@
+{
+  "id": "20260309_wl_sub_empty",
+  "buildCode": 714,
+  "networkHints": ["whitelistOnly=true", "H29 subscription_fetch_mirror"],
+  "hTagSequence": ["H0", "H21", "H29", "SUB2-PARSE", "H39"],
+  "markers": {"SUB2-PARSE_parsed": "0", "catalogOwnership": "USER"},
+  "classifiedFailure": "sub_add_no_proxies_after_fetch",
+  "linkedJourney": "sub_add_import"
+}

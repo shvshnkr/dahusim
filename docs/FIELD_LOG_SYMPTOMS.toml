@@ -1,0 +1,26 @@
+# Field-log symptom bridge: classified failures → H-tags → feature journey id.
+# Raw Telegram exports stay local; only redacted fixtures live in composeApp/src/commonTest/resources/field-log-scenarios/.
+
+[[symptom]]
+id = "sub_add_no_proxies"
+h_tags = ["SUB2-PARSE", "H16", "H29"]
+journey_id = "sub_add_import"
+notes = "SUB2-PARSE parsed=0 or empty diff after subscription fetch/import"
+
+[[symptom]]
+id = "sub_ownership_drift"
+h_tags = ["H16", "H29"]
+journey_id = "sub_survives_bootstrap"
+notes = "USER catalogOwnership with GH_MANAGED origin after bootstrap"
+
+[[symptom]]
+id = "wl_fetch_mirror"
+h_tags = ["H29"]
+journey_id = "sub_add_import"
+notes = "WL uplink subscription fetch via Yandex mirror"
+
+[[symptom]]
+id = "connect_pool_stuck"
+h_tags = ["H4", "H24", "H39"]
+journey_id = "connect_user_pool_priority"
+notes = "User pool PRIORITY with no WL-marked subs in scan"

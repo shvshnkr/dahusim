@@ -152,8 +152,7 @@ internal fun GroupSettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     fun saveAndExit() {
-        viewModel.save()
-        onBackPress()
+        viewModel.save(onComplete = onBackPress)
     }
 
     Scaffold(

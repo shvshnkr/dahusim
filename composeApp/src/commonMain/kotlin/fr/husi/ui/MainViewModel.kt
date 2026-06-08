@@ -19,7 +19,7 @@ import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionUserAgentPresets
-import fr.husi.ui.ImportTargetResolver.createUserSubscriptionGroup
+import fr.husi.subscription.UserSubscriptionAddCoordinator
 import fr.husi.fmt.AbstractBean
 import fr.husi.group.GroupUpdateResult
 import fr.husi.group.GroupUpdateWarning
@@ -269,7 +269,7 @@ class MainViewModel(
     fun confirmImportSubscription(group: ProxyGroup) = viewModelScope.launch(Dispatchers.Default) {
         _importSubscriptionDialog.value = null
         val createdGroup = onIoDispatcher {
-            createUserSubscriptionGroup(group)
+            UserSubscriptionAddCoordinator.add(group, byUser = true, updateImmediately = false)
         }
         performGroupUpdate(createdGroup, true)
     }

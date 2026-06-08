@@ -5,9 +5,12 @@ on:
     paths:
       - "composeApp/**/subscription/**"
       - "composeApp/**/scenario/integration/**"
+      - "composeApp/**/scenario/journey/**"
+      - "composeApp/**/ui/**"
       - "composeApp/**/database/ProfileManager*"
       - "composeApp/**/bootstrap/**"
       - "composeApp/**/update/**"
+      - "docs/FEATURE_JOURNEYS.md"
       - ".github/workflows/integration-scenario-matrix.yml"
       - "buildSrc/**"
       - "gradle/**"
@@ -17,9 +20,12 @@ on:
     paths:
       - "composeApp/**/subscription/**"
       - "composeApp/**/scenario/integration/**"
+      - "composeApp/**/scenario/journey/**"
+      - "composeApp/**/ui/**"
       - "composeApp/**/database/ProfileManager*"
       - "composeApp/**/bootstrap/**"
       - "composeApp/**/update/**"
+      - "docs/FEATURE_JOURNEYS.md"
       - ".github/workflows/integration-scenario-matrix.yml"
       - "buildSrc/**"
       - "gradle/**"
@@ -147,13 +153,15 @@ jobs:
           GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
         run: |
           xvfb-run -a --server-args="-screen 0 1280x720x24" \
-            ./gradlew :composeApp:exportLibraryDefinitions :composeApp:integrationScenarioTest --no-daemon
+            ./gradlew :composeApp:exportLibraryDefinitions :composeApp:integrationScenarioTest :composeApp:featureJourneyTest --no-daemon
 
       - name: Publish JUnit report in Checks
         if: always()
         uses: mikepenz/action-junit-report@v5
         with:
-          report_paths: "composeApp/build/test-results/integrationScenarioTest/**/*.xml"
+          report_paths: |
+            composeApp/build/test-results/integrationScenarioTest/**/*.xml
+            composeApp/build/test-results/featureJourneyTest/**/*.xml
           check_name: "Integration scenario matrix"
           detailed_summary: true
           include_passed: false
