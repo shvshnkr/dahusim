@@ -15,9 +15,6 @@ export GOTOOLCHAIN=auto
 
 mod_cache="$(go env GOMODCACHE)"
 upstream="${mod_cache}/github.com/sagernet/sing-box@${SING_BOX_VERSION}"
-if [ -d "${upstream}" ]; then
-    rm -rf "${upstream}"
-fi
 
 go mod download "github.com/sagernet/sing-box@${SING_BOX_VERSION}"
 go mod download "${XHTTP_SOURCE_MODULE}@${XHTTP_SOURCE_VERSION}"

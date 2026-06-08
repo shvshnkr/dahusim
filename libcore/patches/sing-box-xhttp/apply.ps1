@@ -13,9 +13,6 @@ try {
     $env:GOTOOLCHAIN = "auto"
     $modCache = (go env GOMODCACHE).Trim()
     $upstream = Join-Path $modCache "github.com\sagernet\sing-box@${SingBoxVersion}"
-    if (Test-Path $upstream) {
-        Remove-Item -Recurse -Force $upstream
-    }
     go mod download "github.com/sagernet/sing-box@${SingBoxVersion}" | Out-Null
     go mod download "${XhttpSourceModule}@${XhttpSourceVersion}" | Out-Null
     $xhttpSource = go list -m -f "{{.Dir}}" "${XhttpSourceModule}@${XhttpSourceVersion}"
