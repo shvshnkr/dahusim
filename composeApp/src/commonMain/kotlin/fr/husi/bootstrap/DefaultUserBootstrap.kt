@@ -17,6 +17,7 @@ import fr.husi.group.GroupUpdater
 import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.simplemode.probeSimpleModeNetwork
+import fr.husi.ui.ImportTargetResolver
 import fr.husi.subscription.catalog.SubscriptionCatalogApplier
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import fr.husi.subscription.catalog.SubscriptionCatalogDefaults
@@ -48,6 +49,9 @@ object DefaultUserBootstrap {
             Logs.w("DefaultUserBootstrap: subscription catalog sync", it)
         }
         BuiltinRelayBootstrap.ensureBuiltinRelayPool()
+        runCatching { ImportTargetResolver.migrateMisplacedUserImports() }.onFailure {
+            Logs.w("DefaultUserBootstrap: import ownership migration", it)
+        }
         bootstrapPerAppDefaults()
         ProfileManager.ensureBootstrapRoutingDefaults()
         if (DataStore.routeQuickProfile != RouteQuickProfile.MANUAL) {
@@ -179,6 +183,8 @@ object DefaultUserBootstrap {
         SubscriptionCatalogDefaults.STARTER_SEEDS.forEach { seed ->
             val group = byLink[seed.link] ?: return@forEach
             val sub = group.subscription ?: return@forEach
+            if (sub.catalogOwnership == CatalogOwnership.USER) return@forEach
+            if (!sub.managedByRemote && group.origin != GroupOrigin.GH_MANAGED) return@forEach
             val targetSourceId = SubscriptionCatalogDefaults.builtinSourceId(seed.sourceKey)
             var changed = false
             if (sub.sourceId != targetSourceId) {

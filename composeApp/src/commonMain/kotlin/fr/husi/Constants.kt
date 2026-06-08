@@ -166,6 +166,7 @@ object Key {
     const val PROBE_2K_WARM_RESERVE_STATUS = "probe2kWarmReserveStatus"
     const val USER_POOL_MODE = "userPoolMode"
     const val SWITCH_USE_FULL_PROFILE_PICKER = "switchUseFullProfilePicker"
+    const val EXPERT_CONNECT_RECOVER_ENABLED = "expertConnectRecoverEnabled"
     const val SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT = "simpleModeLastBackgroundSubRefreshAt"
     const val SIMPLE_MODE_WL_SKIP_TUNNEL_HEALTH_CHECK = "simpleModeWlSkipTunnelHealthCheck"
     const val SIMPLE_MODE_TELEGRAM_PROBE = "simpleModeTelegramProbe"

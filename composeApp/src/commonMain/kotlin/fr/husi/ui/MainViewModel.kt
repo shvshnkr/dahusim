@@ -19,11 +19,14 @@ import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionUserAgentPresets
+import fr.husi.ui.ImportTargetResolver.createUserSubscriptionGroup
 import fr.husi.fmt.AbstractBean
 import fr.husi.group.GroupUpdateResult
 import fr.husi.group.GroupUpdateWarning
 import fr.husi.group.GroupUpdater
 import fr.husi.group.RawUpdater
+import fr.husi.group.SubscriptionImportPlan
+import fr.husi.group.SubscriptionImportPreview
 import fr.husi.ktx.Logs
 import fr.husi.ktx.SubscriptionFoundException
 import fr.husi.ktx.onIoDispatcher
@@ -76,6 +79,14 @@ enum class SimpleModeAllServersDeadChoice {
 }
 
 @Immutable
+data class ImportSubscriptionDialogState(
+    val group: ProxyGroup,
+    val previewProxyCount: Int?,
+    val fetchProfile: Int,
+    val needsUaPicker: Boolean = false,
+)
+
+@Immutable
 sealed interface MainViewModelUiEvent {
     class Snackbar(val message: StringOrRes) : MainViewModelUiEvent
     class SnackbarWithAction(
@@ -109,7 +120,7 @@ class MainViewModel(
         MutableStateFlow<FirstLaunchSubscriptionOverlayState>(FirstLaunchSubscriptionOverlayState.Hidden)
     val firstLaunchSubscriptionOverlay = _firstLaunchSubscriptionOverlay.asStateFlow()
 
-    private val _importSubscriptionDialog = MutableStateFlow<ProxyGroup?>(null)
+    private val _importSubscriptionDialog = MutableStateFlow<ImportSubscriptionDialogState?>(null)
     val importSubscriptionDialog = _importSubscriptionDialog.asStateFlow()
 
     private fun alertDialog(
@@ -208,7 +219,7 @@ class MainViewModel(
         when (preview) {
             ImportLinkPreview.Ignore -> Unit
             is ImportLinkPreview.Subscription -> showImportSubscriptionDialog(preview.group)
-            is ImportLinkPreview.Profiles -> showImportProfileDialog(preview.proxies)
+            is ImportLinkPreview.Profiles -> importProfileDirect(preview.proxies)
         }
     }
 
@@ -227,12 +238,28 @@ class MainViewModel(
     }
 
     private suspend fun showImportSubscriptionDialog(group: ProxyGroup) {
-        group.subscription?.let { sub ->
-            if (sub.link.isNotBlank() && sub.fetchProfile == SubscriptionFetchProfile.DEFAULT) {
-                sub.fetchProfile = SubscriptionUserAgentPresets.inferFetchProfileForNewLink(sub.link)
+        when (val plan = onIoDispatcher { SubscriptionImportPreview.prepare(group) }) {
+            is SubscriptionImportPlan.Ready -> {
+                _importSubscriptionDialog.value = ImportSubscriptionDialogState(
+                    group = plan.group,
+                    previewProxyCount = plan.proxyCount,
+                    fetchProfile = plan.fetchProfile,
+                )
+            }
+            is SubscriptionImportPlan.NeedsUaPicker -> {
+                _importSubscriptionDialog.value = ImportSubscriptionDialogState(
+                    group = plan.group,
+                    previewProxyCount = null,
+                    fetchProfile = SubscriptionUserAgentPresets.inferFetchProfileForNewLink(
+                        plan.group.subscription?.link.orEmpty(),
+                    ),
+                    needsUaPicker = true,
+                )
+            }
+            is SubscriptionImportPlan.Failed -> {
+                _uiEvent.emit(MainViewModelUiEvent.Snackbar(StringOrRes.Direct(plan.message)))
             }
         }
-        _importSubscriptionDialog.value = group
     }
 
     fun dismissImportSubscriptionDialog() {
@@ -242,7 +269,7 @@ class MainViewModel(
     fun confirmImportSubscription(group: ProxyGroup) = viewModelScope.launch(Dispatchers.Default) {
         _importSubscriptionDialog.value = null
         val createdGroup = onIoDispatcher {
-            importLinkInteractor.createSubscriptionGroup(group)
+            createUserSubscriptionGroup(group)
         }
         performGroupUpdate(createdGroup, true)
     }
@@ -259,26 +286,23 @@ class MainViewModel(
         performGroupUpdate(entity, byUser = true)
     }
 
-    private suspend fun showImportProfileDialog(profiles: List<AbstractBean>) {
+    private suspend fun importProfileDirect(profiles: List<AbstractBean>) {
         if (profiles.isEmpty()) {
-            _uiEvent.emit(alertDialog(StringOrRes.Res(Res.string.no_proxies_found)))
+            _uiEvent.emit(MainViewModelUiEvent.Snackbar(StringOrRes.Res(Res.string.no_proxies_found)))
             return
         }
+        val count = onIoDispatcher {
+            importLinkInteractor.importStandaloneProfiles(profiles)
+        }
         _uiEvent.emit(
-            MainViewModelUiEvent.AlertDialog(
-                title = StringOrRes.Res(Res.string.profile_import),
-                message = StringOrRes.ResWithParams(
-                    Res.string.profile_import_message,
-                    profiles.joinToString("\n") { it.displayName() },
-                ),
-                confirmButton = AlertButton(StringOrRes.Res(Res.string.ok)) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        importProfile(profiles)
-                    }
-                },
-                dismissButton = AlertButton(StringOrRes.Res(Res.string.cancel)) {},
+            MainViewModelUiEvent.Snackbar(
+                StringOrRes.PluralsRes(Res.plurals.added, count, count),
             ),
         )
+    }
+
+    suspend fun importProfile(proxies: List<AbstractBean>) {
+        importProfileDirect(proxies)
     }
 
     fun parseProxy(text: String?) = viewModelScope.launch {
@@ -338,7 +362,7 @@ class MainViewModel(
             if (proxies.isNullOrEmpty()) {
                 _uiEvent.emit(MainViewModelUiEvent.Snackbar(StringOrRes.Res(Res.string.no_proxies_found_in_clipboard)))
             } else {
-                importProfile(proxies)
+                importProfileDirect(proxies)
             }
         } catch (e: SubscriptionFoundException) {
             importSubscription(e.link)
@@ -346,19 +370,6 @@ class MainViewModel(
             Logs.w(e)
             _uiEvent.emit(MainViewModelUiEvent.Snackbar(StringOrRes.Direct(e.readableMessage)))
         }
-    }
-
-    suspend fun importProfile(proxies: List<AbstractBean>) {
-        val importedCount = importLinkInteractor.importProfiles(proxies)
-        _uiEvent.emit(
-            MainViewModelUiEvent.Snackbar(
-                StringOrRes.PluralsRes(
-                    Res.plurals.added,
-                    importedCount,
-                    importedCount,
-                ),
-            ),
-        )
     }
 
     fun updateSubscriptionGroup(group: ProxyGroup) = viewModelScope.launch(Dispatchers.Default) {

@@ -435,6 +435,11 @@ class BaseService {
 
         private fun tryQueueFallbackAfterProbeFail(profileId: Long, whitelistOnly: Boolean): Boolean {
             if (DataStore.autoSelectFallbackQueue.isBlank()) return false
+            if (!fr.husi.simplemode.ExpertConnectRecoverPolicy.allowsFullModeSessionFallback() &&
+                !DataStore.simpleMode
+            ) {
+                return false
+            }
             val hadQueue = true
             AutoServerSelector.recordProbeFailure(profileId)
             val fallback = AutoServerSelector.tryMoveToFallback(profileId)

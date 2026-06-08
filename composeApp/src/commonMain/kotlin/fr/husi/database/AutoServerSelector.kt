@@ -45,6 +45,10 @@ sealed class PrepareForConnectResult {
  */
 object AutoServerSelector {
 
+    /** Consumed on the next [tryMoveToFallback] call (full manual connect with recovery off). */
+    @Volatile
+    var ignoreSessionFallbackForManualConnect: Boolean = false
+
     private const val TCP_PROBE_BATCH_CAP = 128
     private const val URL_BATCH_CAP = 32
     /** Upper bound on connect-time TCP rounds (128 × 16 ≈ 2k profiles per prepare). */
@@ -1089,6 +1093,13 @@ object AutoServerSelector {
     }
 
     fun tryMoveToFallback(currentId: Long): Long? {
+        if (ignoreSessionFallbackForManualConnect) {
+            ignoreSessionFallbackForManualConnect = false
+            return null
+        }
+        if (!DataStore.simpleMode && !DataStore.expertConnectRecoverEnabled) {
+            return null
+        }
         var walkFromId = currentId
         repeat(8) {
             val picked = pickNextFallbackCandidate(walkFromId) ?: return null

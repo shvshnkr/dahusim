@@ -8,7 +8,6 @@ import fr.husi.database.ProfileManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
-import kotlinx.coroutines.flow.first
 import fr.husi.fmt.AbstractBean
 import fr.husi.fmt.KryoConverters
 import fr.husi.group.GroupUpdater
@@ -19,6 +18,9 @@ import fr.husi.ktx.defaultOr
 import fr.husi.ktx.parseProxies
 import fr.husi.ktx.zlibDecompress
 import fr.husi.libcore.Libcore
+import fr.husi.ui.ImportTargetResolver.applyUserImportOwnership
+import fr.husi.ui.ImportTargetResolver.createUserSubscriptionGroup
+import fr.husi.ui.ImportTargetResolver.resolveStandaloneImportGroupId
 
 sealed interface ImportLinkPreview {
     object Ignore : ImportLinkPreview
@@ -82,58 +84,38 @@ class ImportLinkInteractor {
             return null
         }
         group.name = group.name.blankAsNull() ?: ("Subscription #" + System.currentTimeMillis())
-        return group
+        return group.applyUserImportOwnership()
     }
 
     suspend fun parseProfiles(uri: String): List<AbstractBean> {
         return parseProxies(uri)
     }
 
-    suspend fun createSubscriptionGroup(group: ProxyGroup): ProxyGroup {
-        return GroupManager.createGroup(group)
-    }
+    suspend fun createSubscriptionGroup(group: ProxyGroup): ProxyGroup =
+        createUserSubscriptionGroup(group.applyUserImportOwnership())
 
     suspend fun importSubscription(group: ProxyGroup) {
         val createdGroup = createSubscriptionGroup(group)
         GroupUpdater.executeUpdate(createdGroup, true)
     }
 
-    suspend fun importProfiles(proxies: List<AbstractBean>): Int {
-        val targetId = DataStore.selectedGroupForImport()
-        for (proxy in proxies) {
-            ProfileManager.createProfile(targetId, proxy)
-        }
-        DataStore.selectedGroup = targetId
-        return proxies.size
-    }
+    suspend fun importProfiles(proxies: List<AbstractBean>): Int =
+        importStandaloneProfiles(proxies)
 
-    /** Standalone share links → user BASIC group; creates one when [suggestedGroupName] is new. */
+    /** Standalone share links → user BASIC group (ungrouped by default). */
     suspend fun importStandaloneProfiles(
         proxies: List<AbstractBean>,
         sourceUrl: String? = null,
         suggestedGroupName: String? = sourceUrl?.let { ImportLinkClassifier.suggestImportGroupName(it) },
     ): Int {
         if (proxies.isEmpty()) return 0
-        val targetId = resolveOrCreateUserImportGroup(suggestedGroupName)
+        val targetId = resolveStandaloneImportGroupId(
+            suggestedGroupName.takeUnless { proxies.size == 1 },
+        )
         for (proxy in proxies) {
             ProfileManager.createProfile(targetId, proxy)
         }
         DataStore.selectedGroup = targetId
         return proxies.size
-    }
-
-    private suspend fun resolveOrCreateUserImportGroup(suggestedName: String?): Long {
-        val groups = SagerDatabase.groupDao.allGroups().first()
-        val basic = groups.filter { it.type == GroupType.BASIC }
-        val current = groups.find { it.id == DataStore.selectedGroup }
-        if (current?.type == GroupType.BASIC) return current.id
-        val normalized = suggestedName?.trim()?.takeIf { it.isNotBlank() }
-        if (normalized != null) {
-            basic.find { it.name.equals(normalized, ignoreCase = true) }?.let { return it.id }
-            return GroupManager.createGroup(
-                ProxyGroup(name = normalized, type = GroupType.BASIC),
-            ).id
-        }
-        return DataStore.selectedGroupForImport()
     }
 }

@@ -23,6 +23,8 @@ import fr.husi.ktx.long
 import fr.husi.ktx.parsePort
 import fr.husi.ktx.string
 import fr.husi.ktx.stringSet
+import fr.husi.ui.ImportTargetResolver
+import fr.husi.ui.ImportTargetResolver.isUserImportTarget
 import fr.husi.platform.PlatformInfo
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
@@ -117,11 +119,10 @@ object DataStore {
 
     fun selectedGroupForImport(): Long {
         val current = currentGroup()
-        if (current.type == GroupType.BASIC) return current.id
-        val groups = runBlocking {
-            SagerDatabase.groupDao.allGroups().first()
+        if (current.isUserImportTarget()) return current.id
+        return runBlocking {
+            ImportTargetResolver.resolveStandaloneImportGroupId()
         }
-        return groups.find { it.type == GroupType.BASIC }!!.id
     }
 
     var isExpert by configurationStore.boolean(Key.APP_EXPERT)
@@ -331,6 +332,7 @@ object DataStore {
     }
     var probe2kWarmReserveStatus by configurationStore.string(Key.PROBE_2K_WARM_RESERVE_STATUS) { "" }
     var switchUseFullProfilePicker by configurationStore.boolean(Key.SWITCH_USE_FULL_PROFILE_PICKER) { false }
+    var expertConnectRecoverEnabled by configurationStore.boolean(Key.EXPERT_CONNECT_RECOVER_ENABLED) { true }
     var simpleModeLastBackgroundSubRefreshAt by configurationStore.long(Key.SIMPLE_MODE_LAST_BACKGROUND_SUB_REFRESH_AT) { 0L }
     /** On WL uplink: skip live-tunnel urlTest (debug only; default keeps BS tunnel health). */
     var simpleModeWlSkipTunnelHealthCheck by configurationStore.boolean(Key.SIMPLE_MODE_WL_SKIP_TUNNEL_HEALTH_CHECK) { false }

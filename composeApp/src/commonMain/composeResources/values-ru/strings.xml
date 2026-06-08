@@ -189,6 +189,9 @@
     <string name="library_empty_subscriptions_action">Потяните вниз для обновления или нажмите «Добавить»</string>
     <string name="library_empty_manual">Ручных групп пока нет</string>
     <string name="library_empty_manual_action">Создайте группу через «Добавить»</string>
+    <string name="subscription_import_preview">В preview найдено серверов: %1$d</string>
+    <string name="expert_connect_recover_enabled">Автопереключение при падении probe</string>
+    <string name="expert_connect_recover_summary">В полном режиме пробовать следующий сервер из очереди prepare при падении probe или post-connect проверки</string>
     <string name="library_empty_system">Системных групп пока нет</string>
     <string name="library_empty_system_action">Здесь фиды каталога и встроенные relay</string>
     <string name="library_group_origin_builtin">Встроенный relay</string>

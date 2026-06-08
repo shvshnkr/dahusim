@@ -33,6 +33,9 @@
     <string name="library_empty_subscriptions_action">Pull down to refresh or tap Add</string>
     <string name="library_empty_manual">No manual groups yet</string>
     <string name="library_empty_manual_action">Create a group with Add</string>
+    <string name="subscription_import_preview">%1$d server(s) found in preview</string>
+    <string name="expert_connect_recover_enabled">Auto-switch on probe failure</string>
+    <string name="expert_connect_recover_summary">In full mode, try the next server from the prepare queue when a manual connect probe or post-connect check fails</string>
     <string name="library_empty_system">No system groups yet</string>
     <string name="library_empty_system_action">Catalog feeds and built-in relays appear here</string>
     <string name="library_group_origin_builtin">Built-in relay</string>

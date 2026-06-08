@@ -149,6 +149,9 @@ internal object SimpleModeVpnCoordinator {
             null
         }
         if (!DataStore.simpleMode) {
+            if (!fr.husi.simplemode.ExpertConnectRecoverPolicy.allowsFullModeHealthRecover()) {
+                return SessionRecoverOutcome.NotRecovered
+            }
             if (DataStore.autoSelectFallbackQueue.isBlank()) return SessionRecoverOutcome.NotRecovered
             if (SimpleModeHealthRoute.allowsInconclusiveSoftRecover(
                     context, lastHealthError, whitelistOnly, probeUrl,
