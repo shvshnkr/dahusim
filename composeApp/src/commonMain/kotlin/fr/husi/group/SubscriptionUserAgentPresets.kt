@@ -120,8 +120,42 @@ object SubscriptionUserAgentPresets {
             lower.contains("user agent")
     }
 
+    fun isLikelyPanelHtmlResponse(body: String): Boolean {
+        val trimmed = body.trim()
+        if (trimmed.isEmpty()) return true
+        val lower = trimmed.lowercase()
+        if (lower.contains("<html") || lower.contains("<!doctype html")) return true
+        if (lower.contains("login") && lower.contains("<form")) return true
+        return !looksLikeProxyUriBody(trimmed)
+    }
+
+    private fun looksLikeProxyUriBody(body: String): Boolean {
+        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "tuic://")
+        return schemes.any { body.contains(it, ignoreCase = true) }
+    }
+
+    fun uaRetryLadder(link: String): List<Int> {
+        val kind = SubscriptionSourceKind.inferFromLink(link)
+        val inferred = inferFetchProfileForNewLink(link)
+        val presets = mutableListOf<Int>()
+        if (inferred != SubscriptionFetchProfile.DEFAULT) presets += inferred
+        for (profile in listOf(
+            SubscriptionFetchProfile.HAPP,
+            SubscriptionFetchProfile.INCY,
+            SubscriptionFetchProfile.V2RAYTUN,
+            SubscriptionFetchProfile.V2RAYNG,
+        )) {
+            if (profile !in presets) presets += profile
+        }
+        if (kind == SubscriptionSourceKind.GITHUB && SubscriptionFetchProfile.DEFAULT !in presets) {
+            presets += SubscriptionFetchProfile.DEFAULT
+        }
+        return presets
+    }
+
     fun shouldOfferRetry(subscription: SubscriptionBean, failureMessage: String): Boolean {
-        if (!isLikelyUserAgentRejection(failureMessage)) return false
+        if (isLikelyUserAgentRejection(failureMessage)) return true
+        if (isLikelyPanelHtmlResponse(failureMessage)) return true
         if (subscription.fetchProfile != SubscriptionFetchProfile.DEFAULT) return false
         return SubscriptionSourceKind.inferFromLink(subscription.link) == SubscriptionSourceKind.WEB
     }

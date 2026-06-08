@@ -133,6 +133,7 @@ import fr.husi.resources.library_empty_system_action
 import fr.husi.resources.library_group_origin_builtin
 import fr.husi.resources.library_reorder
 import fr.husi.resources.library_reorder_done
+import fr.husi.resources.library_manage_folders
 import fr.husi.resources.no_proxies_found_in_file
 import fr.husi.ktx.onIoDispatcher
 import fr.husi.ktx.runOnIoDispatcher
@@ -142,6 +143,7 @@ import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import kotlinx.collections.immutable.toImmutableList
 import fr.husi.ui.GroupScreenViewModel
 import fr.husi.ui.MainViewModel
+import fr.husi.ui.NavRoutes
 import fr.husi.ui.MainViewModelAlertDialog
 import fr.husi.ui.MainViewModelUiEvent
 import fr.husi.ui.getStringOrRes
@@ -181,6 +183,7 @@ fun LibraryScreen(
     onDrawerClick: () -> Unit,
     openGroup: (Long) -> Unit,
     openGroupSettings: (Long) -> Unit,
+    openProfileEditor: (NavRoutes.ProfileEditor) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val snackbarState = remember { SnackbarHostState() }
@@ -195,6 +198,7 @@ fun LibraryScreen(
     var deleteGroupConfirm by remember { mutableStateOf<Long?>(null) }
     var showAlertDialog by remember { mutableStateOf<MainViewModelUiEvent.AlertDialog?>(null) }
     var reorderMode by rememberSaveable { mutableStateOf(false) }
+    var showManageFolders by remember { mutableStateOf(false) }
     var showAddSheet by remember { mutableStateOf(false) }
     val configImportVm = viewModel(key = "library-file-import") { ConfigurationScreenViewModel() }
     val scannerAction = rememberLibraryScannerAction()
@@ -280,7 +284,7 @@ fun LibraryScreen(
                     )
                 },
                 actions = {
-                    if (filteredGroups.isNotEmpty()) {
+                    if (filteredGroups.isNotEmpty() && segment != LibrarySegment.Manual) {
                         TextButton(
                             stringResource(
                                 if (reorderMode) {
@@ -390,6 +394,21 @@ fun LibraryScreen(
                         },
                     )
                 }
+            } else if (segment == LibrarySegment.Manual) {
+                Column(modifier = listModifier) {
+                    LibrarySegmentRow(
+                        selected = segment,
+                        onSelect = { segmentIndex = it.ordinal },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                    ManualServersScreen(
+                        contentPadding = contentPadding,
+                        bottomPadding = contentPadding.calculateBottomPadding() + 88.dp,
+                        mainViewModel = mainViewModel,
+                        onManageFolders = { showManageFolders = true },
+                        onOpenProfileEditor = openProfileEditor,
+                    )
+                }
             } else {
                 Box(modifier = listModifier) {
                     LibraryGroupList(
@@ -421,7 +440,7 @@ fun LibraryScreen(
                 }
             }
             val scrollState = if (reorderMode) dragDropListState.lazyListState else listState
-            BoxedVerticalScrollbar(
+            if (segment != LibrarySegment.Manual) BoxedVerticalScrollbar(
                 modifier = Modifier
                     .padding(contentPadding)
                     .fillMaxHeight(),
@@ -439,6 +458,46 @@ fun LibraryScreen(
         onImportFile = { importFile.launch() },
         onScan = scannerAction,
     )
+
+    if (showManageFolders) {
+        val manageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val folderGroups = uiState.groups.filter {
+            it.matchesSegment(LibrarySegment.Manual) && !it.group.ungrouped
+        }
+        ModalBottomSheet(
+            onDismissRequest = { showManageFolders = false },
+            sheetState = manageSheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.library_manage_folders),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                folderGroups.forEach { item ->
+                    SheetActionRow(
+                        text = item.group.displayName(),
+                        onClick = {
+                            showManageFolders = false
+                            openGroupSettings(item.group.id)
+                        },
+                    )
+                }
+                SheetActionRow(
+                    text = stringResource(Res.string.group_create),
+                    leadingIcon = { Icon(vectorResource(Res.drawable.playlist_add), null) },
+                    onClick = {
+                        showManageFolders = false
+                        openGroupSettings(0L)
+                    },
+                )
+            }
+        }
+    }
 
     if (showUpdateAll) {
         AlertDialog(

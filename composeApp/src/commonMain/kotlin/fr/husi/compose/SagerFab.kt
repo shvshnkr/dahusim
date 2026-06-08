@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import fr.husi.bg.ServiceState
+import fr.husi.database.AutoServerSelector
+import fr.husi.database.DataStore
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.*
 import fr.husi.simplemode.SimpleModeConnectCoordinator
@@ -68,6 +70,9 @@ fun SagerFab(
                 } else {
                     if (!canStartFromFullFab(state = state, permissionPending = permissionPending)) {
                         return@FloatingActionButton
+                    }
+                    if (!DataStore.simpleMode && !DataStore.expertConnectRecoverEnabled) {
+                        AutoServerSelector.ignoreSessionFallbackForManualConnect = true
                     }
                     releaseSimpleModeVpnSession("full_manual_connect")
                     SimpleModeConnectCoordinator.takeOverByFullUi("full_manual_connect")

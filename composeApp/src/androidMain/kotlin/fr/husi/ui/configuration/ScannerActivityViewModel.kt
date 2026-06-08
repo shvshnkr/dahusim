@@ -152,7 +152,7 @@ internal class ScannerActivityViewModel(
             } else {
                 _uiEvent.emit(ScannerUiEvent.Finish)
                 onIoDispatcher {
-                    importLinkInteractor.importProfiles(results)
+                    importLinkInteractor.importStandaloneProfiles(results)
                 }
             }
         } catch (e: SubscriptionFoundException) {
@@ -164,24 +164,12 @@ internal class ScannerActivityViewModel(
         }
     }
 
-    fun importSubscription(url: String) = runOnDefaultDispatcher {
-        try {
-            val group = importLinkInteractor.parseSubscription(url)
-            if (group == null) {
-                isProcessing = false
-                viewModelScope.launch {
-                    _uiEvent.emit(ScannerUiEvent.Snakebar(StringOrRes.Res(Res.string.action_import_err)))
-                }
-                return@runOnDefaultDispatcher
-            }
-
+    fun importSubscription(url: String) {
+        if (isProcessing) return
+        isProcessing = true
+        viewModelScope.launch {
+            _uiEvent.emit(ScannerUiEvent.ImportSubscription(url.toUri()))
             _uiEvent.emit(ScannerUiEvent.Finish)
-            onIoDispatcher {
-                importLinkInteractor.importSubscription(group)
-            }
-        } catch (e: Exception) {
-            isProcessing = false
-            onFailure(e)
         }
     }
 

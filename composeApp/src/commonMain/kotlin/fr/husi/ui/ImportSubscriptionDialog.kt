@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import fr.husi.compose.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,8 +11,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import fr.husi.compose.ScrollableDialog
+import fr.husi.compose.TextButton
 import fr.husi.compose.material3.Icon
 import fr.husi.compose.material3.Text
+import fr.husi.database.DataStore
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SubscriptionBean
 import fr.husi.group.SubscriptionFetchProfile
@@ -24,28 +25,28 @@ import fr.husi.resources.cancel
 import fr.husi.resources.ok
 import fr.husi.resources.question_mark
 import fr.husi.resources.subscription_import
+import fr.husi.resources.subscription_import_preview
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
 
 @Composable
 fun ImportSubscriptionDialog(
-    group: ProxyGroup,
+    state: ImportSubscriptionDialogState,
     onConfirm: (ProxyGroup) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val group = state.group
     val subscription = group.subscription ?: SubscriptionBean()
-    var fetchProfile by remember(group) {
-        mutableStateOf(
-            subscription.fetchProfile.takeIf { it != SubscriptionFetchProfile.DEFAULT }
-                ?: SubscriptionUserAgentPresets.inferFetchProfileForNewLink(subscription.link),
-        )
+    var fetchProfile by remember(state) {
+        mutableStateOf(state.fetchProfile)
     }
-    var customUserAgent by remember(group) { mutableStateOf(subscription.customUserAgent) }
-    var uaVersionPinned by remember(group) {
+    var customUserAgent by remember(state) { mutableStateOf(subscription.customUserAgent) }
+    var uaVersionPinned by remember(state) {
         mutableStateOf(subscription.userAgentVersionOverride.isNotBlank())
     }
-    var uaVersionOverride by remember(group) { mutableStateOf(subscription.userAgentVersionOverride) }
+    var uaVersionOverride by remember(state) { mutableStateOf(subscription.userAgentVersionOverride) }
+    var showAdvanced by remember(state) { mutableStateOf(state.needsUaPicker && DataStore.isExpert) }
 
     ScrollableDialog(
         onDismissRequest = onDismiss,
@@ -85,16 +86,31 @@ fun ImportSubscriptionDialog(
                             modifier = Modifier.padding(bottom = 12.dp),
                         )
                     }
-                    SubscriptionFetchProfileBlock(
-                        fetchProfile = fetchProfile,
-                        onFetchProfileChange = { fetchProfile = it },
-                        customUserAgent = customUserAgent,
-                        onCustomUserAgentChange = { customUserAgent = it },
-                        uaVersionPinned = uaVersionPinned,
-                        onUaVersionPinnedChange = { uaVersionPinned = it },
-                        uaVersionOverride = uaVersionOverride,
-                        onUaVersionOverrideChange = { uaVersionOverride = it },
-                    )
+                    state.previewProxyCount?.let { count ->
+                        Text(
+                            text = stringResource(Res.string.subscription_import_preview, count),
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                    if (state.needsUaPicker || (DataStore.isExpert && showAdvanced)) {
+                        SubscriptionFetchProfileBlock(
+                            fetchProfile = fetchProfile,
+                            onFetchProfileChange = { fetchProfile = it },
+                            customUserAgent = customUserAgent,
+                            onCustomUserAgentChange = { customUserAgent = it },
+                            uaVersionPinned = uaVersionPinned,
+                            onUaVersionPinnedChange = { uaVersionPinned = it },
+                            uaVersionOverride = uaVersionOverride,
+                            onUaVersionOverrideChange = { uaVersionOverride = it },
+                        )
+                    } else if (DataStore.isExpert) {
+                        TextButton("Advanced") { showAdvanced = true }
+                    } else if (fetchProfile != SubscriptionFetchProfile.DEFAULT) {
+                        Text(
+                            text = SubscriptionUserAgentPresets.previewUserAgent(fetchProfile),
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
             }
         },

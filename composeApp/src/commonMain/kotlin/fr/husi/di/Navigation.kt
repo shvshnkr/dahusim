@@ -75,6 +75,7 @@ internal val commonNavigationModule = module {
                 openGroupSettings = { groupId ->
                     navigator.navigateTo(NavRoutes.GroupSettings(groupId = groupId))
                 },
+                openProfileEditor = navigator::navigateTo,
             )
         }
 
@@ -138,6 +139,7 @@ internal val commonNavigationModule = module {
                 openGroupSettings = { groupId ->
                     navigator.navigateTo(NavRoutes.GroupSettings(groupId = groupId))
                 },
+                openProfileEditor = navigator::navigateTo,
             )
         }
 

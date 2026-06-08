@@ -46,6 +46,7 @@ import fr.husi.compose.SimpleIconButton
 import fr.husi.compose.TextButton
 import fr.husi.compose.UIntegerTextField
 import fr.husi.compose.withNavigation
+import fr.husi.database.DataStore
 import fr.husi.database.SagerDatabase
 import fr.husi.group.SubscriptionFetchProfile
 import fr.husi.group.SubscriptionSourceKind
@@ -229,6 +230,7 @@ internal fun GroupSettingsScreen(
                                 viewModel.setLandingProxy(id)
                             }
                         },
+                        showProxyChain = uiState.type != GroupType.BASIC || DataStore.isExpert,
                     )
                 }
 
@@ -288,6 +290,7 @@ private fun LazyListScope.groupSettings(
     viewModel: GroupSettingsViewModel,
     selectFrontProxy: () -> Unit,
     selectLandingProxy: () -> Unit,
+    showProxyChain: Boolean = true,
 ) {
     item("name", PreferenceType.TEXT_FIELD) {
         TextFieldPreference(
@@ -338,6 +341,7 @@ private fun LazyListScope.groupSettings(
         )
     }
 
+    if (showProxyChain) {
     item("category_chain", PreferenceType.CATEGORY) {
         PreferenceCategory(text = { Text(stringResource(Res.string.proxy_chain)) })
     }
@@ -399,6 +403,7 @@ private fun LazyListScope.groupSettings(
                 AnnotatedString(stringResource(id))
             },
         )
+    }
     }
 
     if (uiState.type == GroupType.SUBSCRIPTION) {

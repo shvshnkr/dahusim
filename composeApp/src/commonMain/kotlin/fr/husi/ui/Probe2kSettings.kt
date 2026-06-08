@@ -37,6 +37,8 @@ import fr.husi.resources.probe_2k_warm_reserve_count
 import fr.husi.resources.probe_2k_warm_reserve_status
 import fr.husi.resources.switch_use_full_picker
 import fr.husi.resources.switch_use_full_picker_summary
+import fr.husi.resources.expert_connect_recover_enabled
+import fr.husi.resources.expert_connect_recover_summary
 import fr.husi.resources.probe_2k_warm_reserve_summary
 import fr.husi.resources.probe_2k_warm_ranking_enabled
 import fr.husi.resources.probe_2k_warm_ranking_summary
@@ -147,6 +149,18 @@ internal fun LazyListScope.probe2kSettings(
             onValueChange = { DataStore.switchUseFullProfilePicker = it },
             title = { Text(stringResource(Res.string.switch_use_full_picker)) },
             summary = { Text(stringResource(Res.string.switch_use_full_picker_summary)) },
+            icon = { Icon(vectorResource(Res.drawable.security), null) },
+        )
+    }
+    item(Key.EXPERT_CONNECT_RECOVER_ENABLED, PreferenceType.SWITCH) {
+        val enabled by DataStore.configurationStore
+            .booleanFlow(Key.EXPERT_CONNECT_RECOVER_ENABLED, true)
+            .collectAsStateWithLifecycle(false)
+        SwitchPreference(
+            value = enabled,
+            onValueChange = { DataStore.expertConnectRecoverEnabled = it },
+            title = { Text(stringResource(Res.string.expert_connect_recover_enabled)) },
+            summary = { Text(stringResource(Res.string.expert_connect_recover_summary)) },
             icon = { Icon(vectorResource(Res.drawable.security), null) },
         )
     }

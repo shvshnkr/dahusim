@@ -597,10 +597,10 @@ private fun MainScreenContent(
         }
     }
 
-    val importSubscriptionGroup by viewModel.importSubscriptionDialog.collectAsStateWithLifecycle()
-    importSubscriptionGroup?.let { group ->
+    val importSubscriptionState by viewModel.importSubscriptionDialog.collectAsStateWithLifecycle()
+    importSubscriptionState?.let { state ->
         ImportSubscriptionDialog(
-            group = group,
+            state = state,
             onConfirm = { viewModel.confirmImportSubscription(it) },
             onDismiss = { viewModel.dismissImportSubscriptionDialog() },
         )
