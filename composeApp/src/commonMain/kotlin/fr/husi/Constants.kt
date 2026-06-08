@@ -174,6 +174,7 @@ object Key {
     const val SIMPLE_MODE_ACTIVITY = "simpleModeActivity"
     const val SIMPLE_MODE_VPN_SESSION_EXPECTED = "simpleModeVpnSessionExpected"
     const val SIMPLE_MODE_VPN_LAST_HEARTBEAT_MS = "simpleModeVpnLastHeartbeatMs"
+    const val SIMPLE_MODE_PENDING_CARRIER_RECONNECT_AT = "simpleModePendingCarrierReconnectAt"
     const val SUBSCRIPTION_UPDATE_PARALLELISM_FOREGROUND = "subscriptionUpdateParallelismForeground"
     const val SUBSCRIPTION_UPDATE_PARALLELISM_BACKGROUND = "subscriptionUpdateParallelismBackground"
     const val SUBSCRIPTION_CONNECT_REFRESH_BUDGET_MS = "subscriptionConnectRefreshBudgetMs"

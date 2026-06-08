@@ -1,5 +1,6 @@
 package fr.husi.simplemode
 
+import fr.husi.bg.UnderlyingCarrierState
 import fr.husi.database.DataStore
 import fr.husi.utils.simpleModeLog
 import java.net.URL
@@ -172,6 +173,15 @@ internal object SimpleModeHealthRoute {
         return error.contains("network changed", ignoreCase = true)
     }
 
+    fun isCarrierOutageProbeFailure(error: String?): Boolean {
+        if (!UnderlyingCarrierState.awaitingRestore) return false
+        if (error.isNullOrBlank()) return true
+        val e = error.lowercase()
+        return e.contains("no available network interface") ||
+            e.contains("resource temporarily unavailable") ||
+            isNetworkHandoffProbeFailure(error)
+    }
+
     fun isWlTunnelBootstrapFailure(error: String?): Boolean {
         if (error.isNullOrBlank()) return false
         if (!hasWlUplinkDialIface(error)) return false
@@ -247,6 +257,11 @@ internal object SimpleModeHealthRoute {
         whitelistOnly: Boolean,
         probeUrl: String?,
     ): Boolean {
+        if (context == SessionRecoverContext.SessionHealth ||
+            context == SessionRecoverContext.StallWatchdog
+        ) {
+            if (isCarrierOutageProbeFailure(error)) return true
+        }
         if (context != SessionRecoverContext.PostConnectBootstrap) return false
         return isProbeFailureInconclusive(
             error = error,

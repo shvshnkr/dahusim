@@ -112,6 +112,17 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
             "handoff_wifi_lte",
         )
         assertEquals(
+            UnderlyingNetworkHandoffPolicy.REASON_CROSS_INTERFACE,
+            UnderlyingNetworkHandoffPolicy.evaluate(
+                handoffSnapshot(
+                    previousInterfaceForHandoff = "wlan0",
+                    interfaceName = "rmnet_data1",
+                    underlyingCarrierLostWhileConnected = true,
+                ),
+            ),
+            "handoff_wifi_lte_watchdog_snapshot",
+        )
+        assertEquals(
             UnderlyingNetworkHandoffPolicy.REASON_CARRIER_RESTORE,
             UnderlyingNetworkHandoffPolicy.evaluate(
                 handoffSnapshot(

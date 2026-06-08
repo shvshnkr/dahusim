@@ -188,7 +188,11 @@ internal object SimpleModeVpnCoordinator {
                     "error=${lastHealthError.orEmpty()} ctx=$context",
             )
             AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
-            DataStore.simpleModeActivity = ""
+            DataStore.simpleModeActivity = if (SimpleModeHealthRoute.isCarrierOutageProbeFailure(lastHealthError)) {
+                "Network changed, reconnecting…"
+            } else {
+                ""
+            }
             return SessionRecoverOutcome.SoftKeepConnected
         }
         DataStore.simpleModeActivity = if (whitelistOnly) {
@@ -539,6 +543,14 @@ internal object SimpleModeVpnCoordinator {
         previousProfileId: Long,
         networkHandoff: Boolean,
     ): Boolean {
+        if (fr.husi.bg.UnderlyingCarrierState.awaitingRestore) {
+            DataStore.simpleModeActivity = "Network changed, reconnecting…"
+            simpleModeLog(
+                "SimpleMode",
+                "H30 wl_adapt_all_dead_deferred_carrier_outage reason=$reason",
+            )
+            return false
+        }
         val step = nextAllDeadRecoveryStep()
         if (step >= ALL_DEAD_MAX_RECOVERY_STEPS) {
             DataStore.simpleModeActivity = "No healthy servers detected, stopping VPN"

@@ -46,6 +46,7 @@ import fr.husi.simplemode.SimpleModeSessionHealthPolicy
 import fr.husi.simplemode.SimpleModeVpnSessionMarker
 import fr.husi.simplemode.WarmReserveMaintainer
 import fr.husi.simplemode.WarmReserveSessionCache
+import fr.husi.simplemode.SimpleModeCarrierReconnect
 import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.simplemode.SimpleModeTunnelRestart
 import fr.husi.simplemode.SessionRecoverContext
@@ -399,7 +400,9 @@ class BaseService {
                     WarmReserveMaintainer.cancel()
                     SimpleModeVpnCoordinator.cancelAdaptation()
                     WhitelistNetworkRoutingState.reset()
-                    DataStore.simpleModeActivity = ""
+                    if (!SimpleModeCarrierReconnect.isPendingValid()) {
+                        DataStore.simpleModeActivity = ""
+                    }
                     if (!finalMessage.isNullOrBlank()) {
                         data.binder.notifyAlert(AlertType.COMMON, finalMessage)
                     }
@@ -448,6 +451,15 @@ class BaseService {
                 return true
             }
             if (hadQueue && DataStore.simpleMode) {
+                if (SimpleModeCarrierReconnect.shouldDeferGracefulStop()) {
+                    SimpleModeCarrierReconnect.markPending("manual_profile_probe_exhausted")
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H17 manual_profile_probe_deferred reason=carrier_outage profileId=$profileId",
+                    )
+                    stopRunner(false)
+                    return true
+                }
                 BackendState.emitAlert(AlertType.SIMPLE_MODE_ALL_SERVERS_DEAD, "")
                 SimpleModeVpnSessionMarker.markGracefulStop("manual_profile_probe_exhausted")
             }
@@ -605,6 +617,15 @@ class BaseService {
                                 "SimpleMode",
                                 "H17 manual_profile_probe_failed profileId=${profile.id} wlOnly=${reachability.whitelistOnly}",
                             )
+                            if (SimpleModeCarrierReconnect.shouldDeferGracefulStop()) {
+                                SimpleModeCarrierReconnect.markPending("manual_profile_probe_carrier_outage")
+                                simpleModeLog(
+                                    "SimpleMode",
+                                    "H17 manual_profile_probe_deferred reason=carrier_outage profileId=${profile.id}",
+                                )
+                                stopRunner(false)
+                                return@runOnDefaultDispatcher
+                            }
                             if (trySimpleModeManualProbeFallback(profile.id, reachability.whitelistOnly)) {
                                 return@runOnDefaultDispatcher
                             }
@@ -655,6 +676,8 @@ class BaseService {
                     startProcesses()
                     data.changeState(ServiceState.Connected)
                     VpnTunnelHandoffSuppress.markVpnSessionAnchor()
+                    SimpleModeCarrierReconnect.clearPending("connected")
+                    UnderlyingCarrierState.clear()
                     simpleModeLog("SimpleMode", "H9 connected_profile id=${profile.id}")
                     DataStore.simpleModeActivity = "Verifying internet access..."
                     val outboundTag = data.proxy?.config?.mainTag.orEmpty()

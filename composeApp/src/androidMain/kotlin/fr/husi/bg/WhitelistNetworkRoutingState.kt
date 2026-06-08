@@ -4,6 +4,7 @@ import fr.husi.database.DataStore
 import fr.husi.database.UserPoolPolicy
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.repository.resolveRepository
+import fr.husi.simplemode.SimpleModeCarrierReconnect
 import fr.husi.simplemode.SimpleModeVpnCoordinator
 import fr.husi.utils.simpleModeLog
 
@@ -73,7 +74,12 @@ internal object WhitelistNetworkRoutingState {
         elapsedFromLossMs: Long = -1L,
         interfaceRebound: Boolean = false,
     ) {
-        if (!DataStore.serviceState.connected) return
+        if (!DataStore.serviceState.connected) {
+            if (DataStore.simpleMode && SimpleModeCarrierReconnect.isPendingValid()) {
+                SimpleModeCarrierReconnect.tryResumeIfDue("handoff_while_stopped")
+            }
+            return
+        }
         simpleModeLog(
             "SimpleMode",
             "H27 network_handoff iface=${iface ?: "unknown"} reason=${handoffReason ?: "unknown"} " +
