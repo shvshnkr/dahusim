@@ -5,44 +5,44 @@ import fr.husi.SubscriptionType
 import fr.husi.database.DataStore
 import fr.husi.database.SagerDatabase
 import fr.husi.fmt.FmtTestConstant
-import fr.husi.test.HusiKoinMainDispatcherTest
 import fr.husi.ui.GroupSettingsViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class SubscriptionAddBySettingsJourneyTest : HusiKoinMainDispatcherTest() {
+class SubscriptionAddBySettingsJourneyTest : FeatureJourneyTest() {
 
     override suspend fun postStartKoin() {
+        Dispatchers.setMain(Dispatchers.Unconfined)
         DataStore.configurationStore.reset()
+        DataStore.subscriptionCatalogEnabled = false
         DataStore.firstLaunchSubscriptionUiRefreshDone = true
         FeatureJourneyHarness.clear()
     }
 
-    override suspend fun postStopKoinWithMainDispatcher() {
+    override suspend fun postStopKoin() {
         FeatureJourneyHarness.clear()
+        Dispatchers.resetMain()
+        super.postStopKoin()
     }
 
     @Test
-    fun manualSubscriptionSaveCreatesUserOwnedGroupWithProxies() = runTest(dispatcher.scheduler) {
+    fun manualSubscriptionSaveCreatesUserOwnedGroupWithProxies() = runBlocking {
         val link = "https://example.com/settings-sub.txt"
         FeatureJourneyHarness.installSubscriptionBody(link, FmtTestConstant.VMESS_DUCKSOFT_URL)
 
         val viewModel = GroupSettingsViewModel(0L)
-        advanceUntilIdle()
-
         viewModel.setName("Journey settings sub")
         viewModel.setType(GroupType.SUBSCRIPTION)
         viewModel.setSubscriptionType(SubscriptionType.RAW)
         viewModel.setSubscriptionLink(link)
-        advanceUntilIdle()
-
-        viewModel.save()
-        advanceUntilIdle()
+        viewModel.saveAndAwait()
 
         val groups = SagerDatabase.groupDao.allGroups().first()
             .filter { it.type == GroupType.SUBSCRIPTION }

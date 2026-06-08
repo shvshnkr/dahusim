@@ -16,6 +16,7 @@ class SubscriptionAddByImportJourneyTest : FeatureJourneyTest() {
     override suspend fun postStartKoin() {
         super.postStartKoin()
         DataStore.configurationStore.reset()
+        DataStore.subscriptionCatalogEnabled = false
         DataStore.firstLaunchSubscriptionUiRefreshDone = true
         FeatureJourneyHarness.clear()
     }

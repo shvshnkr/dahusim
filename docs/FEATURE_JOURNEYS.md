@@ -39,3 +39,4 @@ Bugfix with attached log: run miner, commit fixture + journey/fieldlog regressio
 | `sub_survives_bootstrap` | Bootstrap does not drift USER ownership | `SubscriptionSurvivesBootstrapJourneyTest` |
 | `profile_import_standalone` | Share link → user BASIC, not builtin | `StandaloneProfileImportJourneyTest` |
 | `connect_user_pool_priority` | USER proxies rank above managed | `UserPoolConnectJourneyTest` |
+| `library_manual_flat_list` | Manual tab → user BASIC only, not builtin | `LibraryManualFlatListJourneyTest` |

@@ -39,6 +39,12 @@ object FeatureJourneys {
             entryPoints = listOf("UserPoolMode.PRIORITY", "AutoServerSelector"),
             testClass = "fr.husi.scenario.journey.UserPoolConnectJourneyTest",
         ),
+        FeatureJourney(
+            id = "library_manual_flat_list",
+            userPromise = "Library Manual tab shows user-owned BASIC profiles, not builtin relay",
+            entryPoints = listOf("ManualServersViewModel", "ManualServersPolicy"),
+            testClass = "fr.husi.scenario.journey.LibraryManualFlatListJourneyTest",
+        ),
     )
 
     fun byId(id: String): FeatureJourney? = all.find { it.id == id }
