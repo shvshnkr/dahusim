@@ -9,6 +9,7 @@ import fr.husi.database.DataStore
 import fr.husi.database.ProfileManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
+import fr.husi.ktx.Logs
 import fr.husi.ktx.onIoDispatcher
 import fr.husi.ktx.runOnDefaultDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -88,6 +89,7 @@ class ManualServersViewModel : ViewModel() {
             pending
         }
         if (pending.isEmpty()) return@runOnDefaultDispatcher
+        Logs.d("ManualServers: deleting ${pending.size} profile(s)")
         onIoDispatcher {
             pending.entries.groupBy({ it.value }, { it.key }).forEach { (groupId, profileIds) ->
                 ProfileManager.deleteProfiles(groupId, profileIds)

@@ -29,13 +29,20 @@ object ImportTargetResolver {
         if (normalized != null) {
             groups.filter { it.isUserImportTarget() }
                 .find { it.name.equals(normalized, ignoreCase = true) }
-                ?.let { return it.id }
-            return GroupManager.createGroup(
+                ?.let {
+                    Logs.d("ImportTargetResolver: standalone import folder id=${it.id} name=$normalized")
+                    return it.id
+                }
+            val created = GroupManager.createGroup(
                 ProxyGroup(name = normalized, type = GroupType.BASIC),
-            ).id
+            )
+            Logs.d("ImportTargetResolver: created standalone import folder id=${created.id} name=$normalized")
+            return created.id
         }
-        return groups.find { it.ungrouped && it.isUserImportTarget() }?.id
+        val ungroupedId = groups.find { it.ungrouped && it.isUserImportTarget() }?.id
             ?: ProfileManager.ensureDefaultGroupId()
+        Logs.d("ImportTargetResolver: standalone import ungrouped id=$ungroupedId")
+        return ungroupedId
     }
 
     fun ProxyGroup.applyUserImportOwnership(): ProxyGroup {
@@ -50,7 +57,9 @@ object ImportTargetResolver {
     }
 
     suspend fun createUserSubscriptionGroup(parsed: ProxyGroup): ProxyGroup =
-        GroupManager.createGroup(parsed.applyUserImportOwnership())
+        GroupManager.createGroup(parsed.applyUserImportOwnership()).also {
+            Logs.d("ImportTargetResolver: created user subscription id=${it.id} name=${it.name}")
+        }
 
     /**
      * One-time repair: standalone profiles wrongly stored in built-in relay, and user subscriptions

@@ -2,6 +2,7 @@ package fr.husi.group
 
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SubscriptionBean
+import fr.husi.ktx.Logs
 import fr.husi.ktx.SubscriptionFoundException
 import fr.husi.ui.ImportLinkInteractor
 import fr.husi.ui.ImportTargetResolver.applyUserImportOwnership
@@ -27,14 +28,20 @@ object SubscriptionImportPreview {
 
     suspend fun prepare(link: String): SubscriptionImportPlan {
         val parsed = interactor.parseSubscription(link)
-            ?: return SubscriptionImportPlan.Failed("invalid subscription link")
+            ?: return SubscriptionImportPlan.Failed("invalid subscription link").also {
+                Logs.d("SubscriptionImportPreview: invalid subscription link")
+            }
         return prepare(parsed)
     }
 
     suspend fun prepare(group: ProxyGroup): SubscriptionImportPlan {
         val owned = group.applyUserImportOwnership()
-        val sub = owned.subscription ?: return SubscriptionImportPlan.Failed("missing subscription")
-        if (sub.link.isBlank()) return SubscriptionImportPlan.Failed("empty subscription link")
+        val sub = owned.subscription ?: return SubscriptionImportPlan.Failed("missing subscription").also {
+            Logs.d("SubscriptionImportPreview: missing subscription")
+        }
+        if (sub.link.isBlank()) return SubscriptionImportPlan.Failed("empty subscription link").also {
+            Logs.d("SubscriptionImportPreview: empty subscription link")
+        }
 
         val ladder = SubscriptionUserAgentPresets.uaRetryLadder(sub.link)
         val tried = mutableListOf<Int>()
@@ -46,12 +53,18 @@ object SubscriptionImportPreview {
                 group = owned,
                 fetchProfile = profile,
                 proxyCount = preview.size,
-            )
+            ).also {
+                Logs.d(
+                    "SubscriptionImportPreview: ready fetchProfile=$profile proxies=${preview.size}",
+                )
+            }
         }
         return SubscriptionImportPlan.NeedsUaPicker(
             group = owned,
             triedProfiles = tried,
-        )
+        ).also {
+            Logs.d("SubscriptionImportPreview: needs UA picker tried=$tried")
+        }
     }
 
     private suspend fun fetchPreview(link: String, fetchProfile: Int): List<fr.husi.fmt.AbstractBean>? {

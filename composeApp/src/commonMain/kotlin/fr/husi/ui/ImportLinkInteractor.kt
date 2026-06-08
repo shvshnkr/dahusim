@@ -11,6 +11,7 @@ import fr.husi.database.SubscriptionBean
 import fr.husi.fmt.AbstractBean
 import fr.husi.fmt.KryoConverters
 import fr.husi.group.SubscriptionUserAgentPresets
+import fr.husi.ktx.Logs
 import fr.husi.ktx.b64Decode
 import fr.husi.ktx.blankAsNull
 import fr.husi.ktx.defaultOr
@@ -115,6 +116,10 @@ class ImportLinkInteractor {
             ProfileManager.createProfile(targetId, proxy)
         }
         DataStore.selectedGroup = targetId
+        Logs.d(
+            "importStandaloneProfiles: count=${proxies.size} targetGroupId=$targetId" +
+                (suggestedGroupName?.let { " folder=$it" }.orEmpty()),
+        )
         return proxies.size
     }
 }
