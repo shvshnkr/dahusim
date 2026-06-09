@@ -23,6 +23,7 @@ import kotlin.test.assertTrue
 class LibraryManualFlatListJourneyTest : FeatureJourneyTest() {
 
     override suspend fun postStartKoin() {
+        super.postStartKoin()
         Dispatchers.setMain(Dispatchers.Unconfined)
         DataStore.configurationStore.reset()
         DataStore.firstLaunchSubscriptionUiRefreshDone = true
