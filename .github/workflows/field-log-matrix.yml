@@ -34,8 +34,74 @@ permissions:
   checks: write
 
 jobs:
+  libcore-desktop-linux-amd64:
+    name: libcore desktop linux/amd64 (once)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Go version
+        id: goversion
+        run: |
+          source buildScript/init/version.sh
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ steps.goversion.outputs.go_version }}
+          cache-dependency-path: libcore/go.sum
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Resolve cronet-go version
+        id: cronet-go-version
+        run: |
+          echo "version=$(tr -d '[:space:]' < .github/CRONET_GO_VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout cronet-go
+        uses: actions/checkout@v6
+        with:
+          repository: sagernet/cronet-go
+          ref: ${{ steps.cronet-go-version.outputs.version }}
+          path: cronet-go
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Cache cronet toolchain
+        uses: ./.github/actions/cronet-toolchain-linux
+        with:
+          cronet-version: ${{ steps.cronet-go-version.outputs.version }}
+
+      - name: Build libcore (desktop linux/amd64)
+        env:
+          CRONET_GO_ROOT: ${{ github.workspace }}/cronet-go
+        run: |
+          ./run lib core --desktop --desktoptargets linux/amd64
+
+      - name: Verify libcore jar
+        run: |
+          test -f composeApp/libs/libcore-desktop-linux-amd64.jar
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libcore-desktop-linux-amd64-field-log
+          path: composeApp/libs/libcore-desktop-linux-amd64.jar
+          if-no-files-found: error
+
   field-log-scenario-tests:
     name: field log scenario matrix
+    needs: libcore-desktop-linux-amd64
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -43,6 +109,11 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: libcore-desktop-linux-amd64-field-log
+          path: composeApp/libs
 
       - uses: actions/setup-java@v5
         with:
