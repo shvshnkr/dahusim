@@ -8,7 +8,8 @@ import fr.husi.repository.resolveRepository
 import fr.husi.utils.simpleModeLog
 
 /**
- * Auto-resume simple-mode VPN after a carrier outage stop without requiring a manual connect tap.
+ * Auto-resume VPN after a carrier outage stop without requiring a manual connect tap.
+ * Active in simple mode and in full mode when expert connect recover is enabled.
  */
 internal object SimpleModeCarrierReconnect {
 
@@ -21,7 +22,7 @@ internal object SimpleModeCarrierReconnect {
     }
 
     fun markPending(reason: String) {
-        if (!DataStore.simpleMode) return
+        if (!ExpertConnectRecoverPolicy.allowsFullModeHealthRecover()) return
         if (!UnderlyingCarrierState.outageDuringVpnSession && !UnderlyingCarrierState.awaitingRestore) {
             return
         }
@@ -32,6 +33,7 @@ internal object SimpleModeCarrierReconnect {
             "SimpleMode",
             "H42 carrier_reconnect_pending reason=$reason profileId=${DataStore.selectedProxy}",
         )
+        scheduleCarrierReconnectResume()
     }
 
     fun clearPending(reason: String) {
@@ -43,15 +45,21 @@ internal object SimpleModeCarrierReconnect {
     fun shouldDeferGracefulStop(): Boolean =
         UnderlyingCarrierState.awaitingRestore || UnderlyingCarrierState.outageDuringVpnSession
 
+    internal fun canResumeNow(
+        pendingValid: Boolean = isPendingValid(),
+        recoverAllowed: Boolean = ExpertConnectRecoverPolicy.allowsFullModeHealthRecover(),
+        serviceState: ServiceState = BackendState.status.value.state,
+        profileId: Long = DataStore.selectedProxy,
+    ): Boolean =
+        pendingValid && recoverAllowed && serviceState == ServiceState.Stopped && profileId > 0L
+
     fun tryResumeIfDue(trigger: String) {
         if (!isPendingValid()) {
             clearPending("expired")
             return
         }
-        if (!DataStore.simpleMode) return
-        if (BackendState.status.value.state != ServiceState.Stopped) return
+        if (!canResumeNow()) return
         val profileId = DataStore.selectedProxy
-        if (profileId <= 0L) return
         clearPending("resuming")
         SimpleModeConnectCoordinator.markPrepareVerifiedForConnect(profileId)
         DataStore.simpleModeActivity = "Network changed, reconnecting…"

@@ -98,6 +98,12 @@ object DefaultNetworkMonitor {
     private fun shouldContinueRestoreWatchdog(): Boolean =
         UnderlyingCarrierState.awaitingRestore || SimpleModeCarrierReconnect.isPendingValid()
 
+    fun schedulePendingReconnectWatchdog() {
+        if (!SimpleModeCarrierReconnect.isPendingValid()) return
+        if (restoreWatchdogJob?.isActive == true) return
+        startCarrierRestoreWatchdog()
+    }
+
     private fun startCarrierRestoreWatchdog() {
         restoreWatchdogJob?.cancel()
         restoreWatchdogJob = monitorScope.launch {
@@ -107,6 +113,7 @@ object DefaultNetworkMonitor {
                 delay(RESTORE_WATCHDOG_POLL_MS)
                 if (!shouldContinueRestoreWatchdog()) break
                 val polled = pollActiveUnderlyingNetwork() ?: continue
+                if (!VpnTunnelHandoffSuppress.isPollableUplink(polled.interfaceName)) continue
                 simpleModeLog(
                     "SimpleMode",
                     "H15 carrier_restore_watchdog_poll iface=${polled.interfaceName} index=${polled.interfaceIndex} " +
@@ -134,12 +141,16 @@ object DefaultNetworkMonitor {
                     )
                     break
                 }
-                finishCarrierRestore(
-                    interfaceName = polled.interfaceName,
-                    interfaceIndex = polled.interfaceIndex,
-                )
+                if (underlyingCarrierLostWhileConnected || UnderlyingCarrierState.awaitingRestore) {
+                    finishCarrierRestore(
+                        interfaceName = polled.interfaceName,
+                        interfaceIndex = polled.interfaceIndex,
+                    )
+                }
                 if (!DataStore.serviceState.connected) {
                     SimpleModeCarrierReconnect.tryResumeIfDue("watchdog")
+                    if (!SimpleModeCarrierReconnect.isPendingValid()) break
+                    continue
                 }
                 break
             }

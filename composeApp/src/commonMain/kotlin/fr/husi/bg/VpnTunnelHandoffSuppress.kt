@@ -19,8 +19,16 @@ internal object VpnTunnelHandoffSuppress {
     fun isVpnTunnelInterface(name: String): Boolean =
         name.startsWith("tun", ignoreCase = true)
 
-    fun shouldSuppressHandoffToTunnel(interfaceName: String): Boolean {
+    /** VPN tunnel iface is never a pollable carrier uplink during restore watchdog. */
+    fun isPollableUplink(interfaceName: String): Boolean =
+        !isVpnTunnelInterface(interfaceName)
+
+    fun shouldSuppressHandoffToTunnel(
+        interfaceName: String,
+        carrierLostWhileConnected: Boolean = false,
+    ): Boolean {
         if (!isVpnTunnelInterface(interfaceName)) return false
+        if (carrierLostWhileConnected) return true
         val anchor = sessionAnchorMs
         if (anchor <= 0L) return false
         return System.currentTimeMillis() - anchor < GRACE_MS

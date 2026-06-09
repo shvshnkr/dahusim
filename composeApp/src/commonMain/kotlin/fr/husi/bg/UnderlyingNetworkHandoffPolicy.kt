@@ -31,7 +31,11 @@ internal object UnderlyingNetworkHandoffPolicy {
 
         val previous = snapshot.previousInterfaceForHandoff
         if (previous != null && previous != name) {
-            if (VpnTunnelHandoffSuppress.shouldSuppressHandoffToTunnel(name)) {
+            if (VpnTunnelHandoffSuppress.shouldSuppressHandoffToTunnel(
+                    name,
+                    snapshot.underlyingCarrierLostWhileConnected,
+                )
+            ) {
                 return null
             }
             return REASON_CROSS_INTERFACE
