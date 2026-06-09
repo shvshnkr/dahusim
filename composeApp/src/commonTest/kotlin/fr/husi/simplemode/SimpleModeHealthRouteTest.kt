@@ -303,6 +303,14 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
                 probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
             ),
         )
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(
+                "context deadline exceeded",
+                whitelistOnly = true,
+                phase = "post_connect",
+                probeUrl = SimpleModeMessengerProbe.DC_REQUIRED_URL,
+            ),
+        )
     }
 
     @Test

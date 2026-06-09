@@ -41,8 +41,12 @@ object FeatureJourneys {
         ),
         FeatureJourney(
             id = "library_manual_flat_list",
-            userPromise = "Library Manual tab shows user-owned BASIC profiles, not builtin relay",
-            entryPoints = listOf("ManualServersViewModel", "ManualServersPolicy"),
+            userPromise = "Library Manual tab lists user-owned BASIC profiles with connect, test, and status actions",
+            entryPoints = listOf(
+                "ManualServersViewModel",
+                "ManualServersPolicy",
+                "ConfigurationScreenViewModel.toggleManualServerConnection",
+            ),
             testClass = "fr.husi.scenario.journey.LibraryManualFlatListJourneyTest",
         ),
         FeatureJourney(
@@ -54,6 +58,16 @@ object FeatureJourneys {
                 "SimpleModeHealthRoute.dashboardConnectionTestUrl",
             ),
             testClass = "fr.husi.scenario.journey.FullModeExpertHealthJourneyTest",
+        ),
+        FeatureJourney(
+            id = "messenger_composite_prepare",
+            userPromise = "Autoselect rejects profiles with web.telegram OK but Telegram DC IP egress dead",
+            entryPoints = listOf(
+                "SimpleModeMessengerProbe",
+                "DirectProfileUrlProbe.messengerCompositeDelay",
+                "SimpleModeTunnelHealthCheck.probeMessengerWave",
+            ),
+            testClass = "fr.husi.scenario.journey.MessengerCompositePrepareJourneyTest",
         ),
     )
 

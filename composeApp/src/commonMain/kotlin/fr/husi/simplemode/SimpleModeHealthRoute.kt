@@ -68,6 +68,20 @@ internal object SimpleModeHealthRoute {
             normalizeTunnelHealthUrl(DataStore.connectionTestURL)
         }
 
+
+    /** Manual dashboard / group urlTest: web first; DC required when composite messenger probe is on. */
+    fun dashboardProbeUrls(whitelistOnly: Boolean = false): List<String> =
+        if (SimpleModeMessengerProbe.compositeRequired(whitelistOnly)) {
+            listOf(
+                SimpleModeMessengerProbe.WEB_URL,
+                SimpleModeMessengerProbe.DC_REQUIRED_URL,
+            )
+        } else if (messengerProbeRequired(whitelistOnly)) {
+            listOf(TUNNEL_HEALTH_TELEGRAM)
+        } else {
+            listOf(dashboardConnectionTestUrl())
+        }
+
     fun probeUrlPlan(
         phase: String,
         whitelistOnly: Boolean,
@@ -321,7 +335,7 @@ internal object SimpleModeHealthRoute {
         }
         // Messenger probe is a "must succeed" signal when the tunnel path is stable. Uplink
         // bootstrap / handoff errors are handled above.
-        if (probeUrl == TUNNEL_HEALTH_TELEGRAM) return false
+        if (SimpleModeMessengerProbe.isMessengerProbeUrl(probeUrl.orEmpty())) return false
         if (isHttpRateLimitOrTransientResponse(error)) {
             return phase == "post_connect" || phase == "session_periodic" || phase.isBlank()
         }
@@ -344,7 +358,9 @@ internal object SimpleModeHealthRoute {
     }
 
     private fun isMessengerDnsOrDialFailure(error: String?, probeUrl: String?): Boolean {
-        if (probeUrl != TUNNEL_HEALTH_TELEGRAM || error.isNullOrBlank()) return false
+        if (!SimpleModeMessengerProbe.isMessengerProbeUrl(probeUrl.orEmpty()) || error.isNullOrBlank()) {
+            return false
+        }
         val e = error.lowercase()
         return e.contains("lookup ") ||
             e.contains("connection refused") ||
@@ -388,7 +404,7 @@ internal object SimpleModeHealthRoute {
 
     fun wlUrlProbeTreatAsOk(error: String?, whitelistOnly: Boolean, probeUrl: String? = null): Int? {
         if (error.isNullOrBlank()) return null
-        if (probeUrl == TUNNEL_HEALTH_TELEGRAM) return null
+        if (SimpleModeMessengerProbe.isMessengerProbeUrl(probeUrl.orEmpty())) return null
         if (isProxyAuthenticationFailure(error)) return null
         if (isHttpRateLimitOrTransientResponse(error)) return WL_URL_PROBE_SYNTHETIC_MS
         if (!whitelistOnly) return null

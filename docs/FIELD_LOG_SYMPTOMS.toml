@@ -30,3 +30,9 @@ id = "tunnel_stale_full_mode"
 h_tags = ["H34", "H37", "H39"]
 journey_id = "full_mode_expert_health"
 notes = "Full mode VPN connected for hours without session_periodic; wake skips H34; warm switch queue drift"
+
+[[symptom]]
+id = "messenger_web_only_false_positive"
+h_tags = ["H37", "H3"]
+journey_id = "messenger_composite_prepare"
+notes = "post_connect web.telegram ok but native TG dead; prepare_messenger_probe dc_91_105=fail (domain-only SOCKS or Timeweb egress)"

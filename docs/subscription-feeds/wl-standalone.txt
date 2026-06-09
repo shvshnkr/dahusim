@@ -1,4 +1,5 @@
 #profile-title: WL standalone
 #profile-update-interval: 24
 
-socks5://95.163.232.231:10808#RU BS SOCKS relay
+# domain-only SOCKS relay: passes web.telegram.org but blocks IPv4 CONNECT to Telegram DCs; unsuitable for native TG autoselect until relay supports IP egress
+# socks5://95.163.232.231:10808#RU BS SOCKS relay
