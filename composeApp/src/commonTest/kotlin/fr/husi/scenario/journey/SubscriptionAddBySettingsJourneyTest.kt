@@ -19,6 +19,7 @@ import kotlin.test.assertEquals
 class SubscriptionAddBySettingsJourneyTest : FeatureJourneyTest() {
 
     override suspend fun postStartKoin() {
+        super.postStartKoin()
         Dispatchers.setMain(Dispatchers.Unconfined)
         DataStore.configurationStore.reset()
         DataStore.subscriptionCatalogEnabled = false

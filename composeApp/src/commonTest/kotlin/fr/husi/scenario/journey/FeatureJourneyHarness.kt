@@ -20,6 +20,11 @@ object FeatureJourneyHarness {
         SubscriptionFetchTestHooks.clear()
     }
 
+    suspend fun resetLibrary() {
+        SagerDatabase.proxyDao.reset()
+        SagerDatabase.groupDao.reset()
+    }
+
     suspend fun assertUserOwnedSubscription(groupId: Long) {
         val group = SagerDatabase.groupDao.getById(groupId).first()
             ?: error("group id=$groupId not found")
@@ -33,4 +38,9 @@ object FeatureJourneyHarness {
     }
 }
 
-abstract class FeatureJourneyTest : HusiKoinTest()
+abstract class FeatureJourneyTest : HusiKoinTest() {
+
+    override suspend fun postStartKoin() {
+        FeatureJourneyHarness.resetLibrary()
+    }
+}
