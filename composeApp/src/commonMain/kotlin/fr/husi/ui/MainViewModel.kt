@@ -32,6 +32,7 @@ import fr.husi.ktx.SubscriptionFoundException
 import fr.husi.ktx.onIoDispatcher
 import fr.husi.ktx.readableMessage
 import fr.husi.repository.Repository
+import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.repository.resolveRepository
 import fr.husi.utils.LibcoreClientManager
 import fr.husi.resources.*
@@ -199,7 +200,7 @@ class MainViewModel(
             urlTestClient.withClient { client ->
                 result = client.urlTest(
                     "",
-                    DataStore.connectionTestURL,
+                    SimpleModeHealthRoute.dashboardConnectionTestUrl(),
                     DataStore.connectionTestTimeout,
                 )
             }

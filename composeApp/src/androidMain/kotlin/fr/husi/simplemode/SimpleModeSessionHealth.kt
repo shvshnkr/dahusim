@@ -41,6 +41,9 @@ internal object SimpleModeSessionHealth {
     private val stallRecoveryInFlight = AtomicBoolean(false)
     private val stallDeferTracker = StallDeferTracker()
 
+    private fun healthRecoverEnabled(): Boolean =
+        ExpertConnectRecoverPolicy.allowsFullModeHealthRecover()
+
     private data class UrlHealthProbeOptions(
         val phase: String = "session_periodic",
         val forceProbe: Boolean = false,
@@ -54,7 +57,7 @@ internal object SimpleModeSessionHealth {
         outboundTag: String,
         firstCheckDelayMs: Long = SimpleModeSessionHealthPolicy.CHECK_INTERVAL_MS,
     ) {
-        if (!DataStore.simpleMode || outboundTag.isBlank()) return
+        if (!healthRecoverEnabled() || outboundTag.isBlank()) return
         cancel()
         monitoredProfileId = profileId
         monitoredOutboundTag = outboundTag
@@ -65,14 +68,14 @@ internal object SimpleModeSessionHealth {
         SimpleModeTunnelSoftRecoveryPolicy.resetDebounce()
         lastCheckCompletedAt.set(System.currentTimeMillis())
         stallWatchdogJob = scope.launch {
-            while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
+            while (isActive && healthRecoverEnabled() && DataStore.serviceState.connected) {
                 delay(SimpleModeSessionHealthPolicy.STALL_TICK_MS)
                 maybeRecoverFromStalledProbe()
             }
         }
         job = scope.launch {
             delay(firstCheckDelayMs.coerceAtLeast(0L))
-            while (isActive && DataStore.simpleMode && DataStore.serviceState.connected) {
+            while (isActive && healthRecoverEnabled() && DataStore.serviceState.connected) {
                 val activeProfileId = DataStore.selectedProxy
                 if (activeProfileId <= 0L) break
                 if (activeProfileId != monitoredProfileId) {
@@ -102,8 +105,8 @@ internal object SimpleModeSessionHealth {
     }
 
     fun triggerQuickCheck(reason: String) {
-        if (!DataStore.simpleMode) {
-            logQuickCheckSkipped(reason, "simple_mode_off")
+        if (!healthRecoverEnabled()) {
+            logQuickCheckSkipped(reason, "health_recover_off")
             return
         }
         if (!DataStore.serviceState.connected) {
@@ -164,7 +167,7 @@ internal object SimpleModeSessionHealth {
     }
 
     private fun ensureMonitoring(reason: String) {
-        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return
+        if (!healthRecoverEnabled() || !DataStore.serviceState.connected) return
         val profileId = DataStore.selectedProxy
         val outboundTag = resolveMonitoredOutboundTag(profileId)
         if (profileId <= 0L || outboundTag.isBlank()) return
@@ -201,7 +204,7 @@ internal object SimpleModeSessionHealth {
     }
 
     private suspend fun runHealthCheck(profileId: Long, outboundTag: String): Boolean = checkLock.withLock {
-        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return@withLock false
+        if (!healthRecoverEnabled() || !DataStore.serviceState.connected) return@withLock false
         if (DataStore.selectedProxy != profileId) return@withLock false
         val ok = runUrlHealthCheck(profileId, outboundTag)
         if (!ok) {
@@ -256,7 +259,7 @@ internal object SimpleModeSessionHealth {
     }
 
     private suspend fun maybeRecoverFromStalledProbe() {
-        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return
+        if (!healthRecoverEnabled() || !DataStore.serviceState.connected) return
         val profileId = DataStore.selectedProxy
         if (profileId <= 0L || profileId != monitoredProfileId) return
         val completedAt = lastCheckCompletedAt.get()
@@ -371,7 +374,7 @@ internal object SimpleModeSessionHealth {
         probeUrl: String?,
         forceProbe: Boolean = false,
     ): Boolean {
-        if (!DataStore.simpleMode || !DataStore.serviceState.connected) return false
+        if (!healthRecoverEnabled() || !DataStore.serviceState.connected) return false
         if (DataStore.selectedProxy != profileId) return false
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
         val nowMs = System.currentTimeMillis()
@@ -380,7 +383,7 @@ internal object SimpleModeSessionHealth {
                 whitelistOnly = wlOnly,
                 probeUrl = probeUrl,
                 nowMs = nowMs,
-                simpleMode = DataStore.simpleMode,
+                healthRecoverEnabled = healthRecoverEnabled(),
                 connected = DataStore.serviceState.connected,
             )
         ) {

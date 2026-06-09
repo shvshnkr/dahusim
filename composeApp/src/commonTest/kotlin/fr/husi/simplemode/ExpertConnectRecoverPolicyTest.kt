@@ -20,4 +20,19 @@ class ExpertConnectRecoverPolicyTest {
     fun simpleModeAlwaysAllowsFallback() {
         assertTrue(ExpertConnectRecoverPolicy.allowsFullModeSessionFallback(true, false))
     }
+
+    @Test
+    fun fullModeHealthRecoverBlockedWhenRecoverDisabled() {
+        assertFalse(ExpertConnectRecoverPolicy.allowsFullModeHealthRecover(false, false))
+    }
+
+    @Test
+    fun fullModeHealthRecoverAllowedWhenRecoverEnabled() {
+        assertTrue(ExpertConnectRecoverPolicy.allowsFullModeHealthRecover(false, true))
+    }
+
+    @Test
+    fun simpleModeAlwaysAllowsHealthRecover() {
+        assertTrue(ExpertConnectRecoverPolicy.allowsFullModeHealthRecover(true, false))
+    }
 }

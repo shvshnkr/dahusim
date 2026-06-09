@@ -45,6 +45,16 @@ object FeatureJourneys {
             entryPoints = listOf("ManualServersViewModel", "ManualServersPolicy"),
             testClass = "fr.husi.scenario.journey.LibraryManualFlatListJourneyTest",
         ),
+        FeatureJourney(
+            id = "full_mode_expert_health",
+            userPromise = "Full mode with expert recover gets tunnel health watchdog and telegram-aligned dashboard test",
+            entryPoints = listOf(
+                "ExpertConnectRecoverPolicy",
+                "SimpleModeSessionHealth",
+                "SimpleModeHealthRoute.dashboardConnectionTestUrl",
+            ),
+            testClass = "fr.husi.scenario.journey.FullModeExpertHealthJourneyTest",
+        ),
     )
 
     fun byId(id: String): FeatureJourney? = all.find { it.id == id }

@@ -12,7 +12,7 @@ object SimpleModeVpnSessionMarker {
     const val HEARTBEAT_STALE_MS = 30 * 60 * 1000L
 
     fun markActive(nowMs: Long = System.currentTimeMillis()) {
-        if (!DataStore.simpleMode) return
+        if (!ExpertConnectRecoverPolicy.allowsFullModeHealthRecover()) return
         DataStore.simpleModeVpnSessionExpected = true
         DataStore.simpleModeVpnLastHeartbeatMs = nowMs
     }

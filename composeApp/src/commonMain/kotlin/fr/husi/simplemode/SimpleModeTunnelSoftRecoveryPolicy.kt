@@ -17,10 +17,10 @@ internal object SimpleModeTunnelSoftRecoveryPolicy {
         whitelistOnly: Boolean,
         probeUrl: String?,
         nowMs: Long,
-        simpleMode: Boolean,
+        healthRecoverEnabled: Boolean,
         connected: Boolean,
     ): Boolean {
-        if (!simpleMode || !connected) return false
+        if (!healthRecoverEnabled || !connected) return false
         if (!SimpleModeHealthRoute.isSoftRecoveryEligible(error, whitelistOnly, probeUrl)) return false
         if (lastSoftResetAtMs > 0L && nowMs - lastSoftResetAtMs < SOFT_RESET_MIN_GAP_MS) return false
         return true
