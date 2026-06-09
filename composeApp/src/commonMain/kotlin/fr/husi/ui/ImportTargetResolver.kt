@@ -8,7 +8,9 @@ import fr.husi.database.GroupOrigin
 import fr.husi.database.ProfileManager
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
+import fr.husi.database.SubscriptionBean
 import fr.husi.database.isBuiltinRelayGroup
+import fr.husi.subscription.catalog.SubscriptionCatalogDefaults
 import fr.husi.database.isUserOwnedLibraryItem
 import fr.husi.database.resolvedOrigin
 import fr.husi.ktx.Logs
@@ -19,6 +21,12 @@ import kotlinx.coroutines.flow.first
  * Built-in / catalog-managed groups are never import targets.
  */
 object ImportTargetResolver {
+
+    private fun SubscriptionBean.isBootstrapManagedSeed(): Boolean =
+        managedByRemote && (
+            sourceId.startsWith(SubscriptionCatalogDefaults.BUILTIN_SOURCE_PREFIX) ||
+                sourceId.startsWith(SubscriptionCatalogDefaults.GITHUB_SOURCE_PREFIX)
+            )
 
     fun ProxyGroup.isUserImportTarget(): Boolean =
         type == GroupType.BASIC && isUserOwnedLibraryItem()
@@ -84,6 +92,7 @@ object ImportTargetResolver {
             if (group.type != GroupType.SUBSCRIPTION) continue
             val sub = group.subscription ?: continue
             if (sub.catalogOwnership != CatalogOwnership.USER) continue
+            if (sub.isBootstrapManagedSeed()) continue
             if (group.resolvedOrigin() != GroupOrigin.GH_MANAGED) continue
             group.origin = GroupOrigin.USER
             group.originSourceId = ""
