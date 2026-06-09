@@ -79,17 +79,25 @@ internal class GroupSettingsViewModel(
     )
 
     init {
-        initialize(groupId)
+        if (groupId == 0L) {
+            initializeNewGroup()
+        } else {
+            initialize(groupId)
+        }
+    }
+
+    private fun initializeNewGroup() {
+        editingID = 0L
+        val state = GroupSettingsUiState()
+        _uiState.value = state
+        initialState.value = state
     }
 
     fun initialize(id: Long) = viewModelScope.launch {
         editingID = id
         initialState.value = null
-        val group = if (isNew) {
-            ProxyGroup()
-        } else {
-            SagerDatabase.groupDao.getById(id).first()!!
-        }
+        val group = SagerDatabase.groupDao.getById(id).first()
+            ?: return@launch
         _uiState.update { state ->
             val subscription = group.subscription ?: SubscriptionBean().applyDefaultValues()
             state.copy(

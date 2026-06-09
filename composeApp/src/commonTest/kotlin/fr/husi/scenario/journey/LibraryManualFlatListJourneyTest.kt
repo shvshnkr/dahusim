@@ -8,27 +8,33 @@ import fr.husi.database.ProxyEntity
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
 import fr.husi.fmt.trojan.TrojanBean
-import fr.husi.test.HusiKoinMainDispatcherTest
 import fr.husi.ui.library.ManualServersViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class LibraryManualFlatListJourneyTest : HusiKoinMainDispatcherTest() {
+class LibraryManualFlatListJourneyTest : FeatureJourneyTest() {
 
     override suspend fun postStartKoin() {
+        Dispatchers.setMain(Dispatchers.Unconfined)
         DataStore.configurationStore.reset()
         DataStore.firstLaunchSubscriptionUiRefreshDone = true
     }
 
+    override suspend fun postStopKoin() {
+        Dispatchers.resetMain()
+        super.postStopKoin()
+    }
+
     @Test
-    fun manualTabListsUserOwnedProfilesOnly() = runTest(dispatcher.scheduler) {
+    fun manualTabListsUserOwnedProfilesOnly() = runBlocking {
         val userGroup = GroupManager.createGroup(
             ProxyGroup(name = "Journey folder", type = GroupType.BASIC).apply {
                 origin = GroupOrigin.USER
@@ -49,11 +55,6 @@ class LibraryManualFlatListJourneyTest : HusiKoinMainDispatcherTest() {
 
         val viewModel = ManualServersViewModel()
         viewModel.setUngroupedLabel("No folder")
-        backgroundScope.launch {
-            viewModel.uiState.collect {}
-        }
-        advanceUntilIdle()
-
         val state = viewModel.uiState.first { it.rows.isNotEmpty() }
         assertEquals(1, state.rows.size)
         assertEquals(userProxy.id, state.rows.single().profile.id)
