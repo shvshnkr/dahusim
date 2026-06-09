@@ -8,6 +8,7 @@ import fr.husi.database.DataStore
 import fr.husi.database.GroupOrigin
 import fr.husi.database.ProxyGroup
 import fr.husi.database.SagerDatabase
+import fr.husi.database.isSystemLibraryItem
 import fr.husi.database.SubscriptionBean
 import fr.husi.fmt.FmtTestConstant
 import fr.husi.subscription.UserSubscriptionAddCoordinator
@@ -17,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class SubscriptionSurvivesBootstrapJourneyTest : FeatureJourneyTest() {
 
@@ -59,6 +61,21 @@ class SubscriptionSurvivesBootstrapJourneyTest : FeatureJourneyTest() {
         assertEquals(CatalogOwnership.USER, after.subscription?.catalogOwnership)
         assertNotEquals(GroupOrigin.GH_MANAGED, after.origin)
         FeatureJourneyHarness.assertUserOwnedSubscription(after.id)
+    }
+
+    @Test
+    fun bootstrapSeedStaysGhManaged() = runBlocking {
+        installBootstrapFetchBodies()
+        DefaultUserBootstrap.bootstrapAll()
+
+        val wlSeed = SubscriptionCatalogDefaults.STARTER_SEEDS
+            .single { it.sourceKey == "wl-standalone" }
+        val group = SagerDatabase.groupDao.allGroups().first()
+            .single { it.subscription?.link == wlSeed.link }
+
+        assertEquals(CatalogOwnership.GH_MANAGED, group.subscription?.catalogOwnership)
+        assertEquals(GroupOrigin.GH_MANAGED, group.origin)
+        assertTrue(group.isSystemLibraryItem())
     }
 
     private fun installBootstrapFetchBodies() {

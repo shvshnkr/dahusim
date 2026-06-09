@@ -18,6 +18,7 @@ import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
 import fr.husi.simplemode.probeSimpleModeNetwork
 import fr.husi.ui.ImportTargetResolver
+import fr.husi.database.applyOriginFromSubscription
 import fr.husi.subscription.catalog.SubscriptionCatalogApplier
 import fr.husi.subscription.catalog.SubscriptionCatalogCoordinator
 import fr.husi.subscription.catalog.SubscriptionCatalogDefaults
@@ -152,9 +153,10 @@ object DefaultUserBootstrap {
                         updateWhenConnectedOnly = false
                         managedByRemote = true
                         sourceId = targetSourceId
+                        catalogOwnership = CatalogOwnership.GH_MANAGED
                         connectPoolRole = seed.poolRole
                     }
-                },
+                }.applyOriginFromSubscription(),
                 notifySubscriptionScheduler = false,
             )
             GroupUpdater.executeUpdate(created, byUser = false)
@@ -183,10 +185,12 @@ object DefaultUserBootstrap {
         SubscriptionCatalogDefaults.STARTER_SEEDS.forEach { seed ->
             val group = byLink[seed.link] ?: return@forEach
             val sub = group.subscription ?: return@forEach
-            if (sub.catalogOwnership == CatalogOwnership.USER) return@forEach
-            if (!sub.managedByRemote && group.origin != GroupOrigin.GH_MANAGED) return@forEach
             val targetSourceId = SubscriptionCatalogDefaults.builtinSourceId(seed.sourceKey)
             var changed = false
+            if (sub.catalogOwnership != CatalogOwnership.GH_MANAGED) {
+                sub.catalogOwnership = CatalogOwnership.GH_MANAGED
+                changed = true
+            }
             if (sub.sourceId != targetSourceId) {
                 sub.sourceId = targetSourceId
                 changed = true
@@ -207,7 +211,10 @@ object DefaultUserBootstrap {
                 group.originSourceId = targetSourceId
                 changed = true
             }
-            if (changed) GroupManager.updateGroup(group)
+            if (changed) {
+                group.applyOriginFromSubscription()
+                GroupManager.updateGroup(group)
+            }
         }
     }
 

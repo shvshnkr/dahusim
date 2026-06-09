@@ -192,6 +192,7 @@ fun DahusimHubScreen(
                 DahusimNavCard(
                     icon = Res.drawable.security,
                     title = Res.string.dahusim_nav_network,
+                    subtitle = dahusimNetworkHubStatus(),
                     onClick = { onNavigate(NavRoutes.DahusimNetwork) },
                 )
             }
@@ -199,6 +200,7 @@ fun DahusimHubScreen(
                 DahusimNavCard(
                     icon = Res.drawable.developer_mode,
                     title = Res.string.dahusim_nav_subscriptions,
+                    subtitle = dahusimSubscriptionsHubStatus(),
                     onClick = { onNavigate(NavRoutes.DahusimSubscriptions) },
                 )
             }
@@ -206,6 +208,7 @@ fun DahusimHubScreen(
                 DahusimNavCard(
                     icon = Res.drawable.fast_forward,
                     title = Res.string.dahusim_nav_autoselect,
+                    subtitle = dahusimAutoselectHubStatus(),
                     onClick = { onNavigate(NavRoutes.DahusimAutoselect) },
                 )
             }
@@ -213,6 +216,7 @@ fun DahusimHubScreen(
                 DahusimNavCard(
                     icon = Res.drawable.transform,
                     title = Res.string.dahusim_nav_diagnostics,
+                    subtitle = dahusimDiagnosticsHubStatus(),
                     onClick = { onNavigate(NavRoutes.DahusimDiagnostics) },
                 )
             }
@@ -225,6 +229,7 @@ fun DahusimHubScreen(
 private fun DahusimNavCard(
     icon: DrawableResource,
     title: StringResource,
+    subtitle: String? = null,
     onClick: () -> Unit,
 ) {
     OutlinedCard(
@@ -245,10 +250,19 @@ private fun DahusimNavCard(
                 modifier = Modifier.size(24.dp),
             )
             Spacer(Modifier.width(16.dp))
-            Text(
-                text = stringResource(title),
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = stringResource(title),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

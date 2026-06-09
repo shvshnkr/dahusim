@@ -91,7 +91,6 @@ import fr.husi.resources.location_permission_description
 import fr.husi.resources.location_permission_title
 import fr.husi.resources.menu_about
 import fr.husi.resources.menu_app_update
-import fr.husi.resources.menu_quick_settings
 import fr.husi.resources.menu_library
 import fr.husi.resources.menu_more
 import fr.husi.resources.menu_dashboard

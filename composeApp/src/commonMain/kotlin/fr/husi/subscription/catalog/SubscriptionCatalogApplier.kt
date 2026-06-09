@@ -208,7 +208,8 @@ object SubscriptionCatalogApplier {
             val newOwnership = when {
                 sub.sourceId == SubscriptionCatalogDefaults.reservedBuiltinSourceId() ->
                     CatalogOwnership.PROTECTED_RESERVED
-                sub.isGithubManagedSourceId() -> CatalogOwnership.GH_MANAGED
+                sub.isGithubManagedSourceId() || sub.isBuiltinManagedSourceId() ->
+                    CatalogOwnership.GH_MANAGED
                 else -> CatalogOwnership.USER
             }
             var changed = sub.catalogOwnership != newOwnership
