@@ -61,6 +61,13 @@ internal object SimpleModeHealthRoute {
     fun messengerProbeRequired(whitelistOnly: Boolean): Boolean =
         whitelistOnly || DataStore.simpleModeTelegramProbe
 
+    fun dashboardConnectionTestUrl(): String =
+        if (messengerProbeRequired(whitelistOnly = false)) {
+            TUNNEL_HEALTH_TELEGRAM
+        } else {
+            normalizeTunnelHealthUrl(DataStore.connectionTestURL)
+        }
+
     fun probeUrlPlan(
         phase: String,
         whitelistOnly: Boolean,

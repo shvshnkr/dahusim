@@ -38,6 +38,7 @@ import fr.husi.ktx.showToast
 import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
+import fr.husi.simplemode.ExpertConnectRecoverPolicy
 import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.simplemode.SimpleModePostConnectHealth
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
@@ -905,10 +906,14 @@ class BaseService {
                         profile.id,
                         recordUrlVerified = postConnectRecordUrlVerified,
                     )
-                    if (postConnectHealthy && DataStore.simpleMode && outboundTag.isNotBlank()) {
+                    if (postConnectHealthy && outboundTag.isNotBlank() &&
+                        ExpertConnectRecoverPolicy.allowsFullModeHealthRecover()
+                    ) {
                         SimpleModeVpnSessionMarker.markActive()
                         SimpleModeSessionHealth.schedule(profile.id, outboundTag)
-                        WarmReserveMaintainer.schedule(profile.id)
+                        if (DataStore.simpleMode) {
+                            WarmReserveMaintainer.schedule(profile.id)
+                        }
                     }
                     if (postConnectRecordUrlVerified) {
                         simpleModeLog(

@@ -24,3 +24,9 @@ id = "connect_pool_stuck"
 h_tags = ["H4", "H24", "H39"]
 journey_id = "connect_user_pool_priority"
 notes = "User pool PRIORITY with no WL-marked subs in scan"
+
+[[symptom]]
+id = "tunnel_stale_full_mode"
+h_tags = ["H34", "H37", "H39"]
+journey_id = "full_mode_expert_health"
+notes = "Full mode VPN connected for hours without session_periodic; wake skips H34; warm switch queue drift"

@@ -1,0 +1,9 @@
+{
+  "id": "20260609_tunnel_stale_full_mode",
+  "buildCode": 724,
+  "networkHints": ["simpleMode=false", "expertRecover=true", "H34 health_recover_off"],
+  "hTagSequence": ["H34", "H37", "H39"],
+  "markers": {"poolMode": "EXCLUSIVE"},
+  "classifiedFailure": "tunnel_stale_full_mode",
+  "linkedJourney": "full_mode_expert_health"
+}

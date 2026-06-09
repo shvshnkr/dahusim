@@ -21,6 +21,7 @@ import fr.husi.libcore.Client
 import fr.husi.libcore.ConnectionEvent
 import fr.husi.libcore.GroupItemIterator
 import fr.husi.libcore.Libcore
+import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.utils.LibcoreClientManager
 import fr.husi.utils.PackageResolver
 import kotlinx.coroutines.Dispatchers
@@ -614,7 +615,11 @@ class DashboardViewModel(
     fun urlTestForSingle(tag: String) = viewModelScope.launch(Dispatchers.IO) {
         try {
             client.withClient { client ->
-                client.urlTest(tag, DataStore.connectionTestURL, DataStore.connectionTestTimeout)
+                client.urlTest(
+                    tag,
+                    SimpleModeHealthRoute.dashboardConnectionTestUrl(),
+                    DataStore.connectionTestTimeout,
+                )
             }
         } catch (e: Exception) {
             Logs.w(e)
@@ -627,7 +632,7 @@ class DashboardViewModel(
             urlTestClient.withClient { client ->
                 client.groupTest(
                     tag,
-                    DataStore.connectionTestURL,
+                    SimpleModeHealthRoute.dashboardConnectionTestUrl(),
                     DataStore.connectionTestTimeout,
                 )
             }

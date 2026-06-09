@@ -1,8 +1,12 @@
 package fr.husi.ui
 
+import fr.husi.bg.ServiceRegistry
 import fr.husi.database.DataStore
 import fr.husi.database.ProfileManager
 import fr.husi.database.ProxyProbeStateStore
+import fr.husi.database.SagerDatabase
+import fr.husi.database.UserPoolPolicy
+import fr.husi.database.UserSubscriptionTag
 import fr.husi.database.WarmReservePool
 import fr.husi.simplemode.WarmReserveLiveProbe
 import fr.husi.simplemode.WarmReserveSessionCache
@@ -10,6 +14,8 @@ import fr.husi.simplemode.WarmReserveSwitchPolicy
 import fr.husi.simplemode.WarmSwitchDecision
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.first
 
 internal const val SIMPLE_MODE_ACTIVITY_COMPARING_BACKUPS = "Comparing backups"
 
@@ -35,8 +41,15 @@ internal object WarmSwitchRunner {
         onProgress: (done: Int, total: Int) -> Unit,
         onActivityLine: (String) -> Unit,
     ): WarmSwitchDecision {
-        val connectedId = DataStore.selectedProxy
-        val queue = WarmReserveSwitchPolicy.parseQueue(DataStore.autoSelectFallbackQueue)
+        val connectedId = resolveConnectedProfileId()
+        val rawQueue = WarmReserveSwitchPolicy.parseQueue(DataStore.autoSelectFallbackQueue)
+        val groups = SagerDatabase.groupDao.allGroups().first()
+        val userTag = UserSubscriptionTag.resolve(
+            SagerDatabase.proxyDao.getAll(),
+            groups,
+        )
+        val poolMode = UserPoolPolicy.effectiveMode()
+        val queue = UserPoolPolicy.filterProxyIds(poolMode, rawQueue, userTag.userProxyIds)
         if (queue.isEmpty() || connectedId <= 0L) {
             return WarmSwitchDecision.NoReserves
         }
@@ -86,11 +99,22 @@ internal object WarmSwitchRunner {
         if (decision is WarmSwitchDecision.SwitchTo) {
             WarmReserveSessionCache.markLive(decision.profileId)
         }
+        val switchToId = (decision as? WarmSwitchDecision.SwitchTo)?.profileId
         simpleModeLog(
             "SimpleMode",
-            "H37 warm_switch_decision decision=${decision::class.simpleName} connected=$connectedId reserves=$reserveIds",
+            "H37 warm_switch_decision decision=${decision::class.simpleName} connected=$connectedId " +
+                "switchToProfileId=${switchToId ?: "-"} reserves=$reserveIds " +
+                "queueFiltered=${queue.size}/${rawQueue.size} poolMode=$poolMode",
         )
         delay(300L)
         return decision
+    }
+
+    private fun resolveConnectedProfileId(): Long {
+        val fromService = ServiceRegistry.baseService?.data?.proxy?.profile?.id ?: 0L
+        if (fromService > 0L) return fromService
+        val current = DataStore.currentProfile
+        if (current > 0L) return current
+        return DataStore.selectedProxy
     }
 }

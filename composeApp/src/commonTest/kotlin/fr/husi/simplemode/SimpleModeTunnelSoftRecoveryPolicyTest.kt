@@ -86,7 +86,7 @@ class SimpleModeTunnelSoftRecoveryPolicyTest : HusiKoinTest() {
                 whitelistOnly = false,
                 probeUrl = null,
                 nowMs = now,
-                simpleMode = true,
+                healthRecoverEnabled = true,
                 connected = true,
             ),
         )
@@ -97,7 +97,7 @@ class SimpleModeTunnelSoftRecoveryPolicyTest : HusiKoinTest() {
                 whitelistOnly = false,
                 probeUrl = null,
                 nowMs = now + 10_000L,
-                simpleMode = true,
+                healthRecoverEnabled = true,
                 connected = true,
             ),
         )
@@ -107,7 +107,7 @@ class SimpleModeTunnelSoftRecoveryPolicyTest : HusiKoinTest() {
                 whitelistOnly = false,
                 probeUrl = null,
                 nowMs = now + SimpleModeTunnelSoftRecoveryPolicy.SOFT_RESET_MIN_GAP_MS,
-                simpleMode = true,
+                healthRecoverEnabled = true,
                 connected = true,
             ),
         )
