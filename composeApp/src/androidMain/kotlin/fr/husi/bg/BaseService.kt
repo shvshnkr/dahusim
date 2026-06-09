@@ -40,6 +40,7 @@ import fr.husi.plugin.PluginNotFoundException
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.ExpertConnectRecoverPolicy
 import fr.husi.simplemode.SimpleModeHealthRoute
+import fr.husi.simplemode.SimpleModeMessengerProbe
 import fr.husi.simplemode.SimpleModePostConnectHealth
 import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.simplemode.SimpleModeSessionHealth
@@ -805,7 +806,10 @@ class BaseService {
                             DataStore.activeWhitelistRestrictedNetwork
                         if (DataStore.simpleMode) {
                             val messengerProbeInvolved =
-                                postConnectUrls.any { it == SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM }
+                                SimpleModeMessengerProbe.compositeRequired(wlOnly) ||
+                                    postConnectUrls.any {
+                                        SimpleModeMessengerProbe.isMessengerProbeUrl(it)
+                                    }
                             val recoverOutcome = SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                                 failedProfileId = profile.id,
                                 lastHealthError = postConnectLastError,

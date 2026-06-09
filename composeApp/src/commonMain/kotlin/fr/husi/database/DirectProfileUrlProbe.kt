@@ -10,10 +10,12 @@ import fr.husi.libcore.Client
 import fr.husi.libcore.Libcore
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.simplemode.SimpleModeHealthRoute
+import fr.husi.simplemode.SimpleModeMessengerProbe
 import fr.husi.utils.closeQuietly
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * URL probe through a standalone sing-box instance for one profile (not the system VPN tunnel).
@@ -21,6 +23,14 @@ import java.io.File
  * ya/dzen are uplink-only and must not be used here (see docs/BS_CS_NETWORK.md).
  */
 internal object DirectProfileUrlProbe {
+
+    private val messengerSecondaryDelays = ConcurrentHashMap<Long, Int>()
+
+    fun clearMessengerSecondaryDelays() {
+        messengerSecondaryDelays.clear()
+    }
+
+    fun messengerSecondaryDelay(profileId: Long): Int? = messengerSecondaryDelays[profileId]
 
     suspend fun urlTestDelay(profile: ProxyEntity, whitelistOnly: Boolean = false): Int? =
         urlTestDelay(profile, whitelistOnly, tier = SimpleModeHealthRoute.ProbeTier.PRIMARY)
@@ -31,27 +41,21 @@ internal object DirectProfileUrlProbe {
         tier: SimpleModeHealthRoute.ProbeTier,
     ): Int? = coroutineScope {
         val phase = "prepare"
-        val openMessengerRequired =
-            SimpleModeHealthRoute.messengerProbeRequired(whitelistOnly) && !whitelistOnly
+        val compositeRequired = SimpleModeMessengerProbe.compositeRequired(whitelistOnly)
         if (tier == SimpleModeHealthRoute.ProbeTier.CONFIRM) {
-            if (openMessengerRequired) {
-                return@coroutineScope urlTestDelay(
-                    profile,
-                    SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
-                    whitelistOnly,
-                    tier,
-                )
-            }
             for (url in SimpleModeHealthRoute.probeUrlPlan(phase, whitelistOnly, tier)) {
                 urlTestDelay(profile, url, whitelistOnly, tier)?.let { return@coroutineScope it }
             }
             return@coroutineScope null
         }
-        val primaryUrls = if (openMessengerRequired) {
-            listOf(SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM)
-        } else {
-            SimpleModeHealthRoute.probeUrlPlan(phase, whitelistOnly, SimpleModeHealthRoute.ProbeTier.PRIMARY)
+        if (compositeRequired) {
+            return@coroutineScope messengerCompositeDelay(profile, whitelistOnly, tier)?.compositeDelayMs
         }
+        val primaryUrls = SimpleModeHealthRoute.probeUrlPlan(
+            phase,
+            whitelistOnly,
+            SimpleModeHealthRoute.ProbeTier.PRIMARY,
+        )
         var lastError: String? = null
         for (url in primaryUrls) {
             urlTestDelay(profile, url, whitelistOnly)?.let { return@coroutineScope it }
@@ -79,6 +83,51 @@ internal object DirectProfileUrlProbe {
             }
         }
         null
+    }
+
+    suspend fun messengerCompositeDelay(
+        profile: ProxyEntity,
+        whitelistOnly: Boolean,
+        tier: SimpleModeHealthRoute.ProbeTier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+        knownWebDelayMs: Int? = null,
+    ): SimpleModeMessengerProbe.PrepareResult? {
+        val webMs = knownWebDelayMs?.takeIf { it > 0 }
+            ?: urlTestDelay(profile, SimpleModeMessengerProbe.WEB_URL, whitelistOnly, tier)
+        val webOk = webMs != null && webMs > 0
+        if (!webOk) {
+            SimpleModeMessengerProbe.logPrepareProbe(
+                profileId = profile.id,
+                webOk = false,
+                dcRequiredOk = false,
+                dcSecondaryOk = null,
+            )
+            messengerSecondaryDelays.remove(profile.id)
+            return null
+        }
+        val dcMs = urlTestDelay(profile, SimpleModeMessengerProbe.DC_REQUIRED_URL, whitelistOnly, tier)
+        val dcOk = dcMs != null && dcMs > 0
+        val secondaryMs = if (dcOk) {
+            urlTestDelay(profile, SimpleModeMessengerProbe.DC_SECONDARY_URL, whitelistOnly, tier)
+        } else {
+            null
+        }
+        if (secondaryMs != null && secondaryMs > 0) {
+            messengerSecondaryDelays[profile.id] = secondaryMs
+        } else {
+            messengerSecondaryDelays.remove(profile.id)
+        }
+        SimpleModeMessengerProbe.logPrepareProbe(
+            profileId = profile.id,
+            webOk = true,
+            dcRequiredOk = dcOk,
+            dcSecondaryOk = secondaryMs?.let { it > 0 },
+        )
+        val result = SimpleModeMessengerProbe.PrepareResult(
+            webDelayMs = webMs!!,
+            dcRequiredDelayMs = dcMs,
+            dcSecondaryDelayMs = secondaryMs,
+        )
+        return result.takeIf { it.ready }
     }
 
     suspend fun urlTestDelay(profile: ProxyEntity, testUrl: String, whitelistOnly: Boolean = false): Int? =

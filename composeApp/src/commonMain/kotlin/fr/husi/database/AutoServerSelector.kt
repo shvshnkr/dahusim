@@ -211,6 +211,7 @@ object AutoServerSelector {
         networkHandoff: Boolean,
     ): PrepareForConnectResult {
         DataStore.simpleModePrepareVerifiedProfileId = 0L
+        DirectProfileUrlProbe.clearMessengerSecondaryDelays()
         val allProxies = SagerDatabase.proxyDao.getAll()
         val groups = SagerDatabase.groupDao.allGroups().first()
         val userTag = UserSubscriptionTag.resolve(allProxies, groups)
@@ -829,6 +830,9 @@ object AutoServerSelector {
                         }
                         .thenBy { pingRank(it.ping) }
                         .thenByDescending { throughputRank(it) }
+                        .thenBy {
+                            if (DirectProfileUrlProbe.messengerSecondaryDelay(it.id) != null) 0 else 1
+                        }
                         .thenBy { urlTestDelays[it.id] ?: Int.MAX_VALUE }
                         .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
                         .thenByDescending { it.id == DataStore.autoSelectLastKnownGood }

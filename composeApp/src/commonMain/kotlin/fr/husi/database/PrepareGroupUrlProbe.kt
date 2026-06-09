@@ -11,6 +11,7 @@ import fr.husi.libcore.Libcore
 import fr.husi.libcore.newInstanceGroupURLTestCompat
 import fr.husi.plugin.PluginNotFoundException
 import fr.husi.simplemode.SimpleModeHealthRoute
+import fr.husi.simplemode.SimpleModeMessengerProbe
 import fr.husi.utils.closeQuietly
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.coroutineScope
@@ -60,10 +61,28 @@ internal object PrepareGroupUrlProbe {
                 )
                 return@coroutineScope null
             }
-            val out = HashMap<Long, Int>(tagDelays.size)
+            val webPass = HashMap<Long, Int>(tagDelays.size)
             for ((tag, ms) in tagDelays) {
                 val profileId = built.tagToID[tag] ?: continue
-                if (ms > 0) out[profileId] = ms
+                if (ms > 0) webPass[profileId] = ms
+            }
+            if (webPass.isEmpty()) return@coroutineScope null
+            if (!SimpleModeMessengerProbe.compositeRequired(whitelistOnly) ||
+                tier != SimpleModeHealthRoute.ProbeTier.PRIMARY
+            ) {
+                return@coroutineScope webPass
+            }
+            val profilesById = profiles.associateBy { it.id }
+            val out = HashMap<Long, Int>(webPass.size)
+            for ((profileId, webMs) in webPass) {
+                val profile = profilesById[profileId] ?: continue
+                val composite = DirectProfileUrlProbe.messengerCompositeDelay(
+                    profile,
+                    whitelistOnly,
+                    tier,
+                    knownWebDelayMs = webMs,
+                )
+                composite?.compositeDelayMs?.takeIf { it > 0 }?.let { out[profileId] = it }
             }
             if (out.isEmpty()) null else out
         } catch (e: PluginNotFoundException) {

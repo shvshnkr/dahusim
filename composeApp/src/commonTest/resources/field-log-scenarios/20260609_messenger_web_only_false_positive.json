@@ -1,0 +1,9 @@
+{
+  "id": "20260609_messenger_web_only_false_positive",
+  "buildCode": 726,
+  "networkHints": ["simpleMode=true", "wlOnly=true", "prepare_messenger_probe", "post_connect telegram ok"],
+  "hTagSequence": ["H37", "H3"],
+  "markers": {"profileKind": "domain_only_socks", "dcProbe": "91.105.192.100"},
+  "classifiedFailure": "messenger_web_only_false_positive",
+  "linkedJourney": "messenger_composite_prepare"
+}

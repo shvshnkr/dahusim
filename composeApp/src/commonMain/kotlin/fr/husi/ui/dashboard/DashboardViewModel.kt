@@ -615,11 +615,7 @@ class DashboardViewModel(
     fun urlTestForSingle(tag: String) = viewModelScope.launch(Dispatchers.IO) {
         try {
             client.withClient { client ->
-                client.urlTest(
-                    tag,
-                    SimpleModeHealthRoute.dashboardConnectionTestUrl(),
-                    DataStore.connectionTestTimeout,
-                )
+                urlTestOutbound(client, tag)
             }
         } catch (e: Exception) {
             Logs.w(e)
@@ -630,16 +626,23 @@ class DashboardViewModel(
         setTesting(tag, true)
         try {
             urlTestClient.withClient { client ->
-                client.groupTest(
-                    tag,
-                    SimpleModeHealthRoute.dashboardConnectionTestUrl(),
-                    DataStore.connectionTestTimeout,
-                )
+                for (url in SimpleModeHealthRoute.dashboardProbeUrls()) {
+                    client.groupTest(tag, url, DataStore.connectionTestTimeout)
+                }
             }
         } catch (e: Exception) {
             Logs.w(e)
         } finally {
             setTesting(tag, false)
+        }
+    }
+
+    private fun urlTestOutbound(client: Client, tag: String) {
+        var worst = 0
+        for (url in SimpleModeHealthRoute.dashboardProbeUrls()) {
+            val ms = client.urlTest(tag, url, DataStore.connectionTestTimeout)
+            if (ms <= 0) error("url test failed for $url")
+            worst = maxOf(worst, ms)
         }
     }
 

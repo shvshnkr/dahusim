@@ -198,11 +198,11 @@ class MainViewModel(
         try {
             var result = -1
             urlTestClient.withClient { client ->
-                result = client.urlTest(
-                    "",
-                    SimpleModeHealthRoute.dashboardConnectionTestUrl(),
-                    DataStore.connectionTestTimeout,
-                )
+                for (url in SimpleModeHealthRoute.dashboardProbeUrls()) {
+                    val ms = client.urlTest("", url, DataStore.connectionTestTimeout)
+                    if (ms <= 0) error("url test failed for $url")
+                    result = maxOf(result, ms)
+                }
             }
             _urlTestStatus.update { URLTestStatus.Success(result) }
         } catch (e: Exception) {

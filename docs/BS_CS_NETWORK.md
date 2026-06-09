@@ -18,21 +18,23 @@
 
 1. **Проверять туннель через ya.ru / dzen.ru на WL** — они уже доступны с uplink; тест не измеряет VPN, только лишний dial к прокси.
 2. **Проверять туннель через gstatic / cloudflare / generate_204 на WL** — это не БС для пользователя WL; плюс exit в PL/NL/US может резать или вести себя иначе, ложные «мёртвые» сервера.
-3. **Считать успех direct probe на ya при prepare на WL** доказательством рабочего узла для Telegram — prepare должен бить в **БС-цель через профиль** (например `web.telegram.org`), либо TCP + политика без ложного post-connect.
-4. **Uplink reachability** (google / dzen / ya / whitelist.txt) — только **direct**, `NetworkReachabilityProbe`, без sing-box outbound.
+3. **Считать успех direct probe на ya при prepare на WL** доказательством рабочего узла для Telegram — prepare должен бить в **БС-цель через профиль** (composite: `web.telegram.org` **и** HTTP к DC IP `91.105.192.100`), либо TCP + политика без ложного post-connect.
+4. **Считать web.telegram.org достаточным для native Telegram** — domain-only SOCKS и частичный egress VPS (Timeweb без WARP) могут пройти web, но не MTProto к DC IP; нужен второй шаг probe.
+5. **Uplink reachability** (google / dzen / ya / whitelist.txt) — только **direct**, `NetworkReachabilityProbe`, без sing-box outbound.
 
 ## Куда какие URL (код)
 
 | Фаза | Open net | WL (БС uplink) |
 |------|----------|----------------|
 | Uplink / `whitelistOnly` | google 204 | dzen, ya, whitelist sources — **direct only** |
-| Prepare URL (direct sing-box per profile) | **OPEN + «Проверка Telegram» (default):** `web.telegram.org` only; OFF: gstatic + user test URL; CONFIRM: telegram + gstatic + cloudflare | **БС PRIMARY:** `web.telegram.org` only; **CONFIRM** (tie / tcp-alive / wave-2): + instagram + facebook |
-| Post-connect / session tunnel | **OPEN + флаг:** telegram only; OFF: gstatic + user URL (+ cloudflare on CONFIRM) | **БС PRIMARY:** telegram; **CONFIRM** при inconclusive: + instagram + facebook |
+| Prepare URL (direct sing-box per profile) | **OPEN + «Проверка Telegram» (default):** `web.telegram.org` + **DC IP** `http://91.105.192.100/` (composite messenger ready); OFF: gstatic + user test URL; CONFIRM: telegram + gstatic + cloudflare | **БС PRIMARY:** composite messenger (web + 91.105); **CONFIRM** (tie / tcp-alive / wave-2): + instagram + facebook |
+| Post-connect / session tunnel | **OPEN + флаг:** composite messenger (web + 91.105); OFF: gstatic + user URL (+ cloudflare on CONFIRM) | **БС PRIMARY:** composite messenger; **CONFIRM** при inconclusive: + instagram + facebook |
 | Prepare batch (WL, N>1) | — | sing-box **urltest group** (`PrepareGroupUrlProbe`), fallback per-profile |
 
 ## Файлы
 
 - `SimpleModeHealthRoute.kt` — единая матрица URL и skip-политика; `DataStore.simpleModeTelegramProbe` (default ON) ослабляет только **OPEN**
+- `SimpleModeMessengerProbe.kt` — composite messenger: web (domain/L7) + DC IP `91.105.192.100` (native egress); `149.154.167.51` — tie-break, не gate
 - `NetworkReachabilityProbe.kt` — только uplink, не туннель
 - `BaseService.kt` / `SimpleModeSessionHealth.kt` — post-connect и periodic tunnel health
 

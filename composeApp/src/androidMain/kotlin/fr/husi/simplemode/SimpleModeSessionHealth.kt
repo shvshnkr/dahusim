@@ -6,6 +6,8 @@ import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
 import fr.husi.ktx.readableMessage
 import fr.husi.repository.resolveRepository
+import fr.husi.simplemode.SimpleModeHealthRoute
+import fr.husi.simplemode.SimpleModeMessengerProbe
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -442,7 +444,8 @@ internal object SimpleModeSessionHealth {
         AutoServerSelector.recordHealthProbeFailure(profileId, error = lastHealthError, whitelistOnly = wlOnly)
         DataStore.simpleModeActivity = "Server degraded, switching…"
         val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = wlOnly)
-        val messengerInvolved = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM in healthUrls
+        val messengerInvolved = SimpleModeMessengerProbe.compositeRequired(wlOnly) ||
+            healthUrls.any { SimpleModeMessengerProbe.isMessengerProbeUrl(it) }
         when (
             SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                 failedProfileId = profileId,
