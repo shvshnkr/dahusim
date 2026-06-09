@@ -37,6 +37,9 @@
     <string name="library_empty_manual_profiles_action">Import a server link with Add</string>
     <string name="library_manual_filter_all">All</string>
     <string name="library_manual_no_folder">Ungrouped</string>
+    <string name="library_manual_action_test">Test</string>
+    <string name="library_manual_status_connected">Connected</string>
+    <string name="library_manual_status_untested">Not tested yet</string>
     <string name="library_manage_folders">Manage folders</string>
     <string name="subscription_import_preview">%1$d server(s) found in preview</string>
     <string name="expert_connect_recover_enabled">Auto-switch on probe failure</string>
