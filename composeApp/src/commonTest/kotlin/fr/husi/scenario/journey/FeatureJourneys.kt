@@ -69,6 +69,16 @@ object FeatureJourneys {
             ),
             testClass = "fr.husi.scenario.journey.MessengerCompositePrepareJourneyTest",
         ),
+        FeatureJourney(
+            id = "carrier_reconnect_after_outage",
+            userPromise = "After carrier outage stop, pending reconnect resumes without manual Connect tap",
+            entryPoints = listOf(
+                "SimpleModeCarrierReconnect",
+                "DefaultNetworkMonitor",
+                "UiActivityTracker",
+            ),
+            testClass = "fr.husi.scenario.journey.CarrierReconnectAfterOutageJourneyTest",
+        ),
     )
 
     fun byId(id: String): FeatureJourney? = all.find { it.id == id }

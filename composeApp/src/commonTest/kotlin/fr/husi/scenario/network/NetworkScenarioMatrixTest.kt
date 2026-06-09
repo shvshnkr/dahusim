@@ -147,6 +147,16 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
             ),
             "handoff_link_rebound",
         )
+        assertNull(
+            UnderlyingNetworkHandoffPolicy.evaluate(
+                handoffSnapshot(
+                    previousInterfaceForHandoff = "wlan0",
+                    interfaceName = "tun0",
+                    underlyingCarrierLostWhileConnected = true,
+                ),
+            ),
+            "handoff_wifi_tun_during_loss",
+        )
 
         val flapEvents = listOf("wifi_to_lte", "lte_to_wifi", "wifi_to_lte", "carrier_restore")
         val proxies = listOf(proxy(1L), proxy(3L))

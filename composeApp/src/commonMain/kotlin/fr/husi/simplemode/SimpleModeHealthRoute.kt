@@ -68,7 +68,6 @@ internal object SimpleModeHealthRoute {
             normalizeTunnelHealthUrl(DataStore.connectionTestURL)
         }
 
-
     /** Manual dashboard / group urlTest: web first; DC required when composite messenger probe is on. */
     fun dashboardProbeUrls(whitelistOnly: Boolean = false): List<String> =
         if (SimpleModeMessengerProbe.compositeRequired(whitelistOnly)) {

@@ -97,6 +97,19 @@ class UnderlyingNetworkHandoffPolicyTest {
     }
 
     @Test
+    fun suppressHandoffToVpnTunnelDuringCarrierLossOutsideGrace() {
+        VpnTunnelHandoffSuppress.clear()
+        val reason = UnderlyingNetworkHandoffPolicy.evaluate(
+            snapshot(
+                previousInterfaceForHandoff = "wlan0",
+                interfaceName = "tun0",
+                underlyingCarrierLostWhileConnected = true,
+            ),
+        )
+        assertNull(reason)
+    }
+
+    @Test
     fun carrierRestoreTakesPrecedenceOverLinkReboundAfterLoss() {
         val reason = UnderlyingNetworkHandoffPolicy.evaluate(
             snapshot(
