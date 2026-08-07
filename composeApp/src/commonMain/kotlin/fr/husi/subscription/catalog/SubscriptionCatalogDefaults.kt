@@ -71,6 +71,12 @@ object SubscriptionCatalogDefaults {
             poolRole = ConnectPoolRole.WL,
         ),
         CatalogSeed(
+            sourceKey = "zieng2-wl",
+            name = "zieng2 wl",
+            link = "https://hub.mos.ru/zieng2/wl/raw/main/list_universal.txt",
+            poolRole = ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
             sourceKey = "wl-standalone",
             name = "WL standalone",
             link = "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/wl-standalone.txt",
