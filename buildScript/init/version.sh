@@ -3,8 +3,8 @@
 GO_VERSION="1.26.2"
 
 # https://github.com/Dreamacro/maxmind-geoip
-GEOIP_VERSION="20260412"
+GEOIP_VERSION="20260712"
 
 # https://github.com/v2fly/domain-list-community
 # or https://github.com/SagerNet/sing-geosite
-GEOSITE_VERSION="20260415042911"
+GEOSITE_VERSION="20260805184445"
