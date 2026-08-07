@@ -90,6 +90,8 @@ PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 `wl-standalone.txt` is a curated WL feed for single-node relays (SOCKS, VLESS, etc.); add profiles one line per URI and bump catalog `generation` when the feed URL or catalog entry changes.
 
+`zieng2-wl` points directly at the upstream BS-direct mirror (`hub.mos.ru`), reachable under whitelist restrictions without a Yandex mirror, unlike `raw.githubusercontent.com`. The list refreshes hourly upstream and profiles churn daily; transient 404s are handled by the subscription jail (profiles stay cached, one unjail attempt per cycle).
+
 ## Degraded feed / jail
 
 Auto-update tracks **group-level** health in Room (`subscription_update_states`), separate from per-profile probe jail:
