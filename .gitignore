@@ -59,3 +59,8 @@ docs/CODE_REVIEW_PROMPT.md
 /_helper.kt
 /_run_scanner_patch.py
 /_profile_*.txt
+/allow_probe.txt
+/bootstrap-only.patch
+/happ_decrypt.js
+/happ_keys.json
+/tmp_happ/

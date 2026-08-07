@@ -441,11 +441,12 @@ internal object SimpleModeSessionHealth {
     ) {
         if (!DataStore.serviceState.connected) return
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
-        AutoServerSelector.recordHealthProbeFailure(profileId, error = lastHealthError, whitelistOnly = wlOnly)
-        DataStore.simpleModeActivity = "Server degraded, switching…"
         val healthUrls = SimpleModeHealthRoute.healthCheckUrls(whitelistOnly = wlOnly)
         val messengerInvolved = SimpleModeMessengerProbe.compositeRequired(wlOnly) ||
             healthUrls.any { SimpleModeMessengerProbe.isMessengerProbeUrl(it) }
+        val probeUrl = if (messengerInvolved) SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM else null
+        AutoServerSelector.recordHealthProbeFailure(profileId, error = lastHealthError, whitelistOnly = wlOnly, probeUrl = probeUrl)
+        DataStore.simpleModeActivity = "Server degraded, switching…"
         when (
             SimpleModeVpnCoordinator.tryRecoverAfterUnhealthySession(
                 failedProfileId = profileId,

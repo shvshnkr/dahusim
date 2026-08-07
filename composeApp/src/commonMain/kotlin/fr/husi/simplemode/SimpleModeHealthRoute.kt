@@ -251,13 +251,13 @@ internal object SimpleModeHealthRoute {
         return !isWlTunnelBootstrapFailure(error)
     }
 
-    fun probeFailureSkipReason(error: String?, whitelistOnly: Boolean): String? =
+    fun probeFailureSkipReason(error: String?, whitelistOnly: Boolean, probeUrl: String? = null): String? =
         when {
             error == SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR ->
                 if (whitelistOnly) "wl_tunnel_bootstrap" else "session_health_probe_stall"
-            isProbeFailureInconclusive(error, whitelistOnly = whitelistOnly, phase = "post_connect") ->
+            isProbeFailureInconclusive(error, whitelistOnly = whitelistOnly, phase = "post_connect", probeUrl = probeUrl) ->
                 if (whitelistOnly) "wl_tunnel_bootstrap" else null
-            isProbeFailureInconclusive(error, whitelistOnly = whitelistOnly) ->
+            isProbeFailureInconclusive(error, whitelistOnly = whitelistOnly, probeUrl = probeUrl) ->
                 if (whitelistOnly) "underlying_proxy_dial" else null
             else -> null
         }

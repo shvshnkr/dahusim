@@ -33,6 +33,7 @@ object SubscriptionUpdateErrorClass {
     const val HTTP_PERMANENT = "http_permanent"
     const val HTTP_TRANSIENT = "http_transient"
     const val TRANSPORT = "transport"
+    const val TRANSIENT_NET = "transient_net"
     const val OTHER = "other"
 }
 

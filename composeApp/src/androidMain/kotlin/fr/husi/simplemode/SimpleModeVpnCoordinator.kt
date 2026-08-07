@@ -161,11 +161,11 @@ internal object SimpleModeVpnCoordinator {
                     "H30 session_recover_inconclusive_skip profileId=$failedProfileId " +
                         "error=${lastHealthError.orEmpty()} simpleMode=false ctx=$context",
                 )
-                AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
+                AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly, probeUrl)
                 DataStore.simpleModeActivity = ""
                 return SessionRecoverOutcome.SoftKeepConnected
             }
-            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
+            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly, probeUrl)
             val fallback = AutoServerSelector.tryMoveToFallback(failedProfileId)
             if (fallback != null) {
                 simpleModeLog(
@@ -190,7 +190,7 @@ internal object SimpleModeVpnCoordinator {
                 "H30 session_recover_inconclusive_skip profileId=$failedProfileId " +
                     "error=${lastHealthError.orEmpty()} ctx=$context",
             )
-            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
+            AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly, probeUrl)
             DataStore.simpleModeActivity = if (SimpleModeHealthRoute.isCarrierOutageProbeFailure(lastHealthError)) {
                 "Network changed, reconnecting…"
             } else {
@@ -207,7 +207,7 @@ internal object SimpleModeVpnCoordinator {
             "SimpleMode",
             "H30 session_recover start failedProfileId=$failedProfileId wl=$whitelistOnly ctx=$context",
         )
-        AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly)
+        AutoServerSelector.recordHealthProbeFailure(failedProfileId, lastHealthError, whitelistOnly, probeUrl)
         val fallback = AutoServerSelector.tryMoveToFallback(failedProfileId)
         if (fallback != null) {
             simpleModeLog(

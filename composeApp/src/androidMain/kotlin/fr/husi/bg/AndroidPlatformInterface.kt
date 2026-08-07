@@ -65,10 +65,13 @@ class AndroidPlatformInterface : PlatformInterface {
                 InetSocketAddress(sourceAddress, sourcePort),
                 InetSocketAddress(destinationAddress, destinationPort),
             )
-            if (uid == Process.INVALID_UID) error("android: connection owner not found")
+            if (uid == Process.INVALID_UID) {
+                Logs.w("android: connection owner not found (INVALID_UID)")
+                return buildConnectionOwner(uid, null)
+            }
             PackageCache.awaitLoadSync()
             val packages = PackageCache.uidMap[uid]
-            return ConnectionOwner(uid, packages?.toStringIterator(packages.size))
+            return buildConnectionOwner(uid, packages?.toStringIterator(packages.size))
         } catch (e: Exception) {
             Logs.e(e)
             throw e

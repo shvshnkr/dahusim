@@ -53,6 +53,11 @@ object SubscriptionUpdateStateStore {
         val state = when {
             errorClass == SubscriptionUpdateErrorClass.HTTP_PERMANENT && failStreak >= 1 ->
                 SubUpdateState.JAIL
+            errorClass == SubscriptionUpdateErrorClass.HTTP_TRANSIENT ||
+                errorClass == SubscriptionUpdateErrorClass.TRANSIENT_NET ||
+                errorClass == SubscriptionUpdateErrorClass.TRANSPORT -> {
+                if (prev?.state == SubUpdateState.JAIL) SubUpdateState.JAIL else SubUpdateState.SUSPECT
+            }
             failStreak >= 3 -> SubUpdateState.JAIL
             failStreak >= 1 -> SubUpdateState.SUSPECT
             else -> prev?.state ?: SubUpdateState.OK
