@@ -75,6 +75,9 @@ object AutoServerSelector {
         lastPrepareUrlVerifiedIds = ids
     }
 
+    internal fun failureCooldownSnapshotForTest(ids: Collection<Long>): Set<Long> =
+        failureCooldownSnapshot(ids)
+
     private val prepareMutex = Mutex()
     private val connectPrepareGeneration = AtomicInteger(0)
     private val adaptPrepareGeneration = AtomicInteger(0)
@@ -785,10 +788,11 @@ object AutoServerSelector {
             return PrepareForConnectResult.AllProbesDead
         }
 
+        val cooldownIds = failureCooldownSnapshot(connectPool.map { it.id })
         val ranked = connectPool
             .sortedWith(
                 if (quickProbePings.isNotEmpty()) {
-                    compareBy<ProxyEntity> { if (isInFailureCooldown(it.id)) 1 else 0 }
+                    compareBy<ProxyEntity> { if (it.id in cooldownIds) 1 else 0 }
                         .thenBy { if (urlTestDelays.containsKey(it.id)) 0 else 1 }
                         .thenBy {
                             if (wlUrlProbes && it.id !in priorityFirstIds && it.id !in urlTestDelays) {
@@ -849,7 +853,7 @@ object AutoServerSelector {
                         .thenBy { it.userOrder }
                         .thenBy { it.id }
                 } else {
-                    compareBy<ProxyEntity> { if (isInFailureCooldown(it.id)) 1 else 0 }
+                    compareBy<ProxyEntity> { if (it.id in cooldownIds) 1 else 0 }
                         .thenBy { warmProbeStateRank(probeStates, it.id) }
                         .thenBy { if (urlTestDelays.containsKey(it.id)) 0 else 1 }
                         .thenBy { urlTestDelays[it.id] ?: ProxyProbeStateStore.persistedDelayScore(probeStates[it.id]) }
@@ -1319,9 +1323,19 @@ object AutoServerSelector {
         }
     }
 
+    internal fun shouldWlReprobeBypass(wlOnly: Boolean): Boolean = wlOnly
+
     private fun reprobeFallbackCandidate(profileId: Long): Boolean {
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
         val proxy = runBlocking { SagerDatabase.proxyDao.getById(profileId) } ?: return false
+        if (shouldWlReprobeBypass(wlOnly)) {
+            simpleModeLog(
+                "SimpleMode",
+                "H30 fallback_reprobe id=$profileId ok=true wl=$wlOnly wl_tcp_bypass=true " +
+                    "reason=bs_targets_blocked_on_wl_uplink",
+            )
+            return true
+        }
         val delayMs = runBlocking {
             withTimeoutOrNull(Probe2kDefaults.FALLBACK_REPROBE_BUDGET_MS) {
                 DirectProfileUrlProbe.urlTestDelay(proxy, whitelistOnly = wlOnly)
@@ -1339,8 +1353,9 @@ object AutoServerSelector {
         profileId: Long,
         error: String?,
         whitelistOnly: Boolean = DataStore.activeWhitelistRestrictedNetwork,
+        probeUrl: String? = null,
     ) {
-        recordProbeFailure(profileId, SimpleModeHealthRoute.probeFailureSkipReason(error, whitelistOnly))
+        recordProbeFailure(profileId, SimpleModeHealthRoute.probeFailureSkipReason(error, whitelistOnly, probeUrl))
     }
 
     fun syncFallbackIndexForConnected(profileId: Long) {
@@ -1393,6 +1408,9 @@ object AutoServerSelector {
         if (!DataStore.probe2kWarmRankingEnabled) return 0
         return ProxyProbeStateStore.probeStateRank(probeStates[profileId])
     }
+
+    private fun failureCooldownSnapshot(ids: Collection<Long>): Set<Long> =
+        ids.filterTo(mutableSetOf()) { isInFailureCooldown(it) }
 
     private fun isInFailureCooldown(profileId: Long): Boolean {
         if (AutoServerSelectorProbePolicy.isRecentlyDegraded(profileId)) {
@@ -1503,9 +1521,10 @@ object AutoServerSelector {
         userProxyIds: Set<Long> = emptySet(),
         userMode: UserPoolMode = UserPoolMode.OFF,
     ): Long {
+        val cooldownIds = failureCooldownSnapshot(proxies.map { it.id })
         val ranked = proxies.sortedWith(
             compareBy<ProxyEntity> { if (it.id == preferId) 0 else 1 }
-                .thenBy { if (isInFailureCooldown(it.id)) 1 else 0 }
+                .thenBy { if (it.id in cooldownIds) 1 else 0 }
                 .thenBy {
                     compositeSelectionScore(
                         it,

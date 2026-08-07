@@ -15,6 +15,7 @@ import fr.husi.bg.SubscriptionUpdater
 import fr.husi.bootstrap.DefaultUserBootstrap
 import fr.husi.database.DataStore
 import fr.husi.di.initHusiKoin
+import fr.husi.ktx.Logs
 import fr.husi.ktx.runOnDefaultDispatcher
 import fr.husi.ktx.invariantDirectoryPathString
 import fr.husi.libcore.Libcore
@@ -89,9 +90,23 @@ class Application : Application(),
         if (isMainProcess && !InstrumentationEnvironment.isInstrumented) runOnDefaultDispatcher {
             runCatching {
                 DefaultUserBootstrap.bootstrapAll()
+            }.onFailure {
+                Logs.e("Failed to bootstrap default user", it)
+            }
+            runCatching {
                 SubscriptionUpdater.reconfigureUpdater()
+            }.onFailure {
+                Logs.e("Failed to reconfigure subscription updater", it)
+            }
+            runCatching {
                 RouteAssetUpdater.reconfigureUpdater()
+            }.onFailure {
+                Logs.e("Failed to reconfigure route asset updater", it)
+            }
+            runCatching {
                 AppUpdateUpdater.reconfigureUpdater()
+            }.onFailure {
+                Logs.e("Failed to reconfigure app update updater", it)
             }
             runCatching {
                 AppUpdateCoordinator.checkForUpdate(manual = false)

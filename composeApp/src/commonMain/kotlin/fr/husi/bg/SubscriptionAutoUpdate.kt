@@ -392,6 +392,12 @@ internal fun classifySubscriptionUpdateError(message: String): String {
     ) {
         return SubscriptionUpdateErrorClass.HTTP_TRANSIENT
     }
+    if (m.contains("timeout") || m.contains("timed out") ||
+        m.contains("dns") || m.contains("unresolved") ||
+        m.contains("tls") || m.contains("connection reset") || m.contains("eof")
+    ) {
+        return SubscriptionUpdateErrorClass.TRANSIENT_NET
+    }
     return SubscriptionUpdateErrorClass.OTHER
 }
 

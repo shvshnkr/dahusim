@@ -420,6 +420,7 @@ fun LibraryScreen(
                     segment = segment,
                     onSegmentSelect = { segmentIndex = it.ordinal },
                     configViewModel = configImportVm,
+                    serviceState = serviceStatus.state,
                     onAdd = { showAddSheet = true },
                     onManageFolders = { showManageFolders = true },
                     onOpenProfileEditor = openProfileEditor,

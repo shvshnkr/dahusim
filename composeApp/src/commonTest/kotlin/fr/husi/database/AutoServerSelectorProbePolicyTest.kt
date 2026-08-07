@@ -205,6 +205,12 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
         assertFalse(AutoServerSelectorProbePolicy.isHandoffPreserveFresh(now))
     }
 
+    @Test
+    fun wlReprobeBypassTrueOnlyForWhitelist() {
+        assertTrue(AutoServerSelector.shouldWlReprobeBypass(wlOnly = true))
+        assertFalse(AutoServerSelector.shouldWlReprobeBypass(wlOnly = false))
+    }
+
     private fun trojanProxy(id: Long) = ProxyEntity().apply {
         this.id = id
         type = ProxyEntity.TYPE_TROJAN

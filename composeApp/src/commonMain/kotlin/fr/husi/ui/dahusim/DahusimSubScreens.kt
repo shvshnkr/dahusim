@@ -27,12 +27,9 @@ import fr.husi.resources.dahusim_nav_user_agents
 import fr.husi.resources.grid_3x3
 import fr.husi.ui.MainViewModel
 import fr.husi.ui.NavRoutes
-import fr.husi.ui.connectionTestConcurrentPreference
 import fr.husi.ui.dahusimDiagnosticsPreferences
-import fr.husi.ui.probe2kSettings
-import fr.husi.ui.probeParallelismCategory
+import fr.husi.ui.probe2kAutoselectSettings
 import fr.husi.ui.proxyAppsPreferences
-import fr.husi.ui.simpleModeProbeSettings
 import fr.husi.ui.subscriptionCatalogSettings
 import fr.husi.ui.subscriptionUpdateParallelismPreferences
 import fr.husi.ui.subscriptionUserAgentTemplatesSettings
@@ -103,10 +100,7 @@ fun DahusimAutoselectScreen(
         mainViewModel = mainViewModel,
         onBackPress = onBackPress,
     ) { showMessage ->
-        simpleModeProbeSettings()
-        probe2kSettings(showMessage)
-        probeParallelismCategory()
-        connectionTestConcurrentPreference()
+        probe2kAutoselectSettings(showMessage)
     }
 }
 
@@ -123,8 +117,8 @@ fun DahusimDiagnosticsScreen(
         title = Res.string.dahusim_nav_diagnostics,
         mainViewModel = mainViewModel,
         onBackPress = onBackPress,
-    ) { _ ->
-        dahusimDiagnosticsPreferences()
+    ) { showMessage ->
+        dahusimDiagnosticsPreferences(showMessage)
     }
 }
 

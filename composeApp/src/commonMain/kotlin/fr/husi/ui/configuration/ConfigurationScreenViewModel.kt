@@ -13,6 +13,7 @@ import fr.husi.Key
 import fr.husi.bg.GuardedProcessPool
 import fr.husi.bg.initPlugins
 import fr.husi.bg.launchPlugins
+import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
 import fr.husi.database.GroupManager
 import fr.husi.database.ProfileManager
@@ -423,6 +424,47 @@ class ConfigurationScreenViewModel : ViewModel() {
 
     private val profileAccess = Mutex()
     private val reloadAccess = Mutex()
+
+    fun toggleManualServerConnection(
+        profileId: Long,
+        groupId: Long,
+        startVpn: () -> Unit,
+    ) = viewModelScope.launch {
+        DataStore.selectedGroup = groupId
+        val serviceState = DataStore.serviceState
+        val wasActiveProfile = DataStore.selectedProxy == profileId
+
+        if (serviceState.canStop && wasActiveProfile) {
+            resolveRepository().stopService()
+            childViewModels[groupId]?.onProfileSelected(profileId)
+            return@launch
+        }
+
+        var profileChanged = false
+        profileAccess.withLock {
+            profileChanged = profileId != DataStore.selectedProxy
+            DataStore.selectedProxy = profileId
+        }
+
+        if (!DataStore.simpleMode && !DataStore.expertConnectRecoverEnabled) {
+            AutoServerSelector.ignoreSessionFallbackForManualConnect = true
+        }
+        releaseSimpleModeVpnSession("manual_server_connect")
+        SimpleModeConnectCoordinator.takeOverByFullUi("manual_server_connect")
+        prepareManualProfileReload()
+
+        when {
+            profileChanged && serviceState.canStop -> {
+                if (reloadAccess.tryLock()) {
+                    resolveRepository().reloadService()
+                    reloadAccess.unlock()
+                }
+            }
+
+            !serviceState.canStop -> startVpn()
+        }
+        childViewModels[groupId]?.onProfileSelected(profileId)
+    }
 
     fun onProfileSelect(new: Long) = viewModelScope.launch {
         var lastSelected: Long

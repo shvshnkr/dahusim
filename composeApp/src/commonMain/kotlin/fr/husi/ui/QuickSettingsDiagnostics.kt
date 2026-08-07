@@ -1,8 +1,10 @@
 package fr.husi.ui
 
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
-import fr.husi.compose.PreferenceCategory
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import fr.husi.Key
 import fr.husi.compose.PreferenceType
 import fr.husi.compose.material3.Icon
 import fr.husi.compose.material3.Text
@@ -10,9 +12,13 @@ import fr.husi.database.DataStore
 import fr.husi.database.Probe2kProgress
 import fr.husi.resources.Res
 import fr.husi.resources.bug_report
+import fr.husi.resources.dahusim_diagnostics_logs_on_hub
+import fr.husi.resources.dahusim_diagnostics_pool_empty
+import fr.husi.resources.dahusim_diagnostics_pool_empty_hint
 import fr.husi.resources.delete_sweep
 import fr.husi.resources.probe_2k_pool_line
-import fr.husi.resources.quick_settings_section_diagnostics
+import fr.husi.resources.probe_2k_persistence_enabled
+import fr.husi.resources.probe_2k_persistence_summary
 import fr.husi.resources.simple_mode_clear_log
 import fr.husi.resources.simple_mode_clear_log_done
 import fr.husi.resources.simple_mode_logs
@@ -21,12 +27,15 @@ import fr.husi.utils.clearSimpleModeLogs
 import fr.husi.utils.shareSimpleModeLogs
 import kotlinx.coroutines.launch
 import me.zhanghai.compose.preference.Preference
+import me.zhanghai.compose.preference.SwitchPreference
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
 
-internal fun LazyListScope.dahusimDiagnosticsPreferences() {
+internal fun LazyListScope.dahusimDiagnosticsPreferences(
+    showMessage: (String) -> Unit,
+) {
     if (Probe2kProgress.hasPoolSummary()) {
-        item("quick_settings_pool_line", PreferenceType.TEXT_FIELD) {
+        item("dahusim_pool_line", PreferenceType.TEXT_FIELD) {
             Preference(
                 title = {
                     Text(
@@ -43,18 +52,37 @@ internal fun LazyListScope.dahusimDiagnosticsPreferences() {
                 icon = { Icon(vectorResource(Res.drawable.bug_report), null) },
             )
         }
+    } else {
+        item("dahusim_pool_empty", PreferenceType.TEXT_FIELD) {
+            Preference(
+                title = { Text(stringResource(Res.string.dahusim_diagnostics_pool_empty)) },
+                summary = { Text(stringResource(Res.string.dahusim_diagnostics_pool_empty_hint)) },
+                enabled = false,
+                icon = { Icon(vectorResource(Res.drawable.bug_report), null) },
+            )
+        }
+        item(Key.PROBE_2K_PERSISTENCE_ENABLED, PreferenceType.SWITCH) {
+            val enabled by DataStore.configurationStore
+                .booleanFlow(Key.PROBE_2K_PERSISTENCE_ENABLED, true)
+                .collectAsStateWithLifecycle(true)
+            SwitchPreference(
+                value = enabled,
+                onValueChange = { DataStore.probe2kPersistenceEnabled = it },
+                title = { Text(stringResource(Res.string.probe_2k_persistence_enabled)) },
+                summary = { Text(stringResource(Res.string.probe_2k_persistence_summary)) },
+                icon = { Icon(vectorResource(Res.drawable.bug_report), null) },
+            )
+        }
     }
-}
-
-internal fun LazyListScope.quickSettingsDiagnostics(
-    showMessage: (String) -> Unit,
-) {
-    item("quick_settings_section_diagnostics", PreferenceType.CATEGORY) {
-        PreferenceCategory(text = { Text(stringResource(Res.string.quick_settings_section_diagnostics)) })
+    item("dahusim_logs_on_hub", PreferenceType.TEXT_FIELD) {
+        Preference(
+            title = { Text(stringResource(Res.string.dahusim_diagnostics_logs_on_hub)) },
+            enabled = false,
+            icon = { Icon(vectorResource(Res.drawable.bug_report), null) },
+        )
     }
-    dahusimDiagnosticsPreferences()
     if (canShareSimpleModeLogs()) {
-        item("quick_settings_share_log", PreferenceType.TEXT_FIELD) {
+        item("dahusim_share_log", PreferenceType.TEXT_FIELD) {
             val scope = rememberCoroutineScope()
             Preference(
                 title = { Text(stringResource(Res.string.simple_mode_logs)) },
@@ -68,7 +96,7 @@ internal fun LazyListScope.quickSettingsDiagnostics(
             )
         }
     }
-    item("quick_settings_clear_log", PreferenceType.TEXT_FIELD) {
+    item("dahusim_clear_log", PreferenceType.TEXT_FIELD) {
         val scope = rememberCoroutineScope()
         Preference(
             title = { Text(stringResource(Res.string.simple_mode_clear_log)) },

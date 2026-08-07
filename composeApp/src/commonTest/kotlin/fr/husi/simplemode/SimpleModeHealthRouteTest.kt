@@ -566,4 +566,27 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
             ),
         )
     }
+
+    @Test
+    fun messengerDnsErrorConclusiveWithTelegramProbeUrl() {
+        assertEquals(
+            null,
+            SimpleModeHealthRoute.probeFailureSkipReason(
+                error = "lookup gb.nodes.rocketnetwork.ru: connection refused",
+                whitelistOnly = true,
+                probeUrl = SimpleModeHealthRoute.TUNNEL_HEALTH_TELEGRAM,
+            ),
+        )
+    }
+
+    @Test
+    fun wlTunnelBootstrapStillInconclusiveWithoutProbeUrl() {
+        assertEquals(
+            "wl_tunnel_bootstrap",
+            SimpleModeHealthRoute.probeFailureSkipReason(
+                error = "dial ccmni1 (15): dial tcp 94.125.102.179:443: i/o timeout",
+                whitelistOnly = true,
+            ),
+        )
+    }
 }
