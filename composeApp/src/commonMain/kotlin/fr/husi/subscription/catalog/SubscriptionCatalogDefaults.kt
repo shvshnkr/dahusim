@@ -95,6 +95,36 @@ object SubscriptionCatalogDefaults {
             ConnectPoolRole.WL,
         ),
         CatalogSeed("wlrus-blackl", "wlrus blackl", "https://wlrus.lol/confs/blackl.txt", ConnectPoolRole.WL),
+        CatalogSeed(
+            "migiti-wl",
+            "MiGiTi WL",
+            "https://raw.githubusercontent.com/misha12333211-ctrl/proxy-subs/refs/heads/main/1.txt",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "migiti-open",
+            "MiGiTi open",
+            "https://raw.githubusercontent.com/misha12333211-ctrl/proxy-subs/refs/heads/main/4.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "vlessfo-open",
+            "Vlessforu",
+            "https://sub.vlessfo.ru/vlessforu/working_configs.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "antarktida-open",
+            "Antarktida VPN",
+            "https://raw.githubusercontent.com/makardinis2013-cloud/My-vpn/refs/heads/main/Antarktida%20VPN",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "razlo4ka-open",
+            "Razlo4ka",
+            "https://raw.githubusercontent.com/free1zona/Keyfreetee/refs/heads/main/razlo4ka7",
+            ConnectPoolRole.OPEN,
+        ),
     )
 
     fun builtinSourceId(sourceKey: String): String = "$BUILTIN_SOURCE_PREFIX$sourceKey"
