@@ -92,6 +92,10 @@ PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 `zieng2-wl` points directly at the upstream BS-direct mirror (`hub.mos.ru`), reachable under whitelist restrictions without a Yandex mirror, unlike `raw.githubusercontent.com`. The list refreshes hourly upstream and profiles churn daily; transient 404s are handled by the subscription jail (profiles stay cached, one unjail attempt per cycle).
 
+`migiti-wl` / `migiti-open` (MiGiTi) and `vlessfo-open` (Vlessforu) point at upstream GitHub/self-hosted lists; `migiti-wl` is a RU-SNI whitelist (BS) list, the others are general-purpose VLESS Reality lists.
+
+`antarktida-open` (Antarktida VPN) and `razlo4ka-open` (Razlo4ka) are general-purpose VLESS lists refreshed upstream every few hours.
+
 ## Degraded feed / jail
 
 Auto-update tracks **group-level** health in Room (`subscription_update_states`), separate from per-profile probe jail:
