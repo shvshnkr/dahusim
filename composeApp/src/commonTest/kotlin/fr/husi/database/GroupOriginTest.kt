@@ -35,7 +35,7 @@ class GroupOriginTest {
     @Test
     fun managedBootstrapSubscriptionResolvesAsGhManagedBeforeCatalogPromotion() {
         val group = subscriptionGroup(
-            sourceId = SubscriptionCatalogDefaults.builtinSourceId("mifa-main"),
+            sourceId = SubscriptionCatalogDefaults.builtinSourceId("swordware-main"),
             ownership = CatalogOwnership.USER,
             managedByRemote = true,
         )

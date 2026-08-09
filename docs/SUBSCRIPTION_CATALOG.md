@@ -47,7 +47,7 @@ Supported values:
 Examples:
 
 ```text
-UPSERT|mifa-main|Mifa Main|https://mifa.world/vless|RAW|default|open
+UPSERT|open-feed|Open Feed|https://example.com/open.txt|RAW|default|open
 UPSERT|white-lattice|WhiteLattice|https://example.com/wl.txt|RAW|default|wl
 UPSERT|paid-main|Paid Main|https://example.com/subscription|SIP008|happ
 REMOVE|legacy-id
@@ -92,9 +92,11 @@ PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 `zieng2-wl` points directly at the upstream BS-direct mirror (`hub.mos.ru`), reachable under whitelist restrictions without a Yandex mirror, unlike `raw.githubusercontent.com`. The list refreshes hourly upstream and profiles churn daily; transient 404s are handled by the subscription jail (profiles stay cached, one unjail attempt per cycle).
 
-`migiti-wl` / `migiti-open` (MiGiTi) and `vlessfo-open` (Vlessforu) point at upstream GitHub/self-hosted lists; `migiti-wl` is a RU-SNI whitelist (BS) list, the others are general-purpose VLESS Reality lists.
+`migiti-wl` (MiGiTi) and `vlessfo-open` (Vlessforu) point at upstream GitHub/self-hosted lists; `migiti-wl` is a RU-SNI whitelist (BS) list, the others are general-purpose VLESS Reality lists. `migiti-open` was removed in generation 11: its `4.txt` is a near-duplicate of `migiti-wl` (same 350 servers, ~92% host overlap, RU-SNI profiles relabeled "Universal").
 
-`antarktida-open` (Antarktida VPN) and `razlo4ka-open` (Razlo4ka) are general-purpose VLESS lists refreshed upstream every few hours.
+`razlo4ka-open` (Razlo4ka) is a general-purpose VLESS list refreshed upstream every few hours.
+
+`aetris-blacklist` (AetrisVPN BlackList, open) and `aetris-wl-lite` (AetrisVPN WhiteList Lite, WL) are the ЧС/БС-lite variants from the same author as `aetris-vpn` (flaafix), auto-updated upstream.
 
 ## Degraded feed / jail
 
