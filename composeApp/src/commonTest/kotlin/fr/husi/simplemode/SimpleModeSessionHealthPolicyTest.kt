@@ -122,12 +122,51 @@ class SimpleModeSessionHealthPolicyTest {
             SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
                 tracker = tracker,
                 nowMs = now,
+                stalledMs = 50_000L,
                 consecutiveFails = 1,
                 lastHealthOkAt = now - 1_000L,
                 warmReserveVerifiedRecently = true,
                 profileSessionLive = true,
                 whitelistOnly = false,
             ),
+        )
+    }
+
+    @Test
+    fun stallDeferBlockedBeyondHardCap() {
+        val tracker = StallDeferTracker()
+        val now = 1_000_000L
+        assertFalse(
+            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                tracker = tracker,
+                nowMs = now,
+                stalledMs = SimpleModeSessionHealthPolicy.STALL_RECOVERY_HARD_CAP_MS,
+                consecutiveFails = 0,
+                lastHealthOkAt = now - 30_000L,
+                warmReserveVerifiedRecently = true,
+                profileSessionLive = true,
+                whitelistOnly = true,
+            ),
+        )
+        assertTrue(
+            SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
+                tracker = tracker,
+                nowMs = now,
+                stalledMs = SimpleModeSessionHealthPolicy.STALL_RECOVERY_HARD_CAP_MS - 1L,
+                consecutiveFails = 0,
+                lastHealthOkAt = now - 30_000L,
+                warmReserveVerifiedRecently = true,
+                profileSessionLive = true,
+                whitelistOnly = true,
+            ),
+        )
+    }
+
+    @Test
+    fun stallHardCapAboveRecoveryThreshold() {
+        assertTrue(
+            SimpleModeSessionHealthPolicy.STALL_RECOVERY_HARD_CAP_MS >
+                SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS,
         )
     }
 
@@ -139,6 +178,7 @@ class SimpleModeSessionHealthPolicyTest {
             SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
                 tracker = tracker,
                 nowMs = now,
+                stalledMs = 50_000L,
                 consecutiveFails = 0,
                 lastHealthOkAt = now - 120_000L,
                 warmReserveVerifiedRecently = true,
@@ -150,6 +190,7 @@ class SimpleModeSessionHealthPolicyTest {
             SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
                 tracker = tracker,
                 nowMs = now,
+                stalledMs = 50_000L,
                 consecutiveFails = 0,
                 lastHealthOkAt = now - 30_000L,
                 warmReserveVerifiedRecently = true,

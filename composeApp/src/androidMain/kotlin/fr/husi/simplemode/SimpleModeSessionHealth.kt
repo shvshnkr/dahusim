@@ -42,6 +42,7 @@ internal object SimpleModeSessionHealth {
     private val lastCheckCompletedAt = AtomicLong(0L)
     private val stallRecoveryInFlight = AtomicBoolean(false)
     private val stallDeferTracker = StallDeferTracker()
+    private var stallRecoveriesPerSession: Int = 0
 
     private fun healthRecoverEnabled(): Boolean =
         ExpertConnectRecoverPolicy.allowsFullModeHealthRecover()
@@ -67,6 +68,7 @@ internal object SimpleModeSessionHealth {
         lastHealthFailAt = 0L
         lastHealthOkAt = 0L
         stallDeferTracker.reset()
+        stallRecoveriesPerSession = 0
         SimpleModeTunnelSoftRecoveryPolicy.resetDebounce()
         lastCheckCompletedAt.set(System.currentTimeMillis())
         stallWatchdogJob = scope.launch {
@@ -165,6 +167,7 @@ internal object SimpleModeSessionHealth {
         lastCheckCompletedAt.set(0L)
         stallRecoveryInFlight.set(false)
         stallDeferTracker.reset()
+        stallRecoveriesPerSession = 0
         SimpleModeTunnelSoftRecoveryPolicy.resetDebounce()
     }
 
@@ -275,6 +278,7 @@ internal object SimpleModeSessionHealth {
             val deferRecovery = SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
                 tracker = stallDeferTracker,
                 nowMs = nowMs,
+                stalledMs = stalledMs,
                 consecutiveFails = consecutiveFails,
                 lastHealthOkAt = lastHealthOkAt,
                 warmReserveVerifiedRecently = WarmReserveSessionCache.hasRecentVerifySuccess(
@@ -290,6 +294,7 @@ internal object SimpleModeSessionHealth {
                 )
                 return
             }
+            lastCheckCompletedAt.set(nowMs)
             lastHealthError = SimpleModeSessionHealthPolicy.STALL_PROBE_ERROR
             lastHealthProbeUrl = null
             lastHealthFailAt = System.currentTimeMillis()
@@ -308,12 +313,21 @@ internal object SimpleModeSessionHealth {
                     forceProbe = true,
                 )
             ) {
-                ensureMonitoring("stall_soft_ok")
+                stallRecoveriesPerSession++
+                if (stallRecoveriesPerSession >= SimpleModeSessionHealthPolicy.MAX_STALL_RECOVERY_OK_PER_SESSION) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H34 stall_recovery_repeat profileId=$profileId " +
+                            "count=$stallRecoveriesPerSession wl=$wlOnly",
+                    )
+                    handleUnhealthySession(profileId, SessionRecoverContext.StallWatchdog)
+                } else {
+                    ensureMonitoring("stall_soft_ok")
+                }
                 return
             }
             handleUnhealthySession(profileId, SessionRecoverContext.StallWatchdog)
         } finally {
-            lastCheckCompletedAt.set(System.currentTimeMillis())
             stallRecoveryInFlight.set(false)
         }
     }

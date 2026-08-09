@@ -27,6 +27,10 @@ internal object SimpleModeSessionHealthPolicy {
     const val STALL_DEFER_WINDOW_MS = 120_000L
     const val STALL_DEFER_PRIMARY_OK_MS = 60_000L
     const val WARM_STALL_DEFER_MS = 45_000L
+    /** Absolute stall ceiling: never defer once the tunnel has been frozen this long. */
+    const val STALL_RECOVERY_HARD_CAP_MS = 90_000L
+    /** Successful stall recoveries in one session after which the server is switched anyway. */
+    const val MAX_STALL_RECOVERY_OK_PER_SESSION = 3
     /** Post-connect verify must finish within this window or trigger fallback. */
     const val POST_CONNECT_WATCHDOG_MS = 28_000L
 
@@ -54,12 +58,14 @@ internal object SimpleModeSessionHealthPolicy {
     fun shouldDeferStallRecovery(
         tracker: StallDeferTracker,
         nowMs: Long,
+        stalledMs: Long,
         consecutiveFails: Int,
         lastHealthOkAt: Long,
         warmReserveVerifiedRecently: Boolean,
         profileSessionLive: Boolean,
         whitelistOnly: Boolean,
     ): Boolean {
+        if (stalledMs >= STALL_RECOVERY_HARD_CAP_MS) return false
         if (consecutiveFails > 0) return false
         if (!warmReserveVerifiedRecently && !profileSessionLive) return false
         if (!whitelistOnly) {
