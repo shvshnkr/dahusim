@@ -17,7 +17,6 @@ internal object WlSubscriptionTag {
         "wlrus-blackl",
         "black-vless-rus-mobile",
         "vless-wl-rus-mobile",
-        "vless-wl-rus-mobile-2",
         "tri-228-wl",
         "wl-standalone",
     )

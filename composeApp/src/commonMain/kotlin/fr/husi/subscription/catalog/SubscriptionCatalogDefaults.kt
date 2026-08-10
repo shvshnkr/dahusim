@@ -18,8 +18,6 @@ object SubscriptionCatalogDefaults {
     )
 
     val STARTER_SEEDS: List<CatalogSeed> = listOf(
-        CatalogSeed("mifa-main", "Mifa Main", "https://mifa.world/vless", ConnectPoolRole.OPEN),
-        CatalogSeed("mifa-hysteria", "Mifa Hysteria", "https://mifa.world/hysteria", ConnectPoolRole.OPEN),
         CatalogSeed(
             sourceKey = "swordware-main",
             name = "Swordware",
@@ -40,12 +38,6 @@ object SubscriptionCatalogDefaults {
             "vless-wl-rus-mobile",
             "Vless Reality White Lists Rus Mobile",
             "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
-            ConnectPoolRole.WL,
-        ),
-        CatalogSeed(
-            "vless-wl-rus-mobile-2",
-            "Vless Reality White Lists Rus Mobile 2",
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt",
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
@@ -95,6 +87,36 @@ object SubscriptionCatalogDefaults {
             ConnectPoolRole.WL,
         ),
         CatalogSeed("wlrus-blackl", "wlrus blackl", "https://wlrus.lol/confs/blackl.txt", ConnectPoolRole.WL),
+        CatalogSeed(
+            "migiti-wl",
+            "MiGiTi WL",
+            "https://raw.githubusercontent.com/misha12333211-ctrl/proxy-subs/refs/heads/main/1.txt",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "vlessfo-open",
+            "Vlessforu",
+            "https://sub.vlessfo.ru/vlessforu/working_configs.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "razlo4ka-open",
+            "Razlo4ka",
+            "https://raw.githubusercontent.com/free1zona/Keyfreetee/refs/heads/main/razlo4ka7",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "aetris-blacklist",
+            "AetrisVPN BlackList",
+            "https://raw.githubusercontent.com/flaafix/AetrisVPN-black-list/refs/heads/main/configs.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "aetris-wl-lite",
+            "AetrisVPN WhiteList Lite",
+            "https://raw.githubusercontent.com/flaafix/AetrisVPN-white-list-lite/refs/heads/main/AetrisVPN.txt",
+            ConnectPoolRole.WL,
+        ),
     )
 
     fun builtinSourceId(sourceKey: String): String = "$BUILTIN_SOURCE_PREFIX$sourceKey"
