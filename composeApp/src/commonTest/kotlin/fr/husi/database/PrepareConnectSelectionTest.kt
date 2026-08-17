@@ -68,6 +68,42 @@ class PrepareConnectSelectionTest : HusiKoinTest() {
     }
 
     @Test
+    fun freshUrlOverridesStaleFailureCooldownForOpenSelection() {
+        val cooldownId = 31170L
+        val staleId = 31751L
+        val profiles = mapOf(
+            cooldownId to proxy(cooldownId, ProxyEntity.STATUS_AVAILABLE),
+            staleId to proxy(staleId, ProxyEntity.STATUS_AVAILABLE),
+        )
+        val urlDelays = mapOf(cooldownId to 1166)
+        val tcpPings = mapOf(cooldownId to 97, staleId to 74)
+        val ranked = listOf(staleId, cooldownId)
+
+        val inCooldown = { id: Long -> id == cooldownId }
+        val freshOverridesCooldown = { id: Long -> inCooldown(id) && id !in urlDelays }
+
+        val withoutFix = PrepareConnectSelection.selectBestOpenProfile(
+            rankedFinal = ranked,
+            profilesById = profiles,
+            probeStates = emptyMap(),
+            urlTestDelays = urlDelays,
+            quickProbePings = tcpPings,
+            isInFailureCooldown = inCooldown,
+        )
+        val withFix = PrepareConnectSelection.selectBestOpenProfile(
+            rankedFinal = ranked,
+            profilesById = profiles,
+            probeStates = emptyMap(),
+            urlTestDelays = urlDelays,
+            quickProbePings = tcpPings,
+            isInFailureCooldown = freshOverridesCooldown,
+        )
+
+        assertEquals(staleId, withoutFix)
+        assertEquals(cooldownId, withFix)
+    }
+
+    @Test
     fun effectiveStatusForRankingDowngradesStaleUnavailable() {
         val proxy = proxy(6209L, ProxyEntity.STATUS_UNAVAILABLE)
         assertEquals(

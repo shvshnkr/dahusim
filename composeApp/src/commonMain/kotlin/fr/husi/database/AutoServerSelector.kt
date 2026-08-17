@@ -792,8 +792,9 @@ object AutoServerSelector {
         val ranked = connectPool
             .sortedWith(
                 if (quickProbePings.isNotEmpty()) {
-                    compareBy<ProxyEntity> { if (it.id in cooldownIds) 1 else 0 }
-                        .thenBy { if (urlTestDelays.containsKey(it.id)) 0 else 1 }
+                    compareBy<ProxyEntity> {
+                        if (it.id in cooldownIds && it.id !in urlTestDelays) 1 else 0
+                    }.thenBy { if (urlTestDelays.containsKey(it.id)) 0 else 1 }
                         .thenBy {
                             if (wlUrlProbes && it.id !in priorityFirstIds && it.id !in urlTestDelays) {
                                 1
@@ -853,8 +854,9 @@ object AutoServerSelector {
                         .thenBy { it.userOrder }
                         .thenBy { it.id }
                 } else {
-                    compareBy<ProxyEntity> { if (it.id in cooldownIds) 1 else 0 }
-                        .thenBy { warmProbeStateRank(probeStates, it.id) }
+                    compareBy<ProxyEntity> {
+                        if (it.id in cooldownIds && it.id !in urlTestDelays) 1 else 0
+                    }.thenBy { warmProbeStateRank(probeStates, it.id) }
                         .thenBy { if (urlTestDelays.containsKey(it.id)) 0 else 1 }
                         .thenBy { urlTestDelays[it.id] ?: ProxyProbeStateStore.persistedDelayScore(probeStates[it.id]) }
                         .thenByDescending { throughputRank(it) }
@@ -943,7 +945,7 @@ object AutoServerSelector {
         val best = if (networkHandoff &&
             selectedBefore > 0L &&
             selectedBefore in rankedFinal &&
-            !isInFailureCooldown(selectedBefore) &&
+            (!isInFailureCooldown(selectedBefore) || selectedBefore in urlTestDelays) &&
             PrepareConnectSelection.hasFreshPrepareUrl(selectedBefore, urlTestDelays)
         ) {
             simpleModeLog("SimpleMode", "H33 handoff_prefer_current profileId=$selectedBefore")
@@ -965,7 +967,7 @@ object AutoServerSelector {
                 urlTestDelays = urlTestDelays,
                 quickProbePings = quickProbePings,
                 probeStates = probeStates,
-                isInFailureCooldown = ::isInFailureCooldown,
+                isInFailureCooldown = { id -> isInFailureCooldown(id) && id !in urlTestDelays },
             )
             if (demoted != best) {
                 simpleModeLog(
@@ -1524,7 +1526,9 @@ object AutoServerSelector {
         val cooldownIds = failureCooldownSnapshot(proxies.map { it.id })
         val ranked = proxies.sortedWith(
             compareBy<ProxyEntity> { if (it.id == preferId) 0 else 1 }
-                .thenBy { if (it.id in cooldownIds) 1 else 0 }
+                .thenBy {
+                    if (it.id in cooldownIds && it.id !in urlTestDelays) 1 else 0
+                }
                 .thenBy {
                     compositeSelectionScore(
                         it,
@@ -1563,7 +1567,7 @@ object AutoServerSelector {
         val best = ProbePoolEligibility.firstViableInQueue(
             rankedIds = ordered,
             probeStates = probeStates,
-            inRecentFailureCooldown = ::isInFailureCooldown,
+            inRecentFailureCooldown = { id -> isInFailureCooldown(id) && id !in urlTestDelays },
         ) ?: ordered.first()
         if (selectedBefore != best) {
             DataStore.selectedProxy = best
@@ -1733,7 +1737,7 @@ object AutoServerSelector {
                 profilesById = profilesById,
                 probeStates = probeStates,
                 urlTestDelays = urlTestDelays,
-                isInFailureCooldown = ::isInFailureCooldown,
+                isInFailureCooldown = { id -> isInFailureCooldown(id) && id !in urlTestDelays },
             )
         }
         return PrepareConnectSelection.selectBestOpenProfile(
@@ -1742,7 +1746,7 @@ object AutoServerSelector {
             probeStates = probeStates,
             urlTestDelays = urlTestDelays,
             quickProbePings = quickProbePings,
-            isInFailureCooldown = ::isInFailureCooldown,
+            isInFailureCooldown = { id -> isInFailureCooldown(id) && id !in urlTestDelays },
         )
     }
 
