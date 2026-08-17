@@ -310,8 +310,8 @@ internal object ConnectPoolPolicy {
         userPoolMode: UserPoolMode = UserPoolMode.OFF,
     ): Int {
         val wlRank = when (mode) {
-            PoolBuildMode.WL_SUBSCRIPTION -> wlNodeRank(profileId, subscriptionWlIds)
-            PoolBuildMode.OPEN, PoolBuildMode.MERGED -> 0
+            PoolBuildMode.WL_SUBSCRIPTION, PoolBuildMode.MERGED -> wlNodeRank(profileId, subscriptionWlIds)
+            PoolBuildMode.OPEN -> 0
         }
         val userRank = UserPoolPolicy.userSelectionRank(userPoolMode, profileId, userProxyIds)
         return wlRank * 2 + userRank

@@ -137,6 +137,16 @@ class ConnectPoolPolicyTest {
     }
 
     @Test
+    fun mergedSelectionRankPrefersWlNodes() {
+        val wlIds = setOf(1L, 2L)
+        val wlRank = ConnectPoolPolicy.selectionRank(1L, wlIds, ConnectPoolPolicy.PoolBuildMode.MERGED)
+        val openRank = ConnectPoolPolicy.selectionRank(3L, wlIds, ConnectPoolPolicy.PoolBuildMode.MERGED)
+        val openRankOnOpen = ConnectPoolPolicy.selectionRank(3L, wlIds, ConnectPoolPolicy.PoolBuildMode.OPEN)
+        assertTrue(wlRank < openRank)
+        assertEquals(openRankOnOpen, openRank - 2)
+    }
+
+    @Test
     fun wlSubscriptionTagMatchesSourceId() {
         val group = group(5L, "Any name", sourceId = "gh.white-lattice")
         val tag = WlSubscriptionTag.resolve(

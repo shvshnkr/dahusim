@@ -110,7 +110,6 @@ object SimpleModeConnectCoordinator {
             return
         }
         cancel("connect_supersede")
-        DataStore.simpleModeAutoselectPoolMerged = false
         UserPoolPolicy.simpleModeUserPoolFallbackUsed = false
         DataStore.simpleModeActivity = "Checking network…"
         connectJob = connectScope.launch {
