@@ -117,6 +117,24 @@ object SubscriptionCatalogDefaults {
             "https://raw.githubusercontent.com/flaafix/AetrisVPN-white-list-lite/refs/heads/main/AetrisVPN.txt",
             ConnectPoolRole.WL,
         ),
+        CatalogSeed(
+            "kizyak-beta6",
+            "КIЗЯК VPN 6",
+            "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "kizyak-beta6-bl",
+            "КIЗЯК VPN BLACKLIST",
+            "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6BL.txt",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "kizyak-testru",
+            "КIЗЯК VPN TEST_RU",
+            "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyaktestru.txt",
+            ConnectPoolRole.OPEN,
+        ),
     )
 
     fun builtinSourceId(sourceKey: String): String = "$BUILTIN_SOURCE_PREFIX$sourceKey"

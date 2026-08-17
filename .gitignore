@@ -64,3 +64,6 @@ docs/CODE_REVIEW_PROMPT.md
 /happ_decrypt.js
 /happ_keys.json
 /tmp_happ/
+
+# Build logs
+/logs/

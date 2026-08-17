@@ -98,6 +98,8 @@ PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 `aetris-blacklist` (AetrisVPN BlackList, open) and `aetris-wl-lite` (AetrisVPN WhiteList Lite, WL) are the ЧС/БС-lite variants from the same author as `aetris-vpn` (flaafix), auto-updated upstream.
 
+`kizyak-beta6` (КIЗЯК VPN 6, open), `kizyak-beta6-bl` (КIЗЯК VPN BLACKLIST, WL) and `kizyak-testru` (КIЗЯК VPN TEST_RU, open) are general-purpose VLESS/hysteria2/trojan lists from `Maskkost93/kizyak-vpn-4.0` (same ecosystem as `igareck/vpn-configs-for-russia`; the BL variant carries `[BL]`-tagged nodes like `black-vless-rus-mobile`, so it is pool_role `wl`).
+
 ## Degraded feed / jail
 
 Auto-update tracks **group-level** health in Room (`subscription_update_states`), separate from per-profile probe jail:
