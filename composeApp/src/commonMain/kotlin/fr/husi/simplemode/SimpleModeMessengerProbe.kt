@@ -47,6 +47,7 @@ internal object SimpleModeMessengerProbe {
         val lastError: String?,
         val lastProbeUrl: String?,
         val dcSecondaryOk: Boolean = false,
+        val wasSynthetic: Boolean = false,
     )
 
     fun evaluateTunnelWave(
@@ -55,6 +56,8 @@ internal object SimpleModeMessengerProbe {
         dcRequiredLatencyMs: Int,
         dcRequiredError: String?,
         dcSecondaryLatencyMs: Int = 0,
+        webSynthetic: Boolean = false,
+        dcRequiredSynthetic: Boolean = false,
     ): TunnelWaveEvaluation {
         if (webLatencyMs <= 0) {
             return TunnelWaveEvaluation(
@@ -62,6 +65,7 @@ internal object SimpleModeMessengerProbe {
                 latencyMs = 0,
                 lastError = webError ?: "messenger_web_failed",
                 lastProbeUrl = WEB_URL,
+                wasSynthetic = webSynthetic,
             )
         }
         if (dcRequiredLatencyMs <= 0) {
@@ -70,6 +74,7 @@ internal object SimpleModeMessengerProbe {
                 latencyMs = 0,
                 lastError = dcRequiredError ?: "messenger_dc_required_failed",
                 lastProbeUrl = DC_REQUIRED_URL,
+                wasSynthetic = dcRequiredSynthetic,
             )
         }
         return TunnelWaveEvaluation(
@@ -78,6 +83,7 @@ internal object SimpleModeMessengerProbe {
             lastError = null,
             lastProbeUrl = DC_REQUIRED_URL,
             dcSecondaryOk = dcSecondaryLatencyMs > 0,
+            wasSynthetic = webSynthetic || dcRequiredSynthetic,
         )
     }
 
@@ -105,7 +111,8 @@ internal object SimpleModeMessengerProbe {
             "SimpleMode",
             "H37 messenger_wave phase=$phase wlOnly=$whitelistOnly " +
                 "outboundTag=${outboundTag.ifBlank { "-" }} ok=${evaluation.ok} " +
-                "delayMs=${evaluation.latencyMs} dc_149_154=${if (evaluation.dcSecondaryOk) "ok" else "fail"}",
+                "delayMs=${evaluation.latencyMs} dc_149_154=${if (evaluation.dcSecondaryOk) "ok" else "fail"} " +
+                "synthetic=${evaluation.wasSynthetic}",
         )
     }
 }

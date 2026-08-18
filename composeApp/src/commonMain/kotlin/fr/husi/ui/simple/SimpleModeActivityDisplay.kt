@@ -21,7 +21,9 @@ import fr.husi.resources.simple_mode_activity_testing_url
 import fr.husi.resources.simple_mode_activity_trying_next
 import fr.husi.resources.simple_mode_activity_verifying_internet
 import fr.husi.resources.simple_mode_activity_verifying_last
+import fr.husi.resources.simple_mode_activity_waiting_servers
 import fr.husi.simplemode.ACTIVITY_CONNECTION_UNSTABLE_RECHECKING
+import fr.husi.simplemode.ACTIVITY_WAITING_FOR_SERVERS
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -50,6 +52,8 @@ internal fun displaySimpleModeActivity(raw: String): String {
             stringResource(Res.string.simple_mode_activity_network_changed)
         raw == ACTIVITY_CONNECTION_UNSTABLE_RECHECKING ->
             stringResource(Res.string.simple_mode_activity_connection_unstable)
+        raw == ACTIVITY_WAITING_FOR_SERVERS ->
+            stringResource(Res.string.simple_mode_activity_waiting_servers)
         raw.startsWith("Server unstable, switching") ->
             stringResource(Res.string.simple_mode_activity_server_unstable)
         raw.startsWith("Server degraded, switching") ->

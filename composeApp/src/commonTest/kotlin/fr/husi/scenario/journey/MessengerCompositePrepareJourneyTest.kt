@@ -52,4 +52,46 @@ class MessengerCompositePrepareJourneyTest : FeatureJourneyTest() {
         )
         assertFalse(partial.ready)
     }
+
+    @Test
+    fun messengerWaveThatOnlyPassedSyntheticallyIsNotRecordedAsUrlVerified() {
+        // All URLs failed with inconclusive proxy-dial timeouts -> synthetic latency 1.
+        val wave = SimpleModeMessengerProbe.evaluateTunnelWave(
+            webLatencyMs = 1,
+            webError = "dial ccmni1 (15): dial tcp 151.101.56.6:443: i/o timeout",
+            dcRequiredLatencyMs = 1,
+            dcRequiredError = "dial ccmni1 (15): dial tcp 151.101.56.6:443: i/o timeout",
+            dcSecondaryLatencyMs = 1,
+            webSynthetic = true,
+            dcRequiredSynthetic = true,
+        )
+        assertTrue(wave.ok)
+        assertTrue(wave.wasSynthetic)
+        // Post-connect must NOT bless a dead proxy as url-verified.
+        assertFalse(
+            SimpleModeHealthRoute.postConnectRecordUrlVerified(
+                tunnelLatencyMs = wave.latencyMs,
+                wasSyntheticSuccess = wave.wasSynthetic,
+            ),
+        )
+    }
+
+    @Test
+    fun realMessengerWaveIsRecordedAsUrlVerified() {
+        val wave = SimpleModeMessengerProbe.evaluateTunnelWave(
+            webLatencyMs = 815,
+            webError = null,
+            dcRequiredLatencyMs = 344,
+            dcRequiredError = null,
+            dcSecondaryLatencyMs = 977,
+        )
+        assertTrue(wave.ok)
+        assertFalse(wave.wasSynthetic)
+        assertTrue(
+            SimpleModeHealthRoute.postConnectRecordUrlVerified(
+                tunnelLatencyMs = wave.latencyMs,
+                wasSyntheticSuccess = wave.wasSynthetic,
+            ),
+        )
+    }
 }

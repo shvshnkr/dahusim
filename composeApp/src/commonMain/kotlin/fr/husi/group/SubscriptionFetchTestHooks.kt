@@ -11,18 +11,28 @@ object SubscriptionFetchTestHooks {
     var bodyByLink: Map<String, String>? = null
         private set
 
-    fun install(bodyByLink: Map<String, String>) {
+    var failForFetchLinks: Set<String>? = null
+        private set
+
+    fun install(bodyByLink: Map<String, String>, failForFetchLinks: Set<String> = emptySet()) {
         enabled = true
         this.bodyByLink = bodyByLink
+        this.failForFetchLinks = failForFetchLinks
     }
 
     fun clear() {
         enabled = false
         bodyByLink = null
+        failForFetchLinks = null
     }
 
     internal fun bodyFor(canonicalLink: String): String? {
         if (!enabled) return null
         return bodyByLink?.get(canonicalLink)
+    }
+
+    internal fun shouldFailFetch(fetchLink: String): Boolean {
+        if (!enabled) return false
+        return failForFetchLinks?.contains(fetchLink) == true
     }
 }

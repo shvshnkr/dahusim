@@ -35,6 +35,10 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 object SimpleModeConnectCoordinator {
 
+    internal const val ALL_SERVERS_DEAD_PROMPT_TIMEOUT_MS = 30_000L
+    internal const val WL_SERVER_REVIVAL_WATCH_MS = 6 * 60_000L
+    internal const val WL_SERVER_REVIVAL_POLL_INTERVAL_MS = 45_000L
+
     private val connectScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var connectJob: Job? = null
 
@@ -85,6 +89,117 @@ object SimpleModeConnectCoordinator {
 
     private fun clearPrepareVerifiedProfileIdOnly() {
         DataStore.simpleModePrepareVerifiedProfileId = 0L
+    }
+
+    /**
+     * All-probes-dead resolution. The [ConnectHost.promptAllServersDead] wait must be bounded —
+     * a lost/ignored prompt previously left [connectJob] in flight forever, freezing the UI in
+     * "Preparing…" with an unresponsive Connect button (field log 2026-08-18 02:46, BS).
+     */
+    internal suspend fun handleAllServersDead(
+        host: ConnectHost,
+        promptTimeoutMs: Long = ALL_SERVERS_DEAD_PROMPT_TIMEOUT_MS,
+    ) {
+        DataStore.simpleModeActivity = ""
+        simpleModeLog("SimpleMode", "connect_blocked_all_probes_dead")
+        withContext(Dispatchers.Main) { host.setPermissionPending(false) }
+        val choice = resolveAllServersDeadChoice(
+            prompt = { withContext(Dispatchers.Main) { host.promptAllServersDead() } },
+            timeoutMs = promptTimeoutMs,
+        )
+        when (choice) {
+            SimpleModeAllServersDeadChoice.WaitForGoogle -> {
+                DataStore.autoConnectPausedUntilGoogle = true
+                resolveRepository().stopService()
+            }
+            SimpleModeAllServersDeadChoice.ExitApp -> exitApplication()
+        }
+    }
+
+    internal suspend fun resolveAllServersDeadChoice(
+        prompt: suspend () -> SimpleModeAllServersDeadChoice,
+        timeoutMs: Long = ALL_SERVERS_DEAD_PROMPT_TIMEOUT_MS,
+    ): SimpleModeAllServersDeadChoice = withTimeoutOrNull(timeoutMs) { prompt() }
+        ?.also { simpleModeLog("SimpleMode", "H21 all_servers_dead_choice choice=$it") }
+        ?: SimpleModeAllServersDeadChoice.WaitForGoogle.also {
+            simpleModeLog("SimpleMode", "H21 all_servers_dead_prompt_timeout")
+        }
+
+    /**
+     * Bounded BS revival watch: after an AllProbesDead sweep, re-prepare on a poll interval until
+     * a candidate verifies (auto-connect) or the watch window elapses (then the AllServersDead
+     * prompt path runs). Cancelled by any new connect tap via [cancel].
+     */
+    internal suspend fun awaitWlServerRevival(
+        initial: PrepareForConnectResult,
+        refreshBudgetMs: Long,
+        whitelistOnly: Boolean,
+        watchMs: Long = WL_SERVER_REVIVAL_WATCH_MS,
+        pollIntervalMs: Long = WL_SERVER_REVIVAL_POLL_INTERVAL_MS,
+        prepare: suspend () -> PrepareForConnectResult = {
+            prepareWithRefresh(refreshBudgetMs, whitelistOnly)
+        },
+    ): PrepareForConnectResult {
+        val deadline = System.currentTimeMillis() + watchMs
+        var result = initial
+        var attempt = 0
+        while (result is PrepareForConnectResult.AllProbesDead &&
+            System.currentTimeMillis() < deadline
+        ) {
+            attempt++
+            val waitMs = pollIntervalMs.coerceAtMost(
+                (deadline - System.currentTimeMillis()).coerceAtLeast(1_000L),
+            )
+            DataStore.simpleModeActivity = ACTIVITY_WAITING_FOR_SERVERS
+            simpleModeLog(
+                "SimpleMode",
+                "H21 server_revival_watch attempt=$attempt waitMs=$waitMs " +
+                    "leftMs=${(deadline - System.currentTimeMillis()).coerceAtLeast(0)}",
+            )
+            delay(waitMs)
+            result = prepare()
+        }
+        if (result is PrepareForConnectResult.AllProbesDead) {
+            simpleModeLog("SimpleMode", "H21 server_revival_watch exhausted attempts=$attempt")
+        }
+        return result
+    }
+
+    private suspend fun prepareWithRefresh(
+        refreshBudgetMs: Long,
+        whitelistOnly: Boolean,
+    ): PrepareForConnectResult = onDefaultDispatcher {
+        coroutineScope {
+            val refreshJob = async {
+                DataStore.simpleModeActivity = "Refreshing subscriptions…"
+                withTimeoutOrNull(refreshBudgetMs) {
+                    SubscriptionAutoUpdateRunner.refreshDueWithBudget(
+                        mode = SubscriptionUpdateMode.ForegroundInteractive,
+                        budgetMs = refreshBudgetMs,
+                        connectRefresh = true,
+                    )
+                }.also { outcome ->
+                    simpleModeLog(
+                        "SimpleMode",
+                        if (outcome == null) {
+                            "H21 preconnect_subscription_refresh timeout budgetMs=$refreshBudgetMs " +
+                                "whitelistOnly=$whitelistOnly"
+                        } else {
+                            "H21 preconnect_subscription_refresh done " +
+                                "allSucceeded=${outcome.allSucceeded} " +
+                                "staleFails=${outcome.transportFailuresWhileVpnConnected} " +
+                                "whitelistOnly=$whitelistOnly"
+                        },
+                    )
+                }
+            }
+            try {
+                DataStore.simpleModeActivity = "Finding best server…"
+                AutoServerSelector.prepareForConnect(owner = PrepareOwner.CONNECT)
+            } finally {
+                refreshJob.cancel()
+            }
+        }
     }
 
     fun cancel(reason: String = "connect") {
@@ -184,38 +299,17 @@ object SimpleModeConnectCoordinator {
             )
             preconnectStage = "prepare_for_connect"
             DataStore.simpleModeActivity = "Finding best server…"
-            val prep = onDefaultDispatcher {
-                coroutineScope {
-                    val refreshJob = async {
-                        DataStore.simpleModeActivity = "Refreshing subscriptions…"
-                        withTimeoutOrNull(refreshBudgetMs) {
-                            SubscriptionAutoUpdateRunner.refreshDueWithBudget(
-                                mode = SubscriptionUpdateMode.ForegroundInteractive,
-                                budgetMs = refreshBudgetMs,
-                                connectRefresh = true,
-                            )
-                        }.also { outcome ->
-                            simpleModeLog(
-                                "SimpleMode",
-                                if (outcome == null) {
-                                    "H21 preconnect_subscription_refresh timeout budgetMs=$refreshBudgetMs " +
-                                        "whitelistOnly=${net.whitelistOnly}"
-                                } else {
-                                    "H21 preconnect_subscription_refresh done " +
-                                        "allSucceeded=${outcome.allSucceeded} " +
-                                        "staleFails=${outcome.transportFailuresWhileVpnConnected} " +
-                                        "whitelistOnly=${net.whitelistOnly}"
-                                },
-                            )
-                        }
-                    }
-                    try {
-                        DataStore.simpleModeActivity = "Finding best server…"
-                        AutoServerSelector.prepareForConnect(owner = PrepareOwner.CONNECT)
-                    } finally {
-                        refreshJob.cancel()
-                    }
-                }
+            var prep = prepareWithRefresh(refreshBudgetMs, net.whitelistOnly)
+            if (prep is PrepareForConnectResult.AllProbesDead && net.whitelistOnly) {
+                // BS servers flap on a minute scale (field 2026-08-18: 340 dead at 02:55,
+                // alive at 03:17, dead again at 03:20). Instead of giving up on the first
+                // sweep, keep watching: re-prepare on a poll interval and auto-connect the
+                // moment any candidate verifies.
+                prep = awaitWlServerRevival(
+                    initial = prep,
+                    refreshBudgetMs = refreshBudgetMs,
+                    whitelistOnly = net.whitelistOnly,
+                )
             }
             preconnectStage = "prepare_result"
             simpleModeLog("SimpleMode", "H21 preconnect_stage stage=prepare_result result=$prep")
@@ -232,20 +326,10 @@ object SimpleModeConnectCoordinator {
                     }
                 }
                 PrepareForConnectResult.AllProbesDead -> {
-                    DataStore.simpleModeActivity = ""
-                    simpleModeLog("SimpleMode", "connect_blocked_all_probes_dead")
-                    withContext(Dispatchers.Main) { host.setPermissionPending(false) }
-                    val choice = withContext(Dispatchers.Main) { host.promptAllServersDead() }
-                    when (choice) {
-                        SimpleModeAllServersDeadChoice.WaitForGoogle -> {
-                            DataStore.autoConnectPausedUntilGoogle = true
-                            resolveRepository().stopService()
-                        }
-                        SimpleModeAllServersDeadChoice.ExitApp -> exitApplication()
-                    }
+                    handleAllServersDead(host)
                 }
                 is PrepareForConnectResult.Success -> {
-                    val selected = prep.profileId
+                    var selected = prep.profileId
                     if (selected <= 0L && DataStore.selectedProxy <= 0L) {
                         simpleModeLog("SimpleMode", "connect_blocked_no_profile")
                         withContext(Dispatchers.Main) {
@@ -280,7 +364,22 @@ object SimpleModeConnectCoordinator {
                         }
                         return
                     }
-                    val vpnProfileId = resolveVpnProfileId(selected)
+                    var vpnProfileId = resolveVpnProfileId(selected)
+                    if (vpnProfileId == null) {
+                        // The concurrent subscription refresh deleted the just-selected profile from the DB.
+                        // Re-prepare once against the settled DB instead of aborting to onNoProfile.
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H21 permission_retry_prepare reason=profile_missing selected=$selected",
+                        )
+                        val retry = onDefaultDispatcher {
+                            AutoServerSelector.prepareForConnect(owner = PrepareOwner.CONNECT)
+                        }
+                        if (retry is PrepareForConnectResult.Success) {
+                            selected = retry.profileId
+                            vpnProfileId = resolveVpnProfileId(selected)
+                        }
+                    }
                     if (vpnProfileId == null) {
                         simpleModeLog(
                             "SimpleMode",

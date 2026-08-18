@@ -85,7 +85,10 @@ internal object PrepareConnectSelection {
         val viable = rankedFinal.filter {
             ProbePoolEligibility.isViableFallbackTarget(probeStates[it], isInFailureCooldown(it))
         }
-        val urlVerified = viable.filter { it in urlTestDelays }
+        // Fresh this-run URL verification outranks stale persisted viability (DEAD/jail recorded
+        // when the server was down — field 2026-08-18 03:17: verified 340 was skipped for stale
+        // 99, costing a dead-tunnel connect + post-connect recover).
+        val urlVerified = rankedFinal.filter { it in urlTestDelays }
         preferSelectable(urlVerified, profilesById, urlTestDelays)?.let { return it }
         viable.firstOrNull {
             AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(it, urlTestDelays, probeStates)

@@ -74,6 +74,66 @@ class SimpleModeMessengerProbeTest {
         assertTrue(evaluation.ok)
         assertEquals(240, evaluation.latencyMs)
         assertTrue(evaluation.dcSecondaryOk)
+        assertFalse(evaluation.wasSynthetic)
+    }
+
+    @Test
+    fun evaluateTunnelWaveAllSyntheticLatenciesAreNotRealSuccess() {
+        val evaluation = SimpleModeMessengerProbe.evaluateTunnelWave(
+            webLatencyMs = 1,
+            webError = "dial ccmni1: i/o timeout",
+            dcRequiredLatencyMs = 1,
+            dcRequiredError = "dial ccmni1: i/o timeout",
+            dcSecondaryLatencyMs = 1,
+            webSynthetic = true,
+            dcRequiredSynthetic = true,
+        )
+        assertTrue(evaluation.ok)
+        assertEquals(1, evaluation.latencyMs)
+        assertTrue(evaluation.wasSynthetic)
+    }
+
+    @Test
+    fun evaluateTunnelWaveSyntheticWebDowngradesWholeWave() {
+        val evaluation = SimpleModeMessengerProbe.evaluateTunnelWave(
+            webLatencyMs = 1,
+            webError = "dial ccmni1: i/o timeout",
+            dcRequiredLatencyMs = 300,
+            dcRequiredError = null,
+            webSynthetic = true,
+            dcRequiredSynthetic = false,
+        )
+        assertTrue(evaluation.ok)
+        assertTrue(evaluation.wasSynthetic)
+    }
+
+    @Test
+    fun evaluateTunnelWaveSyntheticDcRequiredDowngradesWholeWave() {
+        val evaluation = SimpleModeMessengerProbe.evaluateTunnelWave(
+            webLatencyMs = 200,
+            webError = null,
+            dcRequiredLatencyMs = 1,
+            dcRequiredError = "dial ccmni1: i/o timeout",
+            webSynthetic = false,
+            dcRequiredSynthetic = true,
+        )
+        assertTrue(evaluation.ok)
+        assertTrue(evaluation.wasSynthetic)
+    }
+
+    @Test
+    fun evaluateTunnelWaveSecondarySyntheticDoesNotDowngradeGate() {
+        val evaluation = SimpleModeMessengerProbe.evaluateTunnelWave(
+            webLatencyMs = 200,
+            webError = null,
+            dcRequiredLatencyMs = 300,
+            dcRequiredError = null,
+            dcSecondaryLatencyMs = 1,
+            webSynthetic = false,
+            dcRequiredSynthetic = false,
+        )
+        assertTrue(evaluation.ok)
+        assertFalse(evaluation.wasSynthetic)
     }
 
     @Test

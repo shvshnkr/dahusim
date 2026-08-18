@@ -153,6 +153,7 @@ object AutoServerSelector {
     }
 
     private const val WL_URL_PROBE_EARLY_EXIT = 8
+    private const val WL_SUBSCRIPTION_URL_PROBE_EARLY_EXIT = 1
     private const val TCP_SURVIVOR_URL_CAP = 64
     private const val CONFIRM_TCP_TOP_K = 12
 
@@ -557,7 +558,42 @@ object AutoServerSelector {
                     }
                 }
                 val urlJob = async(Dispatchers.IO) {
-                    if (parallelUrlPool.isEmpty()) {
+                    if (wlUrlProbes) {
+                        // WL: wait for the TCP round so the URL wave leads with this-run alive
+                        // candidates — the first url-ok lands in ~1-2s and the early exit (target=1)
+                        // cuts the phase from ~20s (full drain of warm-dead candidates) to a
+                        // single bounded wave. Per-profile only: the group batch (PrepareGroupUrlProbe)
+                        // swallows the alive candidates and returns null on BS (H25 unavailable).
+                        val tcpResult = tcpJob.await()
+                        val wavePool = buildWlUrlWavePool(
+                            connectPool = connectPool,
+                            quickProbePings = tcpResult.pings,
+                            priorityFirstIds = priorityFirstIds,
+                            urlTestCap = urlTestCap,
+                            extraTcp = extraUrlTestByTcp,
+                        )
+                        if (wavePool.isEmpty()) {
+                            emptyMap()
+                        } else {
+                            setSimpleModeActivity("Testing URL 0/${wavePool.size}")
+                            simpleModeLog(
+                                "SimpleMode",
+                                "H17 urltest_started candidates=${wavePool.size} baseCap=$urlTestCap " +
+                                    "extraTcp=$extraUrlTestByTcp mode=wl_alive_first",
+                            )
+                            urlTestTopCandidates(
+                                wavePool,
+                                urlConcurrency,
+                                session,
+                                whitelistBuiltinOnly = true,
+                                poolMode = poolMode,
+                                forcePerProfile = true,
+                            ) { done, total ->
+                                setSimpleModeActivity("Testing URL $done/$total")
+                                Probe2kProgress.publishScan(done, total)
+                            }
+                        }
+                    } else if (parallelUrlPool.isEmpty()) {
                         emptyMap()
                     } else {
                         setSimpleModeActivity("Testing URL 0/${parallelUrlPool.size}")
@@ -570,6 +606,7 @@ object AutoServerSelector {
                             urlConcurrency,
                             session,
                             whitelistBuiltinOnly = wlUrlProbes,
+                            poolMode = poolMode,
                         ) { done, total ->
                             setSimpleModeActivity("Testing URL $done/$total")
                             Probe2kProgress.publishScan(done, total)
@@ -627,7 +664,7 @@ object AutoServerSelector {
                     .filter { it.id !in merged }
                     .sortedBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
                     .take(urlSupplementCap)
-                if (missing.isNotEmpty()) {
+                if (missing.isNotEmpty() && (merged.isEmpty() || !wlUrlProbes)) {
                     simpleModeLog(
                         "SimpleMode",
                         "H17 urltest_supplement candidates=${missing.size} cap=$urlSupplementCap " +
@@ -639,6 +676,7 @@ object AutoServerSelector {
                             urlConcurrency,
                             session,
                             whitelistBuiltinOnly = wlUrlProbes,
+                            poolMode = poolMode,
                         ) { done, total ->
                             setSimpleModeActivity("Testing URL $done/$total")
                             Probe2kProgress.publishScan(done, total)
@@ -665,6 +703,7 @@ object AutoServerSelector {
                                 urlConcurrency,
                                 session,
                                 whitelistBuiltinOnly = wlUrlProbes,
+                                poolMode = poolMode,
                                 tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
                             ) { done, total ->
                                 setSimpleModeActivity("Testing URL $done/$total")
@@ -697,6 +736,7 @@ object AutoServerSelector {
                                 urlConcurrency,
                                 session,
                                 whitelistBuiltinOnly = wlUrlProbes,
+                                poolMode = poolMode,
                                 tier = SimpleModeHealthRoute.ProbeTier.CONFIRM,
                             ),
                         )
@@ -736,6 +776,7 @@ object AutoServerSelector {
                     urlConcurrency,
                     session,
                     whitelistBuiltinOnly = wlUrlProbes,
+                    poolMode = poolMode,
                 ) { done, total ->
                     setSimpleModeActivity("Testing URL $done/$total")
                     Probe2kProgress.publishScan(done, total)
@@ -1063,7 +1104,32 @@ object AutoServerSelector {
             AutoServerSelectorProbePolicy.OpenPrepareDecision.OK -> Unit
         }
         lastPrepareUrlVerifiedIds = urlTestDelays.keys
-        return PrepareForConnectResult.Success(finalBest)
+        val resolvedBest = resolveBestAgainstDb(finalBest, rankedFinal)
+        if (resolvedBest != finalBest) {
+            simpleModeLog(
+                "SimpleMode",
+                "H22 prepare_selected_profile_missing best=$finalBest fallbackTo=$resolvedBest",
+            )
+            DataStore.selectedProxy = resolvedBest
+        }
+        return PrepareForConnectResult.Success(resolvedBest)
+    }
+
+    /**
+     * The concurrent subscription refresh (connect refresh) can delete a profile from the DB
+     * after this prepare snapshot picked it as best. Re-resolve against the current DB so the
+     * returned id still exists; otherwise fall back to the next ranked candidate.
+     */
+    internal suspend fun resolveBestAgainstDb(best: Long, rankedFinal: List<Long>): Long {
+        if (best <= 0L) return best
+        if (SagerDatabase.proxyDao.getById(best) != null) return best
+        val existingIds = SagerDatabase.proxyDao.getAll().map { it.id }.toSet()
+        val replacement = rankedFinal.firstOrNull { it in existingIds }
+        if (replacement == null) {
+            simpleModeLog("SimpleMode", "H22 prepare_selected_profile_missing best=$best no_existing_candidates")
+            return best
+        }
+        return replacement
     }
 
     private fun recordPrepareSelectionReason(
@@ -1325,21 +1391,16 @@ object AutoServerSelector {
         }
     }
 
-    internal fun shouldWlReprobeBypass(wlOnly: Boolean): Boolean = wlOnly
-
     private fun reprobeFallbackCandidate(profileId: Long): Boolean {
         val wlOnly = DataStore.activeWhitelistRestrictedNetwork
         val proxy = runBlocking { SagerDatabase.proxyDao.getById(profileId) } ?: return false
-        if (shouldWlReprobeBypass(wlOnly)) {
-            simpleModeLog(
-                "SimpleMode",
-                "H30 fallback_reprobe id=$profileId ok=true wl=$wlOnly wl_tcp_bypass=true " +
-                    "reason=bs_targets_blocked_on_wl_uplink",
-            )
-            return true
+        val budgetMs = if (wlOnly) {
+            Probe2kDefaults.WL_FALLBACK_REPROBE_BUDGET_MS
+        } else {
+            Probe2kDefaults.FALLBACK_REPROBE_BUDGET_MS
         }
         val delayMs = runBlocking {
-            withTimeoutOrNull(Probe2kDefaults.FALLBACK_REPROBE_BUDGET_MS) {
+            withTimeoutOrNull(budgetMs) {
                 DirectProfileUrlProbe.urlTestDelay(proxy, whitelistOnly = wlOnly)
             }
         }
@@ -1478,6 +1539,7 @@ object AutoServerSelector {
                 probeConcurrency(wlUrlProbes),
                 session,
                 whitelistBuiltinOnly = wlUrlProbes,
+                poolMode = poolMode,
             )
         }
         if (urlDelays[goodId] == null && urlDelays.isNotEmpty()) {
@@ -1644,6 +1706,32 @@ object AutoServerSelector {
         return picked
     }
 
+    /**
+     * WL URL-wave pool: strict alive-first order (this-run TCP pings), then priority, then
+     * stale heuristics. Unstratified on purpose — stratification rotates groups and pushes the
+     * alive candidates out of the early-exit reach; the wave cap covers the whole selectable
+     * pool, so diversity matters less than hitting the first working tunnel fast.
+     */
+    internal fun buildWlUrlWavePool(
+        connectPool: List<ProxyEntity>,
+        quickProbePings: Map<Long, Int>,
+        priorityFirstIds: Set<Long>,
+        urlTestCap: Int,
+        extraTcp: Int,
+    ): List<ProxyEntity> {
+        val cap = (urlTestCap + extraTcp).coerceAtMost(connectPool.size)
+        if (cap <= 0) return emptyList()
+        return connectPool.sortedWith(
+            compareBy<ProxyEntity> { if (quickProbePings.containsKey(it.id)) 0 else 1 }
+                .thenBy { quickProbePings[it.id] ?: Int.MAX_VALUE }
+                .thenBy { if (it.id in priorityFirstIds) 0 else 1 }
+                .thenBy { statusRank(it.status) }
+                .thenBy { pingRank(it.ping) }
+                .thenByDescending { throughputRank(it) }
+                .thenBy { it.id },
+        ).take(cap)
+    }
+
     private fun statusRank(status: Int): Int = when (status) {
         ProxyEntity.STATUS_AVAILABLE -> 0
         ProxyEntity.STATUS_INITIAL -> 1
@@ -1750,19 +1838,28 @@ object AutoServerSelector {
         )
     }
 
+    internal fun urlTestEarlyExitTarget(poolMode: ConnectPoolPolicy.PoolBuildMode, whitelistBuiltinOnly: Boolean): Int =
+        when {
+            poolMode == ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION -> WL_SUBSCRIPTION_URL_PROBE_EARLY_EXIT
+            whitelistBuiltinOnly -> WL_URL_PROBE_EARLY_EXIT
+            else -> Int.MAX_VALUE
+        }
+
     private suspend fun urlTestTopCandidates(
         candidates: List<ProxyEntity>,
         concurrency: Int,
         session: PrepareSession,
         whitelistBuiltinOnly: Boolean = false,
+        poolMode: ConnectPoolPolicy.PoolBuildMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
         tier: SimpleModeHealthRoute.ProbeTier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+        forcePerProfile: Boolean = false,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Map<Long, Int> = coroutineScope {
         val total = candidates.size
         if (total == 0) return@coroutineScope emptyMap()
         val messengerRequired = SimpleModeHealthRoute.messengerProbeRequired(whitelistBuiltinOnly)
-        val useBatch = whitelistBuiltinOnly || total > 24 ||
-            (messengerRequired && !whitelistBuiltinOnly && total > 12)
+        val useBatch = !forcePerProfile && (whitelistBuiltinOnly || total > 24 ||
+            (messengerRequired && !whitelistBuiltinOnly && total > 12))
         val semaphore = Semaphore(concurrency)
         val result = HashMap<Long, Int>()
         if (useBatch && tier == SimpleModeHealthRoute.ProbeTier.PRIMARY) {
@@ -1804,7 +1901,7 @@ object AutoServerSelector {
                 onProgress = onProgress,
                 result = result,
                 semaphore = semaphore,
-                earlyExitTarget = if (whitelistBuiltinOnly) WL_URL_PROBE_EARLY_EXIT else Int.MAX_VALUE,
+                earlyExitTarget = urlTestEarlyExitTarget(poolMode, whitelistBuiltinOnly),
             )
             return@coroutineScope result.toMap()
         }
@@ -1818,7 +1915,7 @@ object AutoServerSelector {
             onProgress = onProgress,
             result = result,
             semaphore = semaphore,
-            earlyExitTarget = if (whitelistBuiltinOnly) WL_URL_PROBE_EARLY_EXIT else Int.MAX_VALUE,
+            earlyExitTarget = urlTestEarlyExitTarget(poolMode, whitelistBuiltinOnly),
         )
         result.toMap()
     }

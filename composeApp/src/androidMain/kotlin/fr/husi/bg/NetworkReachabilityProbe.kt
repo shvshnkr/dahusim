@@ -12,6 +12,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.concurrent.thread
 
 internal data class NetworkReachability(
     val googleReachable: Boolean,
@@ -41,6 +42,8 @@ internal object NetworkReachabilityProbe {
     private const val FAST_TIMEOUT_MS = 1200
     private const val PROBE_TOTAL_TIMEOUT_MS = 6000L
     private const val FAST_PROBE_TOTAL_TIMEOUT_MS = 4000L
+    /** Extra budget for DNS blackholes — HttpURLConnection.connect() is not bounded by connectTimeout. */
+    private const val DNS_GRACE_MS = 500L
 
     suspend fun probe(fast: Boolean = false): NetworkReachability = coroutineScope {
         val probeNetwork = resolveProbeNetwork()
@@ -145,11 +148,37 @@ internal object NetworkReachabilityProbe {
             .any { it }
     }
 
+    /**
+     * Bounded probe. The blocking [HttpURLConnection] call is not interruptible (DNS blackhole on
+     * BS can hold connect() for ~10s past connectTimeout), so it runs on a daemon thread and we
+     * join with a hard cap — the probe itself must never exceed timeoutMs + [DNS_GRACE_MS].
+     */
     private suspend fun probeUrl(
         url: String,
         timeoutMs: Int,
         network: Network? = null,
     ): Boolean = withContext(Dispatchers.IO) {
+        var result = false
+        val worker = thread(
+            name = "wl-reachability-probe",
+            isDaemon = true,
+        ) {
+            result = probeUrlBlocking(url, timeoutMs, network)
+        }
+        worker.join((timeoutMs + DNS_GRACE_MS).toLong())
+        if (worker.isAlive) {
+            worker.interrupt()
+            false
+        } else {
+            result
+        }
+    }
+
+    private fun probeUrlBlocking(
+        url: String,
+        timeoutMs: Int,
+        network: Network? = null,
+    ): Boolean {
         val connection = openHttpConnection(url, network).apply {
             requestMethod = "GET"
             connectTimeout = timeoutMs
@@ -157,7 +186,7 @@ internal object NetworkReachabilityProbe {
             instanceFollowRedirects = false
             setRequestProperty("User-Agent", "Mozilla/5.0")
         }
-        runCatching {
+        return runCatching {
             connection.connect()
             connection.responseCode in 200..399
         }.getOrElse {

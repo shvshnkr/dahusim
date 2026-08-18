@@ -2,7 +2,11 @@ package fr.husi.simplemode
 
 import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
+import fr.husi.database.PrepareForConnectResult
 import fr.husi.test.HusiKoinTest
+import fr.husi.ui.SimpleModeAllServersDeadChoice
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -48,5 +52,86 @@ class SimpleModeConnectCoordinatorTest : HusiKoinTest() {
         SimpleModeConnectCoordinator.clearPrepareConnectMarkers()
         DataStore.autoSelectFallbackQueue = ""
         AutoServerSelector.setLastPrepareUrlVerifiedIdsForTest(emptySet())
+    }
+
+    @Test
+    fun allServersDeadPromptResolvesToWaitForGoogleAfterTimeout() = runTest {
+        val choice = SimpleModeConnectCoordinator.resolveAllServersDeadChoice(
+            prompt = { awaitCancellation() },
+            timeoutMs = 100L,
+        )
+        assertEquals(SimpleModeAllServersDeadChoice.WaitForGoogle, choice)
+    }
+
+    @Test
+    fun allServersDeadPromptReturnsUserChoiceWhenAnswered() = runTest {
+        val choice = SimpleModeConnectCoordinator.resolveAllServersDeadChoice(
+            prompt = { SimpleModeAllServersDeadChoice.ExitApp },
+            timeoutMs = 100L,
+        )
+        assertEquals(SimpleModeAllServersDeadChoice.ExitApp, choice)
+    }
+
+    @Test
+    fun allServersDeadPromptShortTimeoutDoesNotFireWhenAnsweredFirst() = runTest {
+        val choice = SimpleModeConnectCoordinator.resolveAllServersDeadChoice(
+            prompt = { SimpleModeAllServersDeadChoice.WaitForGoogle },
+            timeoutMs = 0L,
+        )
+        assertEquals(SimpleModeAllServersDeadChoice.WaitForGoogle, choice)
+    }
+
+    @Test
+    fun wlServerRevivalWatchAutoConnectsWhenCandidateRecovers() = runTest {
+        var calls = 0
+        val result = SimpleModeConnectCoordinator.awaitWlServerRevival(
+            initial = PrepareForConnectResult.AllProbesDead,
+            refreshBudgetMs = 1000L,
+            whitelistOnly = true,
+            watchMs = 500L,
+            pollIntervalMs = 50L,
+            prepare = {
+                calls++
+                if (calls >= 2) PrepareForConnectResult.Success(340L) else PrepareForConnectResult.AllProbesDead
+            },
+        )
+        assertEquals(PrepareForConnectResult.Success(340L), result)
+        assertEquals(2, calls)
+    }
+
+    @Test
+    fun wlServerRevivalWatchExhaustsWindowAndStaysDead() = runTest {
+        var calls = 0
+        val result = SimpleModeConnectCoordinator.awaitWlServerRevival(
+            initial = PrepareForConnectResult.AllProbesDead,
+            refreshBudgetMs = 1000L,
+            whitelistOnly = true,
+            watchMs = 120L,
+            pollIntervalMs = 50L,
+            prepare = {
+                calls++
+                PrepareForConnectResult.AllProbesDead
+            },
+        )
+        assertEquals(PrepareForConnectResult.AllProbesDead, result)
+        assertTrue(calls >= 1)
+    }
+
+    @Test
+    fun wlServerRevivalWatchSkipsWhenInitialSucceeded() = runTest {
+        var calls = 0
+        val result = SimpleModeConnectCoordinator.awaitWlServerRevival(
+            initial = PrepareForConnectResult.Success(99L),
+            refreshBudgetMs = 1000L,
+            whitelistOnly = true,
+            watchMs = 200L,
+            pollIntervalMs = 50L,
+            prepare = {
+                calls++
+                PrepareForConnectResult.AllProbesDead
+            },
+        )
+        assertEquals(PrepareForConnectResult.Success(99L), result)
+        assertEquals(0, calls)
     }
 }

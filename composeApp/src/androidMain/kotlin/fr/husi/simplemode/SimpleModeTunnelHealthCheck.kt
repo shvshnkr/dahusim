@@ -156,6 +156,8 @@ internal object SimpleModeTunnelHealthCheck {
             dcRequiredLatencyMs = dcRequired.latencyMs,
             dcRequiredError = dcRequired.lastError,
             dcSecondaryLatencyMs = dcSecondary.latencyMs,
+            webSynthetic = web.wasSyntheticSuccess,
+            dcRequiredSynthetic = dcRequired.wasSyntheticSuccess,
         )
         SimpleModeMessengerProbe.logTunnelWave(phase, whitelistOnly, outboundTag, evaluation)
         return if (evaluation.ok) {
@@ -164,6 +166,7 @@ internal object SimpleModeTunnelHealthCheck {
                 lastError = null,
                 lastProbeUrl = evaluation.lastProbeUrl,
                 hadConclusiveFailure = false,
+                wasSyntheticSuccess = evaluation.wasSynthetic,
                 dcSecondaryOk = evaluation.dcSecondaryOk,
             )
         } else {

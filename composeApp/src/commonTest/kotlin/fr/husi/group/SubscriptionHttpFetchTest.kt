@@ -111,4 +111,83 @@ class SubscriptionHttpFetchTest {
         )
         assertNull(response.subscriptionUserInfo)
     }
+
+    @Test
+    fun `wl github fetch falls back to direct when mirror fails`() = runBlocking {
+        val canonical =
+            "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(canonical to body),
+            failForFetchLinks = setOf(WhitelistSubscriptionFetch.yandexTranslateUrl(canonical)),
+        )
+        try {
+            val response = SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = canonical,
+                    userAgent = "test",
+                    whitelistRestricted = true,
+                    vpnConnected = false,
+                ),
+            )
+            assertEquals(canonical, response.fetchLink)
+            assertFalse(response.viaYandexMirror)
+            assertTrue(response.body.contains("vless://"))
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `fetch propagates failure when mirror and direct both fail`() = runBlocking {
+        val canonical =
+            "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = emptyMap(),
+            failForFetchLinks = setOf(
+                WhitelistSubscriptionFetch.yandexTranslateUrl(canonical),
+                canonical,
+            ),
+        )
+        try {
+            val failure = assertFailsWith<IllegalStateException> {
+                SubscriptionHttpFetch.fetchText(
+                    SubscriptionHttpFetch.Request(
+                        canonicalLink = canonical,
+                        userAgent = "test",
+                        whitelistRestricted = true,
+                        vpnConnected = false,
+                    ),
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("test hook"))
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `direct fetch stays single attempt without mirror`() = runBlocking {
+        val canonical = "https://gitverse.ru/example/feed.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(canonical to body),
+            failForFetchLinks = setOf(canonical),
+        )
+        try {
+            val failure = assertFailsWith<IllegalStateException> {
+                SubscriptionHttpFetch.fetchText(
+                    SubscriptionHttpFetch.Request(
+                        canonicalLink = canonical,
+                        userAgent = "test",
+                        whitelistRestricted = true,
+                        vpnConnected = false,
+                    ),
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("test hook"))
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
 }

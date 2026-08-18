@@ -112,6 +112,66 @@ class PrepareConnectSelectionTest : HusiKoinTest() {
         )
     }
 
+    @Test
+    fun wlSelectPrefersFreshUrlVerifiedOverStaleConfirmedPriority() {
+        val verifiedId = 340L
+        val staleConfirmedId = 99L
+        val profiles = mapOf(
+            verifiedId to proxy(verifiedId, ProxyEntity.STATUS_AVAILABLE),
+            staleConfirmedId to proxy(staleConfirmedId, ProxyEntity.STATUS_AVAILABLE),
+        )
+        val urlDelays = mapOf(verifiedId to 737)
+        val probeStates = mapOf(
+            verifiedId to ProxyProbeState(
+                profileId = verifiedId,
+                state = ProbeState.DEAD,
+            ),
+            staleConfirmedId to ProxyProbeState(
+                profileId = staleConfirmedId,
+                state = ProbeState.ALIVE,
+                lastUrlMs = 500,
+                lastOkAt = System.currentTimeMillis(),
+            ),
+        )
+        val ranked = listOf(staleConfirmedId, verifiedId)
+
+        val best = PrepareConnectSelection.selectBestWlProfile(
+            rankedFinal = ranked,
+            profilesById = profiles,
+            probeStates = probeStates,
+            urlTestDelays = urlDelays,
+            isInFailureCooldown = { false },
+        )
+        assertEquals(verifiedId, best)
+    }
+
+    @Test
+    fun wlSelectFallsBackToStaleConfirmedWhenNoFreshVerified() {
+        val staleConfirmedId = 99L
+        val profiles = mapOf(
+            staleConfirmedId to proxy(staleConfirmedId, ProxyEntity.STATUS_AVAILABLE),
+            340L to proxy(340L, ProxyEntity.STATUS_AVAILABLE),
+        )
+        val probeStates = mapOf(
+            staleConfirmedId to ProxyProbeState(
+                profileId = staleConfirmedId,
+                state = ProbeState.ALIVE,
+                lastUrlMs = 500,
+                lastOkAt = System.currentTimeMillis(),
+            ),
+        )
+        val ranked = listOf(staleConfirmedId, 340L)
+
+        val best = PrepareConnectSelection.selectBestWlProfile(
+            rankedFinal = ranked,
+            profilesById = profiles,
+            probeStates = probeStates,
+            urlTestDelays = emptyMap(),
+            isInFailureCooldown = { false },
+        )
+        assertEquals(staleConfirmedId, best)
+    }
+
     private fun proxy(id: Long, status: Int) = ProxyEntity().apply {
         this.id = id
         this.status = status

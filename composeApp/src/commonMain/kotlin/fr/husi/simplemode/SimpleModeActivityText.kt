@@ -1,6 +1,7 @@
 package fr.husi.simplemode
 
 internal const val ACTIVITY_CONNECTION_UNSTABLE_RECHECKING = "Connection unstable, rechecking…"
+internal const val ACTIVITY_WAITING_FOR_SERVERS = "Waiting for servers…"
 
 /** Pre-connect: subscriptions, probes, ranking — not an active VPN session yet. */
 internal fun isSimpleModePrepareActivity(text: String): Boolean {
@@ -14,7 +15,8 @@ internal fun isSimpleModePrepareActivity(text: String): Boolean {
         text.startsWith("Comparing backups") ||
         text.startsWith("Updating") ||
         text.startsWith("Allow VPN") ||
-        text.startsWith("Return to app")
+        text.startsWith("Return to app") ||
+        text.startsWith("Waiting for")
 }
 
 /** VPN bring-up or in-tunnel health / fallback while service is starting or up. */

@@ -351,7 +351,7 @@ object DataStore {
         1
     }
     var subscriptionConnectRefreshBudgetMs by configurationStore.long(Key.SUBSCRIPTION_CONNECT_REFRESH_BUDGET_MS) {
-        2200L
+        4000L
     }
     var subscriptionFallbackRefreshBudgetMs by configurationStore.long(Key.SUBSCRIPTION_FALLBACK_REFRESH_BUDGET_MS) {
         1200L

@@ -56,14 +56,6 @@ object SubscriptionHttpFetch {
         require(request.transport == SubscriptionFetchTransport.TextFeed) {
             "SubscriptionHttpFetch.fetchText supports TextFeed only; JsonPanel is not implemented"
         }
-        SubscriptionFetchTestHooks.bodyFor(request.canonicalLink)?.let { body ->
-            return buildTextFeedResponse(
-                raw = body,
-                canonicalLink = request.canonicalLink,
-                fetchLink = request.canonicalLink,
-                subscriptionUserInfo = null,
-            )
-        }
         val whitelistRestricted = request.whitelistRestricted
             ?: DataStore.activeWhitelistRestrictedNetwork
         val vpnConnected = when {
@@ -86,6 +78,50 @@ object SubscriptionHttpFetch {
             )
         }
 
+        // Bounded fallback chain: primary (mirror on WL) first, then the canonical link. The
+        // whitelist mirror is flaky (field: 2026-08-18 02:46/02:55 preconnect refresh timeouts
+        // on BS killed 8 fetches mid-flight); the direct host is sometimes reachable after all.
+        val attempts = linkedSetOf(fetchLink, request.canonicalLink)
+        var lastFailure: Throwable? = null
+        for (link in attempts) {
+            try {
+                val raw = rawFetch(request, link, vpnConnected)
+                return buildTextFeedResponse(
+                    raw = raw.content,
+                    canonicalLink = request.canonicalLink,
+                    fetchLink = link,
+                    subscriptionUserInfo = raw.subscriptionUserInfo,
+                )
+            } catch (e: Throwable) {
+                lastFailure = e
+                if (attempts.size > 1) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H29 subscription_fetch_fallback link=${link.substringBefore('?')} " +
+                            "error=${e.message ?: e.javaClass.simpleName}",
+                    )
+                }
+            }
+        }
+        throw lastFailure ?: IllegalStateException("no fetch attempts")
+    }
+
+    private data class RawFetch(
+        val content: String,
+        val subscriptionUserInfo: String?,
+    )
+
+    private fun rawFetch(
+        request: Request,
+        link: String,
+        vpnConnected: Boolean,
+    ): RawFetch {
+        if (SubscriptionFetchTestHooks.shouldFailFetch(link)) {
+            throw IllegalStateException("test hook: fetch failed for $link")
+        }
+        SubscriptionFetchTestHooks.bodyFor(request.canonicalLink)?.let { body ->
+            return RawFetch(body, null)
+        }
         val response = Libcore.newHttpClient().apply {
             keepAlive()
             if (vpnConnected) {
@@ -96,15 +132,12 @@ object SubscriptionHttpFetch {
                 )
             }
         }.newRequest().apply {
-            setURL(fetchLink)
+            setURL(link)
             Logs.d("subscription fetch UA (${request.purpose.name}): ${request.userAgent}")
             setUserAgent(request.userAgent)
         }.execute()
-
-        return buildTextFeedResponse(
-            raw = response.contentString,
-            canonicalLink = request.canonicalLink,
-            fetchLink = fetchLink,
+        return RawFetch(
+            content = response.contentString,
             subscriptionUserInfo = response.getHeader("Subscription-Userinfo"),
         )
     }

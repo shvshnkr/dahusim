@@ -923,6 +923,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_activity_ranking">Ранжирование %1$d серверов…</string>
     <string name="simple_mode_activity_testing_tcp">Проверка TCP %1$d/%2$d</string>
     <string name="simple_mode_activity_testing_url">Проверка URL %1$d/%2$d</string>
+    <string name="simple_mode_activity_waiting_servers">Ожидание серверов…</string>
     <string name="simple_mode_connect">Подключить</string>
     <string name="simple_mode_disconnect">Отключить</string>
     <string name="simple_mode_logs">Отправить логи</string>

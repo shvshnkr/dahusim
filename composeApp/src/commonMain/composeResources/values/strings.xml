@@ -1027,6 +1027,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_activity_ranking">Ranking %1$d servers…</string>
     <string name="simple_mode_activity_testing_tcp">TCP probe %1$d/%2$d</string>
     <string name="simple_mode_activity_testing_url">URL probe %1$d/%2$d</string>
+    <string name="simple_mode_activity_waiting_servers">Waiting for servers…</string>
     <string name="simple_mode_connect">Connect</string>
     <string name="simple_mode_disconnect">Disconnect</string>
     <string name="simple_mode_logs">Send logs</string>

@@ -206,9 +206,79 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
     }
 
     @Test
-    fun wlReprobeBypassTrueOnlyForWhitelist() {
-        assertTrue(AutoServerSelector.shouldWlReprobeBypass(wlOnly = true))
-        assertFalse(AutoServerSelector.shouldWlReprobeBypass(wlOnly = false))
+    fun wlSubscriptionEarlyExitAfterFirstUrlOk() {
+        assertEquals(
+            1,
+            AutoServerSelector.urlTestEarlyExitTarget(
+                poolMode = ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION,
+                whitelistBuiltinOnly = true,
+            ),
+        )
+        assertEquals(
+            Int.MAX_VALUE,
+            AutoServerSelector.urlTestEarlyExitTarget(
+                poolMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
+                whitelistBuiltinOnly = false,
+            ),
+        )
+        assertEquals(
+            8,
+            AutoServerSelector.urlTestEarlyExitTarget(
+                poolMode = ConnectPoolPolicy.PoolBuildMode.MERGED,
+                whitelistBuiltinOnly = true,
+            ),
+        )
+    }
+
+    @Test
+    fun wlUrlWavePoolLeadsWithThisRunTcpAliveByPingBeforePriority() {
+        val pool = listOf(
+            plainProxy(1L),
+            plainProxy(2L).also { it.ping = 90 },
+            plainProxy(3L).also { it.ping = 40 },
+            plainProxy(4L),
+        )
+        val wave = AutoServerSelector.buildWlUrlWavePool(
+            connectPool = pool,
+            quickProbePings = mapOf(2L to 90, 3L to 40),
+            priorityFirstIds = setOf(4L),
+            urlTestCap = 4,
+            extraTcp = 0,
+        )
+        assertEquals(listOf(3L, 2L, 4L, 1L), wave.map { it.id })
+    }
+
+    @Test
+    fun wlUrlWavePoolRespectsCapAndKeepsAliveInside() {
+        val pool = (1L..10L).map { plainProxy(it) }
+        val wave = AutoServerSelector.buildWlUrlWavePool(
+            connectPool = pool,
+            quickProbePings = mapOf(9L to 10, 3L to 55),
+            priorityFirstIds = emptySet(),
+            urlTestCap = 3,
+            extraTcp = 2,
+        )
+        assertEquals(5, wave.size)
+        assertEquals(listOf(9L, 3L), wave.take(2).map { it.id })
+    }
+
+    @Test
+    fun wlUrlWavePoolEmptyWhenCapZero() {
+        val pool = listOf(plainProxy(1L))
+        val wave = AutoServerSelector.buildWlUrlWavePool(
+            connectPool = pool,
+            quickProbePings = mapOf(1L to 5),
+            priorityFirstIds = emptySet(),
+            urlTestCap = 0,
+            extraTcp = 0,
+        )
+        assertTrue(wave.isEmpty())
+    }
+
+    private fun plainProxy(id: Long) = ProxyEntity().apply {
+        this.id = id
+        status = ProxyEntity.STATUS_INITIAL
+        groupId = 1L
     }
 
     private fun trojanProxy(id: Long) = ProxyEntity().apply {

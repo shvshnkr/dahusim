@@ -79,6 +79,24 @@ object FeatureJourneys {
             ),
             testClass = "fr.husi.scenario.journey.CarrierReconnectAfterOutageJourneyTest",
         ),
+        FeatureJourney(
+            id = "simple_all_servers_dead_prompt_timeout",
+            userPromise = "All-servers-dead prompt cannot hang the app: unresolved prompt resolves to wait-for-google and stops the service",
+            entryPoints = listOf(
+                "SimpleModeConnectCoordinator.handleAllServersDead",
+                "MainViewModel.promptSimpleModeAllServersDead",
+            ),
+            testClass = "fr.husi.scenario.journey.SimpleAllServersDeadPromptTimeoutJourneyTest",
+        ),
+        FeatureJourney(
+            id = "wl_server_revival_watch",
+            userPromise = "BS dead sweep keeps watching and auto-connects when a flapping server revives — one Connect tap, not a retry loop",
+            entryPoints = listOf(
+                "SimpleModeConnectCoordinator.awaitWlServerRevival",
+                "AutoServerSelector.prepareForConnect",
+            ),
+            testClass = "fr.husi.scenario.journey.WlServerRevivalWatchJourneyTest",
+        ),
     )
 
     fun byId(id: String): FeatureJourney? = all.find { it.id == id }
