@@ -954,6 +954,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_whitelist_warning">Похоже, сеть в режиме белых списков (Google недоступен, при этом отвечают Dzen или известные URL списков). В простом режиме сначала используются WL-подписки; при провале — обычные. Стабильность не гарантируется. Husi всё равно попробует подключиться.</string>
     <string name="simple_mode_wait_for_google">Проверки автоподключения поставлены на паузу для экономии батареи. Они возобновятся, когда появится интернет без БС.</string>
     <string name="simple_mode_no_internet_pause">Интернет недоступен. Проверки автоподключения поставлены на паузу до восстановления связи.</string>
+    <string name="simple_mode_no_internet_banner_title">Нет интернета</string>
+    <string name="simple_mode_no_internet_banner_subtitle">Husi не может подключиться — проверьте мобильные данные или Wi‑Fi.</string>
     <string name="manual_profile_probe_failed">Выбранный сервер не отвечает. Выберите другой профиль или включите автоподбор.</string>
     <string name="simple_mode_all_servers_dead_title">Нет рабочих серверов</string>
     <string name="simple_mode_all_servers_dead_message">Профили из подписок не ответили на проверки. Можно ждать интернета без БС (для обычных обновлений списков) или выйти из приложения.</string>

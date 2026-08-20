@@ -52,7 +52,8 @@ import fr.husi.resources.simple_mode_connecting
 import fr.husi.resources.simple_mode_preparing
 import fr.husi.resources.simple_mode_full_ui
 import fr.husi.resources.simple_mode_logs
-import fr.husi.resources.simple_mode_no_internet_pause
+import fr.husi.resources.simple_mode_no_internet_banner_subtitle
+import fr.husi.resources.simple_mode_no_internet_banner_title
 import fr.husi.resources.simple_mode_no_profile
 import fr.husi.resources.simple_mode_permission_pending
 import fr.husi.resources.simple_mode_permission_unlock
@@ -102,6 +103,7 @@ fun SimpleHomeScreen(
         .intFlow(Key.PROBE_2K_SCAN_CHECKED, 0)
         .collectAsStateWithLifecycle(0)
     var whitelistOnly by remember { mutableStateOf(DataStore.activeWhitelistRestrictedNetwork) }
+    var noInternet by remember { mutableStateOf(false) }
     var showUncleanStopNotice by remember { mutableStateOf(false) }
     var scanStale by remember { mutableStateOf(false) }
     var lastScanUpdateAt by remember { mutableLongStateOf(0L) }
@@ -162,7 +164,10 @@ fun SimpleHomeScreen(
             }
 
             override fun onNoInternet() {
-                mainViewModel.showSnackbar(StringOrRes.Res(Res.string.simple_mode_no_internet_pause))
+                // Persistent banner instead of a one-shot snackbar: the user must see WHY
+                // Connect does nothing when the tariff/data link is dead ("app is broken"
+                // feedback, field 2026-08-21). Cleared on the next attempt / activity.
+                noInternet = true
             }
 
             override fun onNoProfile() {
@@ -189,6 +194,15 @@ fun SimpleHomeScreen(
             ServiceState.Idle,
             -> permissionPending = false
             else -> Unit
+        }
+        if (status.state == ServiceState.Connected) {
+            noInternet = false
+        }
+    }
+    LaunchedEffect(activityText) {
+        // Any non-blank activity means a connect attempt got past the network gate.
+        if (activityText.isNotBlank()) {
+            noInternet = false
         }
     }
     LaunchedEffect(status.state) {
@@ -289,7 +303,36 @@ fun SimpleHomeScreen(
             )
         }
 
-        if (whitelistOnly) {
+        if (noInternet) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.padding(top = 14.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(MaterialTheme.colorScheme.onErrorContainer, CircleShape),
+                    )
+                    Text(
+                        text = stringResource(Res.string.simple_mode_no_internet_banner_title),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = stringResource(Res.string.simple_mode_no_internet_banner_subtitle),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                    )
+                }
+            }
+        } else if (whitelistOnly) {
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.errorContainer,
@@ -363,6 +406,9 @@ fun SimpleHomeScreen(
                         }
                         SimpleModeVpnSessionMarker.clearOnConnectAttempt()
                         showUncleanStopNotice = false
+                        // New attempt: the previous network-gate result is stale — the banner
+                        // re-appears only if the coordinator blocks again.
+                        noInternet = false
                         if (permissionPending) {
                             simpleModeLog("SimpleMode", "connect_ignored_permission_pending")
                             return@SimplePowerButton

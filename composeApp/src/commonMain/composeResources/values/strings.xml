@@ -1056,6 +1056,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_whitelist_warning">This network appears to use a whitelist mode (Google is unreachable while Dzen or known list URLs respond). In simple mode, server selection prefers whitelist-oriented subscriptions; if those fail, open subscriptions are tried. Stability is not guaranteed. Husi will still try to connect.</string>
     <string name="simple_mode_wait_for_google">Auto-connect checks are paused to save battery. They will resume once you have normal internet outside whitelist-only networks.</string>
     <string name="simple_mode_no_internet_pause">No internet access detected. Auto-connect checks are paused until connectivity returns.</string>
+    <string name="simple_mode_no_internet_banner_title">No internet</string>
+    <string name="simple_mode_no_internet_banner_subtitle">Husi can't connect — check mobile data or Wi-Fi.</string>
     <string name="manual_profile_probe_failed">The selected server did not respond. Choose another profile or use auto-connect.</string>
     <string name="simple_mode_all_servers_dead_title">No working servers</string>
     <string name="simple_mode_all_servers_dead_message">Your subscription profiles did not respond to health checks. You can wait for normal internet outside the whitelist (for list updates), or exit the app.</string>

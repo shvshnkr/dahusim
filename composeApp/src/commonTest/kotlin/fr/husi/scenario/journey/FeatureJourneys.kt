@@ -100,6 +100,15 @@ object FeatureJourneys {
             testClass = "fr.husi.scenario.journey.CarrierReconnectAfterOutageJourneyTest",
         ),
         FeatureJourney(
+            id = "simple_no_internet_blocked",
+            userPromise = "Connect on a dead link shows a no-internet banner and never pretends to be preparing — the app blocks before any probe",
+            entryPoints = listOf(
+                "SimpleModeConnectCoordinator.runConnect",
+                "SimpleModeNetworkProbeHooks",
+            ),
+            testClass = "fr.husi.scenario.journey.SimpleNoInternetBlockedJourneyTest",
+        ),
+        FeatureJourney(
             id = "simple_all_servers_dead_prompt_timeout",
             userPromise = "All-servers-dead prompt cannot hang the app: unresolved prompt resolves to wait-for-google and stops the service",
             entryPoints = listOf(
