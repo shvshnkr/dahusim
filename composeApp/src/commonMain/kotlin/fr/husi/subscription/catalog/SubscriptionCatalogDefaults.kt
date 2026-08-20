@@ -135,6 +135,42 @@ object SubscriptionCatalogDefaults {
             "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyaktestru.txt",
             ConnectPoolRole.OPEN,
         ),
+        CatalogSeed(
+            "terik21-hiddify",
+            "HiddifySubs VlessKeys",
+            "https://raw.githubusercontent.com/terik21/HiddifySubs-VlessKeys/refs/heads/main/main",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "kafka-def",
+            "Kafka sub",
+            "https://raw.githubusercontent.com/kafka-def/kafka-sub/refs/heads/main/subscription.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "migiti-fast-ru",
+            "MiGiTi FAST RU SNI",
+            "https://raw.githubusercontent.com/misha12333211-ctrl/proxy-subs/refs/heads/main/2.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "go-engine",
+            "Go Engine By MiGiTi",
+            "https://flat-hill-2415.fatago78.workers.dev",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "haven-gitverse",
+            "Haven VPN",
+            "https://gitverse.ru/api/repos/soulcoil/Haven/raw/branch/master/Haven",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "hardvpn-wlall",
+            "HARDVPN Белые списки ALL",
+            "https://raw.githubusercontent.com/ksenkovsolo/HardVPN-bypass-WhiteLists-/refs/heads/main/vpn-lte/WHITELIST-ALL.txt",
+            ConnectPoolRole.WL,
+        ),
     )
 
     fun builtinSourceId(sourceKey: String): String = "$BUILTIN_SOURCE_PREFIX$sourceKey"
