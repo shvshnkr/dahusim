@@ -577,30 +577,6 @@ object AutoServerSelector {
                         "H14 quick_probe_done alive=$quickProbeAlive tested=$tcpTestedCount " +
                             "pool=${connectPool.size} best=$quickProbeHead",
                     )
-                    if (urlTestDelays.isNotEmpty()) {
-                        val urlOkBest = urlTestDelays.minBy { it.value }.key
-                        val urlOkRanked = urlTestDelays.entries
-                            .sortedBy { it.value }
-                            .map { it.key }
-                        val tcpOnlyRanked = quickProbePings.entries
-                            .filter { it.key !in urlTestDelays }
-                            .sortedBy { it.value }
-                            .map { it.key }
-                        val earlyFallbackQueue = (urlOkRanked + tcpOnlyRanked).joinToString(",")
-                        DataStore.autoSelectFallbackQueue = earlyFallbackQueue
-                        DataStore.autoSelectFallbackIndex = 0
-                        sessionFallbackSteps.set(0)
-                        if (selectedBefore != urlOkBest) {
-                            DataStore.selectedProxy = urlOkBest
-                        }
-                        simpleModeLog(
-                            "SimpleMode",
-                            "H4 early_connect best=$urlOkBest urlOk=${urlTestDelays.size} " +
-                                "tcpAlive=$quickProbeAlive queueSize=${urlOkRanked.size + tcpOnlyRanked.size}",
-                        )
-                        ProxyProbeStateStore.logPoolSnapshot("prepare")
-                        return@coroutineScope PrepareForConnectResult.Success(urlOkBest)
-                    }
                 } else {
                     // OPEN: LKG pre-seed first — live candidates (probeState.lastUrlMs > 0,
                     // 48h LKG freshness) get a URL check before any TCP round; a live one
@@ -897,14 +873,20 @@ object AutoServerSelector {
             )
         }
 
-        // OPEN early-connect: first url-ok(s) already decided the connect — skip the full
+        // Early-connect: first url-ok(s) already decided the connect — skip the full
         // ranking (smoke 754 OPEN: first url-ok at 214ms, but preconnect took 18.5s through
-        // ranking). Fallback queue = url-ok + tcp-alive. Best keeps the messenger TCP+URL
-        // preference of demoteUrlOnlyBestIfNeeded (URL-only url-ok can be a false positive —
-        // smoke 754 best fell post_connect); the ranking path below still applies
-        // demoteUrlOnlyBestIfNeeded.
-        if (!wlUrlProbes && shouldQuickProbe && urlTestDelays.isNotEmpty()) {
-            val earlyBest = PrepareConnectSelection.openEarlyConnectBest(urlTestDelays, quickProbePings)
+        // ranking; wl: the in-scope return@coroutineScope discarded its value and prepare
+        // fell through to full ranking — bs_session4_753.log: early_connect 07:53:32.171 →
+        // queue_prepared 07:53:36.507 → preconnect 75.5s).
+        // Fallback queue = url-ok + tcp-alive. Best keeps the messenger TCP+URL preference of
+        // demoteUrlOnlyBestIfNeeded (URL-only url-ok can be a false positive — smoke 754 best
+        // fell post_connect); the ranking path below still applies demoteUrlOnlyBestIfNeeded.
+        if (shouldQuickProbe && urlTestDelays.isNotEmpty()) {
+            val earlyBest = if (wlUrlProbes) {
+                urlTestDelays.minBy { it.value }.key
+            } else {
+                PrepareConnectSelection.openEarlyConnectBest(urlTestDelays, quickProbePings)
+            }
             val urlOkRanked = urlTestDelays.entries
                 .sortedBy { it.value }
                 .map { it.key }
@@ -927,7 +909,7 @@ object AutoServerSelector {
                 "SimpleMode",
                 "H4 early_connect best=$earlyBest urlOk=${urlTestDelays.size} " +
                     "tcpAlive=${quickProbePings.size} queueSize=${urlOkRanked.size + tcpOnlyRanked.size} " +
-                    "path=open",
+                    "path=${if (wlUrlProbes) "wl" else "open"}",
             )
             ProxyProbeStateStore.logPoolSnapshot("prepare")
             return PrepareForConnectResult.Success(earlyBest)
