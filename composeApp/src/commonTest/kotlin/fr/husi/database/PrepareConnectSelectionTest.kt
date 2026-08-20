@@ -172,6 +172,45 @@ class PrepareConnectSelectionTest : HusiKoinTest() {
         assertEquals(staleConfirmedId, best)
     }
 
+    @Test
+    fun openEarlyConnectPrefersTcpUrlWhenMinDelayIsUrlOnly() {
+        val urlDelays = mapOf(4836L to 284, 6209L to 326)
+        val tcpPings = mapOf(6209L to 5)
+        assertEquals(
+            6209L,
+            PrepareConnectSelection.openEarlyConnectBest(urlDelays, tcpPings),
+        )
+    }
+
+    @Test
+    fun openEarlyConnectKeepsMinDelayWhenItHasTcp() {
+        val urlDelays = mapOf(6209L to 284, 4836L to 326)
+        val tcpPings = mapOf(6209L to 5, 75L to 5)
+        assertEquals(
+            6209L,
+            PrepareConnectSelection.openEarlyConnectBest(urlDelays, tcpPings),
+        )
+    }
+
+    @Test
+    fun openEarlyConnectKeepsMinDelayUrlOnlyWhenNoTcpPings() {
+        val urlDelays = mapOf(4836L to 284, 6209L to 326)
+        assertEquals(
+            4836L,
+            PrepareConnectSelection.openEarlyConnectBest(urlDelays, emptyMap()),
+        )
+    }
+
+    @Test
+    fun openEarlyConnectKeepsMinDelayUrlOnlyWhenNoTcpUrlPairExists() {
+        val urlDelays = mapOf(4836L to 284, 6209L to 326)
+        val tcpPings = mapOf(75L to 5)
+        assertEquals(
+            4836L,
+            PrepareConnectSelection.openEarlyConnectBest(urlDelays, tcpPings),
+        )
+    }
+
     private fun proxy(id: Long, status: Int) = ProxyEntity().apply {
         this.id = id
         this.status = status

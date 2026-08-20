@@ -293,7 +293,7 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
             ),
         )
         assertEquals(
-            Int.MAX_VALUE,
+            2,
             AutoServerSelector.urlTestEarlyExitTarget(
                 poolMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
                 whitelistBuiltinOnly = false,

@@ -129,4 +129,26 @@ internal object PrepareConnectSelection {
         } ?: return best
         return replacement
     }
+
+    /**
+     * OPEN early-connect best: min-delay url-ok, but when the messenger circuit is active and
+     * this-run TCP pings exist, prefer a TCP+URL url-ok over a URL-only min-delay — a URL-only
+     * ok can be a false positive (smoke 754: first url-ok at 214ms died post_connect). Mirrors
+     * [demoteUrlOnlyBestIfNeeded] within the url-ok set only; the full ranking path keeps using
+     * [demoteUrlOnlyBestIfNeeded] itself.
+     */
+    fun openEarlyConnectBest(
+        urlTestDelays: Map<Long, Int>,
+        quickProbePings: Map<Long, Int>,
+    ): Long {
+        val urlOkBest = urlTestDelays.minBy { it.value }.key
+        if (!SimpleModeHealthRoute.messengerProbeRequired(false) || quickProbePings.isEmpty()) {
+            return urlOkBest
+        }
+        if (urlOkBest in quickProbePings) return urlOkBest
+        return urlTestDelays.entries
+            .sortedBy { it.value }
+            .firstOrNull { it.key in quickProbePings }
+            ?.key ?: urlOkBest
+    }
 }

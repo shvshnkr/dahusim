@@ -157,6 +157,7 @@ object AutoServerSelector {
 
     private const val WL_URL_PROBE_EARLY_EXIT = 8
     private const val WL_SUBSCRIPTION_URL_PROBE_EARLY_EXIT = 1
+    private const val OPEN_URL_PROBE_EARLY_EXIT = 2
     private const val TCP_SURVIVOR_URL_CAP = 64
     private const val CONFIRM_TCP_TOP_K = 12
 
@@ -601,6 +602,48 @@ object AutoServerSelector {
                         return@coroutineScope PrepareForConnectResult.Success(urlOkBest)
                     }
                 } else {
+                    // OPEN: LKG pre-seed first — live candidates (probeState.lastUrlMs > 0,
+                    // 48h LKG freshness) get a URL check before any TCP round; a live one
+                    // ends the prepare instantly. Does not duplicate tryLastKnownGoodFastPath
+                    // (that one is a single LKG skip-full-probe; this is a pool URL pre-seed).
+                    val lkgCandidates = connectPool
+                        .filter { proxy ->
+                            val state = probeStates[proxy.id]
+                            state != null && state.lastUrlMs > 0 &&
+                                AutoServerSelectorProbePolicy.isLastKnownGoodUrlFresh(proxy.id)
+                        }
+                        .sortedWith(
+                            compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
+                                .thenBy { it.id },
+                        )
+                    val lkgDelays = if (lkgCandidates.isNotEmpty()) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H17 urltest_started candidates=${lkgCandidates.size} mode=open_lkg_preseed",
+                        )
+                        urlTestTopCandidates(
+                            lkgCandidates,
+                            urlConcurrency,
+                            session,
+                            poolMode = poolMode,
+                        ) { done, total ->
+                            setSimpleModeActivity("Testing URL $done/$total")
+                            Probe2kProgress.publishScan(done, total)
+                        }
+                    } else {
+                        emptyMap()
+                    }
+                    if (lkgDelays.isNotEmpty()) {
+                        quickProbePings = emptyMap()
+                        tcpTestedCount = 0
+                        urlTestCandidates = lkgCandidates
+                        urlTestDelays = lkgDelays
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H14 quick_probe_done alive=0 tested=0 " +
+                                "pool=${connectPool.size} best= lkg_preseed=open",
+                        )
+                    } else {
                 val tcpJob = async(Dispatchers.IO) {
                     probeTcpInBatches(
                         connectPool = connectPool,
@@ -643,6 +686,21 @@ object AutoServerSelector {
                     }
                 }
                 ensurePrepareCurrent(session)
+                val urlDelays0 = urlJob.await()
+                if (urlDelays0.isNotEmpty()) {
+                    // First url-ok(s) decided the connect: cancel the in-flight TCP round and
+                    // early-connect instead of waiting for the full TCP enumeration.
+                    tcpJob.cancel()
+                    quickProbePings = emptyMap()
+                    tcpTestedCount = 0
+                    urlTestCandidates = parallelUrlPool
+                    urlTestDelays = urlDelays0
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H14 quick_probe_done alive=0 tested=0 " +
+                            "pool=${connectPool.size} best= url_early_exit=open",
+                    )
+                } else {
                 val tcpProbeResult = tcpJob.await()
                 quickProbePings = tcpProbeResult.pings
                 tcpTestedCount = tcpProbeResult.testedCount
@@ -657,7 +715,7 @@ object AutoServerSelector {
                         "pool=${connectPool.size} best=$quickProbeHead",
                 )
                 ensurePrepareCurrent(session)
-                var merged = urlJob.await().toMutableMap()
+                var merged = urlDelays0.toMutableMap()
                 val preUrlSorted = connectPool.sortedWith(
                     compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
                         .thenBy { if (quickProbePings.containsKey(it.id)) 0 else 1 }
@@ -773,6 +831,8 @@ object AutoServerSelector {
                 }
                     urlTestDelays = merged
                 }
+                }
+            }
             }
         } else {
             quickProbePings = emptyMap()
@@ -835,6 +895,42 @@ object AutoServerSelector {
                 "H17 urltest_done success=$urlOk tested=${urlTestCandidates.size} " +
                     "tcp_survivors=$tcpSurvivors best=$urlHead",
             )
+        }
+
+        // OPEN early-connect: first url-ok(s) already decided the connect — skip the full
+        // ranking (smoke 754 OPEN: first url-ok at 214ms, but preconnect took 18.5s through
+        // ranking). Fallback queue = url-ok + tcp-alive. Best keeps the messenger TCP+URL
+        // preference of demoteUrlOnlyBestIfNeeded (URL-only url-ok can be a false positive —
+        // smoke 754 best fell post_connect); the ranking path below still applies
+        // demoteUrlOnlyBestIfNeeded.
+        if (!wlUrlProbes && shouldQuickProbe && urlTestDelays.isNotEmpty()) {
+            val earlyBest = PrepareConnectSelection.openEarlyConnectBest(urlTestDelays, quickProbePings)
+            val urlOkRanked = urlTestDelays.entries
+                .sortedBy { it.value }
+                .map { it.key }
+            val tcpOnlyRanked = quickProbePings.entries
+                .filter { it.key !in urlTestDelays }
+                .sortedBy { it.value }
+                .map { it.key }
+            val earlyFallbackQueue = (urlOkRanked + tcpOnlyRanked).joinToString(",")
+            DataStore.autoSelectFallbackQueue = earlyFallbackQueue
+            DataStore.autoSelectFallbackIndex = 0
+            sessionFallbackSteps.set(0)
+            if (selectedBefore != earlyBest) {
+                DataStore.selectedProxy = earlyBest
+            }
+            if (!effectiveHandoff) {
+                AutoServerSelectorProbePolicy.recordFullProbe(proxies, wlUrlProbes)
+            }
+            lastPrepareUrlVerifiedIds = urlTestDelays.keys
+            simpleModeLog(
+                "SimpleMode",
+                "H4 early_connect best=$earlyBest urlOk=${urlTestDelays.size} " +
+                    "tcpAlive=${quickProbePings.size} queueSize=${urlOkRanked.size + tcpOnlyRanked.size} " +
+                    "path=open",
+            )
+            ProxyProbeStateStore.logPoolSnapshot("prepare")
+            return PrepareForConnectResult.Success(earlyBest)
         }
 
         val tcpPoolFullyTested = !compactTcpProbe ||
@@ -1902,6 +1998,7 @@ object AutoServerSelector {
             poolMode == ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION -> WL_SUBSCRIPTION_URL_PROBE_EARLY_EXIT
             whitelistBuiltinOnly -> WL_URL_PROBE_EARLY_EXIT
             poolMode == ConnectPoolPolicy.PoolBuildMode.MERGED -> 1
+            poolMode == ConnectPoolPolicy.PoolBuildMode.OPEN -> OPEN_URL_PROBE_EARLY_EXIT
             else -> Int.MAX_VALUE
         }
 
@@ -2060,7 +2157,12 @@ object AutoServerSelector {
         onProgress: (round: Int, doneInRound: Int, totalInRound: Int, cumulativeTested: Int, poolSize: Int) -> Unit,
     ): TcpProbeBatchResult {
         if (!compactTcpProbe) {
-            val pings = quickTcpProbe(probePoolOrdered, tcpConcurrency, session) { done, total ->
+            val pings = quickTcpProbe(
+                probePoolOrdered,
+                tcpConcurrency,
+                session,
+                TCP_PROBE_TIMEOUT_MS_ROUND_1,
+            ) { done, total ->
                 onProgress(1, done, total, done, connectPool.size)
             }
             return TcpProbeBatchResult(pings, probePoolOrdered.size)
@@ -2080,12 +2182,17 @@ object AutoServerSelector {
             }
             if (batch.isEmpty()) break
             batch.forEach { testedIds.add(it.id) }
+            val roundTimeoutMs = if (round == 1) {
+                TCP_PROBE_TIMEOUT_MS_ROUND_1
+            } else {
+                TCP_PROBE_TIMEOUT_MS_LATER_ROUNDS
+            }
             simpleModeLog(
                 "SimpleMode",
                 "H14 tcp_probe_round round=$round batch=${batch.size} cumulative=${testedIds.size} " +
-                    "pool=${connectPool.size} aliveSoFar=${merged.size}",
+                    "pool=${connectPool.size} aliveSoFar=${merged.size} timeoutMs=$roundTimeoutMs",
             )
-            val roundPings = quickTcpProbe(batch, tcpConcurrency, session) { done, total ->
+            val roundPings = quickTcpProbe(batch, tcpConcurrency, session, roundTimeoutMs) { done, total ->
                 onProgress(round, done, total, testedIds.size, connectPool.size)
             }
             merged.putAll(roundPings)
