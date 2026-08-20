@@ -91,6 +91,84 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
     }
 
     @Test
+    fun wlNoUrlOkDeadEndsOnBsOpenFallback() {
+        assertTrue(
+            AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
+                wlUrlProbes = false,
+                activeWhitelistRestrictedNetwork = true,
+                shouldQuickProbe = true,
+                urlOk = 0,
+                urlConfirmed = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wlNoUrlOkProceedsWhenCandidateUrlConfirmed() {
+        assertFalse(
+            AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
+                wlUrlProbes = false,
+                activeWhitelistRestrictedNetwork = true,
+                shouldQuickProbe = true,
+                urlOk = 0,
+                urlConfirmed = true,
+            ),
+        )
+    }
+
+    @Test
+    fun wlNoUrlOkProceedsWhenUrlOkPresent() {
+        assertFalse(
+            AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
+                wlUrlProbes = false,
+                activeWhitelistRestrictedNetwork = true,
+                shouldQuickProbe = true,
+                urlOk = 1,
+                urlConfirmed = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wlNoUrlOkKeepsDegradedContinueOnOpenNetwork() {
+        assertFalse(
+            AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
+                wlUrlProbes = false,
+                activeWhitelistRestrictedNetwork = false,
+                shouldQuickProbe = true,
+                urlOk = 0,
+                urlConfirmed = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wlNoUrlOkDeadEndsOnWlPoolRegardlessOfNetworkFlag() {
+        assertTrue(
+            AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
+                wlUrlProbes = true,
+                activeWhitelistRestrictedNetwork = false,
+                shouldQuickProbe = true,
+                urlOk = 0,
+                urlConfirmed = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wlNoUrlOkSkipsWhenQuickProbeDidNotRun() {
+        assertFalse(
+            AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
+                wlUrlProbes = true,
+                activeWhitelistRestrictedNetwork = true,
+                shouldQuickProbe = false,
+                urlOk = 0,
+                urlConfirmed = false,
+            ),
+        )
+    }
+
+    @Test
     fun openPrepareHardDeadWhenNoTcpSurvivors() {
         assertEquals(
             AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD,

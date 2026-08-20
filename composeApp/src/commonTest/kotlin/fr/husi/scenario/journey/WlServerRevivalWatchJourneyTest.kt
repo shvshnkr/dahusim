@@ -1,5 +1,6 @@
 package fr.husi.scenario.journey
 
+import fr.husi.database.AutoServerSelectorProbePolicy
 import fr.husi.database.PrepareForConnectResult
 import fr.husi.simplemode.SimpleModeConnectCoordinator
 import kotlinx.coroutines.test.runTest
@@ -30,6 +31,36 @@ class WlServerRevivalWatchJourneyTest : FeatureJourneyTest() {
         )
 
         assertEquals(PrepareForConnectResult.Success(340L), outcome)
+        assertTrue(calls >= 2)
+    }
+
+    @Test
+    fun bsOpenFallbackZeroUrlOkDeadEndsIntoRevivalWatch() = runTest {
+        // BS night: WL pool 0 url-ok → open fallback 0 url-ok with tcp-alive nodes. The sweep
+        // must NOT DEGRADED-continue into a dead tunnel — it dead-ends and the watch takes over.
+        assertTrue(
+            AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
+                wlUrlProbes = false,
+                activeWhitelistRestrictedNetwork = true,
+                shouldQuickProbe = true,
+                urlOk = 0,
+                urlConfirmed = false,
+            ),
+        )
+        var calls = 0
+        val outcome = SimpleModeConnectCoordinator.awaitWlServerRevival(
+            initial = PrepareForConnectResult.AllProbesDead,
+            refreshBudgetMs = 1000L,
+            whitelistOnly = true,
+            watchMs = 400L,
+            pollIntervalMs = 50L,
+            prepare = {
+                calls++
+                if (calls >= 2) PrepareForConnectResult.Success(2175L) else PrepareForConnectResult.AllProbesDead
+            },
+        )
+
+        assertEquals(PrepareForConnectResult.Success(2175L), outcome)
         assertTrue(calls >= 2)
     }
 }

@@ -8,11 +8,9 @@ internal object ConnectPoolPolicy {
     const val WL_PREPARE_CAP = 128
     const val OPEN_PREPARE_CAP = 256
     const val USER_PREPARE_CAP = 128
-    const val WL_STRATIFIED_PER_GROUP = 3
+    const val MERGED_PREPARE_CAP = 4096
     const val WL_LIST_HEAD_PER_GROUP = 2
-    const val USER_STRATIFIED_PER_GROUP = 3
     const val USER_LIST_HEAD_PER_GROUP = 2
-    const val OPEN_STRATIFIED_PER_GROUP = 4
     const val MAX_SESSION_FALLBACK_STEPS_WL = 4
     const val MAX_SESSION_FALLBACK_STEPS_OPEN = 32
 
@@ -21,7 +19,7 @@ internal object ConnectPoolPolicy {
         OPEN,
         /** WL-marked subscription nodes only. */
         WL_SUBSCRIPTION,
-        /** WL-marked + open nodes (after WL pool failed once on this session). */
+        /** WL-marked + open nodes: all selectable on BS from start, WL-first. */
         MERGED,
     }
 
@@ -144,7 +142,6 @@ internal object ConnectPoolPolicy {
         val listHead = wlListHeadPerGroup(subWlPool)
         val subWlProxies = stratifiedSample(
             proxies = subWlPool,
-            perGroupCap = WL_STRATIFIED_PER_GROUP,
             totalCap = minOf(subWlPool.size, WL_PREPARE_CAP / 2),
         )
         val handoffProxies = allProxies.filter { it.id in handoffIds && it.id !in subscriptionWlIds }
@@ -157,7 +154,6 @@ internal object ConnectPoolPolicy {
         val stratified = if (stratifiedBudget > 0) {
             stratifiedSample(
                 proxies = rest.filter { it.id !in urlIds },
-                perGroupCap = WL_STRATIFIED_PER_GROUP,
                 totalCap = stratifiedBudget,
             )
         } else {
@@ -197,7 +193,6 @@ internal object ConnectPoolPolicy {
         val stratified = if (stratifiedBudget > 0) {
             stratifiedSample(
                 proxies = rest.filter { it.id !in urlIds && it.id !in listHead.map { p -> p.id }.toSet() },
-                perGroupCap = USER_STRATIFIED_PER_GROUP,
                 totalCap = stratifiedBudget,
             )
         } else {
@@ -246,7 +241,6 @@ internal object ConnectPoolPolicy {
             val budget = (OPEN_PREPARE_CAP - handoffProxies.size - userHead.size - urlHinted.size).coerceAtLeast(0)
             val stratified = stratifiedSample(
                 proxies = rest.filter { it.id !in urlIds },
-                perGroupCap = OPEN_STRATIFIED_PER_GROUP,
                 totalCap = budget,
             )
             (handoffProxies + userHead + urlHinted + stratified).distinctBy { it.id }.take(OPEN_PREPARE_CAP)
@@ -284,15 +278,18 @@ internal object ConnectPoolPolicy {
         val restAfterUser = rest.filter { it.id !in userHeadIds }
         val urlHinted = restAfterUser.filter { (probeStates[it.id]?.lastUrlMs ?: 0) > 0 }
         val urlIds = urlHinted.map { it.id }.toSet()
-        val budget = (OPEN_PREPARE_CAP - handoffProxies.size - userHead.size - urlHinted.size).coerceAtLeast(0)
-        val stratified = stratifiedSample(
-            proxies = restAfterUser.filter { it.id !in urlIds },
-            perGroupCap = OPEN_STRATIFIED_PER_GROUP,
-            totalCap = budget,
-        )
-        val ordered = (handoffProxies + userHead + urlHinted + stratified).distinctBy { it.id }.take(OPEN_PREPARE_CAP)
+        val tailPool = restAfterUser.filter { it.id !in urlIds }
+        val budget = (MERGED_PREPARE_CAP - handoffProxies.size - userHead.size - urlHinted.size).coerceAtLeast(0)
+        val wlTail = tailPool.filter { it.id in subscriptionWlIds }
+        val openTail = tailPool.filter { it.id !in subscriptionWlIds }
+        val wlBudget = minOf(wlTail.size, budget)
+        val stratifiedWl = stratifiedSample(wlTail, totalCap = wlBudget)
+        val stratifiedOpen = stratifiedSample(openTail, totalCap = budget - stratifiedWl.size)
+        val ordered = (handoffProxies + userHead + urlHinted + stratifiedWl + stratifiedOpen)
+            .distinctBy { it.id }
+            .take(MERGED_PREPARE_CAP)
         return BuildResult(
-            priorityFirstIds = userBoostIds.toSet(),
+            priorityFirstIds = (subscriptionWlIds + userBoostIds).toSet(),
             orderedProxies = ordered,
             subscriptionWlIds = subscriptionWlIds,
             userProxyIds = userProxyIds,
@@ -332,7 +329,7 @@ internal object ConnectPoolPolicy {
         val priority = proxies.filter { it.id in priorityFirstIds }
         val restCap = (maxTotal - priority.size).coerceAtLeast(0)
         val rest = proxies.filter { it.id !in priorityFirstIds }.take(restCap)
-        return (priority + rest).distinctBy { it.id }
+        return (priority + rest).distinctBy { it.id }.take(maxTotal)
     }
 
     fun orderForBackgroundProbe(
@@ -357,7 +354,6 @@ internal object ConnectPoolPolicy {
         val urlIds = urlHinted.map { it.id }.toSet()
         val stratified = stratifiedSample(
             proxies = restAfterUser.filter { it.id !in urlIds },
-            perGroupCap = WL_STRATIFIED_PER_GROUP,
             totalCap = (proxies.size - priority.size - userFirst.size - urlHinted.size).coerceAtLeast(0),
         )
         return (priority + userFirst + urlHinted + stratified).distinctBy { it.id }
@@ -381,7 +377,6 @@ internal object ConnectPoolPolicy {
 
     private fun stratifiedSample(
         proxies: List<ProxyEntity>,
-        perGroupCap: Int,
         totalCap: Int,
     ): List<ProxyEntity> {
         if (totalCap <= 0 || proxies.isEmpty()) return emptyList()
@@ -389,7 +384,7 @@ internal object ConnectPoolPolicy {
         val orderedGroups = byGroup.entries.sortedBy { (_, list) -> list.minOf { it.userOrder } }
         val picked = LinkedHashSet<Long>()
         var round = 0
-        while (picked.size < totalCap && round < perGroupCap) {
+        while (picked.size < totalCap) {
             var added = false
             for ((_, groupProxies) in orderedGroups) {
                 val sorted = groupProxies.sortedBy { it.userOrder }

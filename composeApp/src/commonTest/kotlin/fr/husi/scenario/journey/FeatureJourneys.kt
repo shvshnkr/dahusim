@@ -90,10 +90,11 @@ object FeatureJourneys {
         ),
         FeatureJourney(
             id = "wl_server_revival_watch",
-            userPromise = "BS dead sweep keeps watching and auto-connects when a flapping server revives — one Connect tap, not a retry loop",
+            userPromise = "BS dead sweep (WL pool or open-fallback 0 url-ok) keeps watching and auto-connects when a flapping server revives — one Connect tap, not a retry loop",
             entryPoints = listOf(
                 "SimpleModeConnectCoordinator.awaitWlServerRevival",
                 "AutoServerSelector.prepareForConnect",
+                "AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare",
             ),
             testClass = "fr.husi.scenario.journey.WlServerRevivalWatchJourneyTest",
         ),

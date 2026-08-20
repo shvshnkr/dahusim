@@ -195,6 +195,79 @@ class ConnectPoolPolicyTest {
         assertEquals(userIds, result.userProxyIds)
     }
 
+    @Test
+    fun mergedPoolIncludesAllBelowCapWithWlFirstTail() {
+        val wlGroup = group(10L, "White lists VPN", sourceId = "white-lattice")
+        val openGroup = group(11L, "Foreign pool")
+        val wlProxies = (1L..60L).map { proxy(it, 10L, it) }
+        val openProxies = (101L..160L).map { proxy(it, 11L, it) }
+        val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.MERGED,
+            allProxies = wlProxies + openProxies,
+            groups = listOf(wlGroup, openGroup),
+            handoffIds = emptySet(),
+            probeStates = emptyMap(),
+        )
+        assertEquals(120, result.orderedProxies.size)
+        assertEquals(wlProxies.map { it.id }.toSet(), result.priorityFirstIds)
+        val orderedIds = result.orderedProxies.map { it.id }
+        val lastWlIndex = wlProxies.map { orderedIds.indexOf(it.id) }.maxOrNull() ?: 0
+        val firstOpenIndex = openProxies.map { orderedIds.indexOf(it.id) }.minOrNull() ?: Int.MAX_VALUE
+        assertTrue(lastWlIndex < firstOpenIndex)
+    }
+
+    @Test
+    fun mergedPriorityFirstIncludesUserBoost() {
+        val wlGroup = group(10L, "White lists VPN", sourceId = "white-lattice")
+        val openGroup = group(11L, "Foreign pool")
+        val userGroup = group(12L, "User sub", ownership = CatalogOwnership.USER)
+        val wlProxy = proxy(1L, 10L, 1L)
+        val openProxy = proxy(2L, 11L, 1L)
+        val userProxy = proxy(3L, 12L, 1L)
+        val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.MERGED,
+            allProxies = listOf(wlProxy, openProxy, userProxy),
+            groups = listOf(wlGroup, openGroup, userGroup),
+            handoffIds = emptySet(),
+            probeStates = emptyMap(),
+            userProxyIds = setOf(3L),
+            userPoolMode = UserPoolMode.PRIORITY,
+        )
+        assertEquals(setOf(1L, 3L), result.priorityFirstIds)
+        assertEquals(3, result.orderedProxies.size)
+    }
+
+    @Test
+    fun wlPoolStratifiedFillsToTotalCapNotPerGroup() {
+        val groups = listOf(
+            group(1L, "White lists A", sourceId = "white-lattice"),
+            group(2L, "White lists B", sourceId = "wlrus-blackl"),
+            group(3L, "White lists C", sourceId = "black-vless-rus-mobile"),
+        )
+        val proxies = buildList {
+            for (g in 1L..3L) {
+                for (i in 1L..100L) {
+                    add(proxy(id = g * 1000 + i, groupId = g, order = i))
+                }
+            }
+        }
+        val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION,
+            allProxies = proxies,
+            groups = groups,
+            handoffIds = emptySet(),
+            probeStates = emptyMap(),
+        )
+        assertEquals(ConnectPoolPolicy.WL_PREPARE_CAP, result.orderedProxies.size)
+    }
+
+    @Test
+    fun compactTcpBatchCapsPriorityAtMaxTotal() {
+        val pool = (1L..10L).map { proxy(it, 1L, it) }
+        val batch = ConnectPoolPolicy.compactTcpBatch(pool, pool.map { it.id }.toSet(), maxTotal = 4)
+        assertEquals(4, batch.size)
+    }
+
     private fun proxy(id: Long, groupId: Long, order: Long, profileName: String = "node$id") = ProxyEntity().apply {
         this.id = id
         this.groupId = groupId

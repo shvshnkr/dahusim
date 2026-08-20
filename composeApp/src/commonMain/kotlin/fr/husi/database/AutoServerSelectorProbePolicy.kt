@@ -71,11 +71,15 @@ internal object AutoServerSelectorProbePolicy {
         DataStore.autoSelectLastHandoffPreserveOkAt = nowMs
     }
 
-    fun isRecentlyDegraded(profileId: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
+    fun isRecentlyDegraded(
+        profileId: Long,
+        cachedDegradedProfileId: Long = DataStore.autoSelectLastDegradedProfileId,
+        cachedDegradedAt: Long = DataStore.autoSelectLastDegradedAt,
+        nowMs: Long = System.currentTimeMillis(),
+    ): Boolean {
         if (profileId <= 0L) return false
-        if (DataStore.autoSelectLastDegradedProfileId != profileId) return false
-        val degradedAt = DataStore.autoSelectLastDegradedAt
-        return degradedAt > 0L && nowMs - degradedAt < DEGRADED_PROFILE_PENALTY_MS
+        if (cachedDegradedProfileId != profileId) return false
+        return cachedDegradedAt > 0L && nowMs - cachedDegradedAt < DEGRADED_PROFILE_PENALTY_MS
     }
 
     fun recordDegradedProfile(profileId: Long, nowMs: Long = System.currentTimeMillis()) {
@@ -145,6 +149,24 @@ internal object AutoServerSelectorProbePolicy {
         }
         return lkgUrlFresh(profileId)
     }
+
+    /**
+     * A prepare sweep that ends with 0 url-ok must dead-end (AllProbesDead) instead of
+     * DEGRADED-continuing into a tcp-alive node when the uplink is whitelist-restricted:
+     * BS servers flap on a minute scale, and a tcp-only candidate yields a dead tunnel +
+     * post_connect fail. WL_SUBSCRIPTION/MERGED reach this via [wlUrlProbes]; the OPEN
+     * fallback branch (H4 wl_pool_fallback_open_priority_once) reaches it via
+     * [activeWhitelistRestrictedNetwork]. Dead-ending lets the revival watch keep polling
+     * and auto-connect the moment any candidate verifies.
+     */
+    fun wlNoUrlOkDeadEndsPrepare(
+        wlUrlProbes: Boolean,
+        activeWhitelistRestrictedNetwork: Boolean,
+        shouldQuickProbe: Boolean,
+        urlOk: Int,
+        urlConfirmed: Boolean,
+    ): Boolean = shouldQuickProbe && urlOk <= 0 && !urlConfirmed &&
+        (wlUrlProbes || activeWhitelistRestrictedNetwork)
 
     fun forceFullProbeReason(
         proxies: List<ProxyEntity>,
