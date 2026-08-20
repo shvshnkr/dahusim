@@ -945,6 +945,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_clear_log_done">Лог simple-mode очищен</string>
     <string name="simple_mode_full_ui">Открыть полный интерфейс</string>
     <string name="simple_mode_switch">Переключиться в простой режим</string>
+    <string name="simple_mode_tab">Простой режим</string>
     <string name="simple_mode_no_profile">Нет доступного профиля. Дождитесь обновления подписок.</string>
     <string name="simple_mode_permission_pending">Ожидание разрешения Android на VPN…</string>
     <string name="simple_mode_permission_unlock">Разблокируйте экран, чтобы разрешить VPN.</string>

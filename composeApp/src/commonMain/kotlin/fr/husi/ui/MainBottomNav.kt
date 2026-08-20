@@ -12,10 +12,12 @@ import fr.husi.compose.material3.Icon
 import fr.husi.compose.material3.Text
 import fr.husi.resources.Res
 import fr.husi.resources.directions
+import fr.husi.resources.home
 import fr.husi.resources.menu_library
 import fr.husi.resources.menu_more
 import fr.husi.resources.menu_route
 import fr.husi.resources.more_vert
+import fr.husi.resources.simple_mode_tab
 import fr.husi.resources.view_list
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
@@ -32,6 +34,7 @@ internal fun MainBottomNavigationBar(
         BottomNavTab(NavRoutes.Library, Res.string.menu_library, Res.drawable.view_list),
         BottomNavTab(NavRoutes.Route, Res.string.menu_route, Res.drawable.directions),
         BottomNavTab(NavRoutes.More, Res.string.menu_more, Res.drawable.more_vert),
+        BottomNavTab(NavRoutes.Simple, Res.string.simple_mode_tab, Res.drawable.home),
     )
     NavigationBar(
         modifier = modifier,

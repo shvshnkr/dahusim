@@ -375,7 +375,13 @@ private fun MainScreenContent(
                 if (showBottomNav && selectedBottomNavTab != null) {
                     MainBottomNavigationBar(
                         selectedTab = selectedBottomNavTab,
-                        onTabSelected = navigator::navigateToDrawerRoute,
+                        onTabSelected = { route ->
+                            if (route == NavRoutes.Simple) {
+                                navigator.navigateToSimpleMode()
+                            } else {
+                                navigator.navigateToDrawerRoute(route)
+                            }
+                        },
                     )
                 }
             }

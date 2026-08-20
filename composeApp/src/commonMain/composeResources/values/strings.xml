@@ -1047,6 +1047,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_clear_log_done">Simple-mode log cleared</string>
     <string name="simple_mode_full_ui">Open full interface</string>
     <string name="simple_mode_switch">Switch to simple mode</string>
+    <string name="simple_mode_tab">Simple mode</string>
     <string name="simple_mode_no_profile">No available profile yet. Wait for subscription refresh.</string>
     <string name="simple_mode_permission_pending">Waiting for Android VPN permission...</string>
     <string name="simple_mode_permission_unlock">Unlock the screen to allow VPN.</string>
