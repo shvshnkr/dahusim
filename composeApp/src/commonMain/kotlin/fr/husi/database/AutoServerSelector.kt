@@ -210,6 +210,9 @@ object AutoServerSelector {
                 throw e
             } finally {
                 probeUiActive = false
+                // Prepare pipeline finished (selected, failed, or superseded): drop the last
+                // published "Scanning N/N" line so the simple screen never shows a stale scan.
+                Probe2kProgress.clearScan()
             }
         }
     }

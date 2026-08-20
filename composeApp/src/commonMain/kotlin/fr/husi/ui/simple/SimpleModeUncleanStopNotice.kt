@@ -1,7 +1,6 @@
 package fr.husi.ui.simple
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -50,24 +50,23 @@ internal fun SimpleModeUncleanStopNotice(modifier: Modifier = Modifier) {
             stringResource(Res.string.simple_mode_unclean_stop_xiaomi_autostart)
         else -> stringResource(Res.string.simple_mode_unclean_stop_battery_already_off)
     }
-    val containerColor = MaterialTheme.colorScheme.errorContainer
-    val contentColor = MaterialTheme.colorScheme.onErrorContainer
-    val borderColor = MaterialTheme.colorScheme.error
-    val shape = RoundedCornerShape(8.dp)
+    val containerColor = Color(0xFFC58A00).copy(alpha = 0.12f)
+    val contentColor = Color(0xFFC58A00)
+    val borderColor = contentColor
+    val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
             .background(containerColor, shape)
-            .border(1.dp, borderColor, shape)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.Start,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
             modifier = Modifier.fillMaxWidth(),
             text = stringResource(Res.string.simple_mode_unclean_stop_title),
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = contentColor,
             textAlign = TextAlign.Start,
@@ -76,7 +75,7 @@ internal fun SimpleModeUncleanStopNotice(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth(),
             text = body,
             style = MaterialTheme.typography.bodySmall,
-            color = contentColor,
+            color = contentColor.copy(alpha = 0.9f),
             textAlign = TextAlign.Start,
         )
         if (shouldRequestBattery) {
