@@ -202,3 +202,17 @@ override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     }
 }
 ```
+
+### Local Android builds
+
+Before any local assemble/install, generate the bundled geo rule-sets
+(`composeApp/src/commonMain/composeResources/files/sing-box/`, gitignored):
+
+```bash
+bash buildScript/lib/assets.sh   # needs Go (buildScript/init/version.sh GO_VERSION)
+```
+
+CI does this via `buildScript/init/action/gradle.sh`. If the step is skipped, the APK has
+no local rule-sets and a fresh install falls back to remote rule-sets, which sing-box fetches
+synchronously **through the selected proxy on connect** — on a dead/blocked proxy the connect
+spinner hangs until TCP timeout.
