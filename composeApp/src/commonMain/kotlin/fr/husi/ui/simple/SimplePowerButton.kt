@@ -51,9 +51,9 @@ internal fun StatusTone.color(): Color {
     }
 }
 
-private val BUTTON_SIZE = 140.dp
-private val INNER_BUTTON_SIZE = 92.dp
-private val RING_STROKE_WIDTH = 6.dp
+private val BUTTON_SIZE = 280.dp
+private val INNER_BUTTON_SIZE = 184.dp
+private val RING_STROKE_WIDTH = 12.dp
 private const val ARC_START = -90f
 
 /**
@@ -195,7 +195,7 @@ internal fun SimplePowerButton(
                 imageVector = vectorResource(iconRes),
                 contentDescription = null,
                 tint = iconColor,
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(80.dp),
             )
         }
     }

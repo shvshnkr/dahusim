@@ -330,7 +330,7 @@ fun SimpleHomeScreen(
             Box(contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
-                        .size(340.dp)
+                        .size(440.dp)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
@@ -420,11 +420,17 @@ fun SimpleHomeScreen(
         ) {
             if (canShareSimpleModeLogs()) {
                 TextButton(onClick = onShareLogsClick) {
-                    Text(text = stringResource(Res.string.simple_mode_logs))
+                    Text(
+                        text = stringResource(Res.string.simple_mode_logs),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             TextButton(onClick = onOpenFullModeClick) {
-                Text(text = stringResource(Res.string.simple_mode_full_ui))
+                Text(
+                    text = stringResource(Res.string.simple_mode_full_ui),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
