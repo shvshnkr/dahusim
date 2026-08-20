@@ -42,7 +42,6 @@ class WlServerRevivalWatchJourneyTest : FeatureJourneyTest() {
             AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
                 wlUrlProbes = false,
                 activeWhitelistRestrictedNetwork = true,
-                shouldQuickProbe = true,
                 urlOk = 0,
                 urlConfirmed = false,
             ),

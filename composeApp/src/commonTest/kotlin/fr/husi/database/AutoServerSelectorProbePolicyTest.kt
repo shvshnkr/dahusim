@@ -96,7 +96,6 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
             AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
                 wlUrlProbes = false,
                 activeWhitelistRestrictedNetwork = true,
-                shouldQuickProbe = true,
                 urlOk = 0,
                 urlConfirmed = false,
             ),
@@ -109,7 +108,6 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
             AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
                 wlUrlProbes = false,
                 activeWhitelistRestrictedNetwork = true,
-                shouldQuickProbe = true,
                 urlOk = 0,
                 urlConfirmed = true,
             ),
@@ -122,7 +120,6 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
             AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
                 wlUrlProbes = false,
                 activeWhitelistRestrictedNetwork = true,
-                shouldQuickProbe = true,
                 urlOk = 1,
                 urlConfirmed = false,
             ),
@@ -135,7 +132,6 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
             AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
                 wlUrlProbes = false,
                 activeWhitelistRestrictedNetwork = false,
-                shouldQuickProbe = true,
                 urlOk = 0,
                 urlConfirmed = false,
             ),
@@ -148,7 +144,6 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
             AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
                 wlUrlProbes = true,
                 activeWhitelistRestrictedNetwork = false,
-                shouldQuickProbe = true,
                 urlOk = 0,
                 urlConfirmed = false,
             ),
@@ -156,12 +151,16 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
     }
 
     @Test
-    fun wlNoUrlOkSkipsWhenQuickProbeDidNotRun() {
-        assertFalse(
+    fun wlNoUrlOkDeadEndsEvenWhenQuickProbeSkipped() {
+        // 2026-08-21 field (code 758): quick probe skipped (full probe recorded seconds
+        // earlier), sequential 36-url sweep found 0 ok, yet prepare returned Success and
+        // connected to a warm-state head (72460) that was dead on the BS uplink — fake
+        // "Connected" until manual disconnect. The 0-url-ok sweep is fresh negative
+        // evidence regardless of shouldQuickProbe, so the gate must dead-end.
+        assertTrue(
             AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
                 wlUrlProbes = true,
                 activeWhitelistRestrictedNetwork = true,
-                shouldQuickProbe = false,
                 urlOk = 0,
                 urlConfirmed = false,
             ),

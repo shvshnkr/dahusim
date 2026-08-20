@@ -158,14 +158,19 @@ internal object AutoServerSelectorProbePolicy {
      * fallback branch (H4 wl_pool_fallback_open_priority_once) reaches it via
      * [activeWhitelistRestrictedNetwork]. Dead-ending lets the revival watch keep polling
      * and auto-connect the moment any candidate verifies.
+     *
+     * Applies to every URL sweep that found nothing, including the sequential sweep that
+     * runs after a skipped quick probe (shouldQuickProbe=false): a 0-url-ok sweep is fresh
+     * negative evidence either way. [urlConfirmed] must not count confirmation the current
+     * sweep contradicted — the caller drops warm-state confirmation when the best candidate
+     * itself was just tested and failed.
      */
     fun wlNoUrlOkDeadEndsPrepare(
         wlUrlProbes: Boolean,
         activeWhitelistRestrictedNetwork: Boolean,
-        shouldQuickProbe: Boolean,
         urlOk: Int,
         urlConfirmed: Boolean,
-    ): Boolean = shouldQuickProbe && urlOk <= 0 && !urlConfirmed &&
+    ): Boolean = urlOk <= 0 && !urlConfirmed &&
         (wlUrlProbes || activeWhitelistRestrictedNetwork)
 
     fun forceFullProbeReason(

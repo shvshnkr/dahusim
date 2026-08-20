@@ -34,6 +34,7 @@ internal object SimpleModeSessionHealth {
     private var monitoredProfileId: Long = -1L
     private var monitoredOutboundTag: String = ""
     private var consecutiveFails: Int = 0
+    private var consecutiveSyntheticPasses: Int = 0
     private var lastOnDemandAt: Long = 0L
     private var lastHealthError: String? = null
     private var lastHealthProbeUrl: String? = null
@@ -65,6 +66,7 @@ internal object SimpleModeSessionHealth {
         monitoredProfileId = profileId
         monitoredOutboundTag = outboundTag
         consecutiveFails = 0
+        consecutiveSyntheticPasses = 0
         lastHealthFailAt = 0L
         lastHealthOkAt = 0L
         stallDeferTracker.reset()
@@ -159,6 +161,7 @@ internal object SimpleModeSessionHealth {
         monitoredProfileId = -1L
         monitoredOutboundTag = ""
         consecutiveFails = 0
+        consecutiveSyntheticPasses = 0
         lastOnDemandAt = 0L
         lastHealthError = null
         lastHealthProbeUrl = null
@@ -374,11 +377,29 @@ internal object SimpleModeSessionHealth {
                 lastError = tunnel.lastError,
             )
         ) {
-            is SimpleModeHealthRoute.TunnelHealthOutcome.RealSuccess,
-            is SimpleModeHealthRoute.TunnelHealthOutcome.InconclusiveSynthetic,
-            -> true
-
-            is SimpleModeHealthRoute.TunnelHealthOutcome.HardFail -> false
+            is SimpleModeHealthRoute.TunnelHealthOutcome.RealSuccess -> {
+                consecutiveSyntheticPasses = 0
+                true
+            }
+            is SimpleModeHealthRoute.TunnelHealthOutcome.InconclusiveSynthetic -> {
+                consecutiveSyntheticPasses++
+                if (wlOnly &&
+                    consecutiveSyntheticPasses >= SimpleModeSessionHealthPolicy.WL_SYNTHETIC_PASS_LIMIT
+                ) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H34 session_health_synthetic_limit profileId=$profileId " +
+                            "count=$consecutiveSyntheticPasses wl=$wlOnly error=${tunnel.lastError.orEmpty()}",
+                    )
+                    false
+                } else {
+                    true
+                }
+            }
+            is SimpleModeHealthRoute.TunnelHealthOutcome.HardFail -> {
+                consecutiveSyntheticPasses = 0
+                false
+            }
         }
     }
 

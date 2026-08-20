@@ -33,6 +33,14 @@ internal object SimpleModeSessionHealthPolicy {
     const val MAX_STALL_RECOVERY_OK_PER_SESSION = 3
     /** Post-connect verify must finish within this window or trigger fallback. */
     const val POST_CONNECT_WATCHDOG_MS = 28_000L
+    /**
+     * Consecutive synthetic-only (inconclusive) WL health cycles after which the session is
+     * treated as unhealthy and recovery/fallback runs. Without the bound, a profile whose
+     * server is unreachable from the BS uplink (e.g. hosted on a non-whitelisted IP) stays
+     * "Connected" on a dead tunnel forever: every check produces the same dial error, which
+     * the bootstrap classification marks inconclusive and resets the fail streak.
+     */
+    const val WL_SYNTHETIC_PASS_LIMIT = 3
 
     fun isMonitoringStale(lastCheckCompletedAt: Long, nowMs: Long): Boolean {
         if (lastCheckCompletedAt <= 0L) return true

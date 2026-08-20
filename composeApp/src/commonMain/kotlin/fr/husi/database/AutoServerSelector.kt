@@ -1182,13 +1182,14 @@ object AutoServerSelector {
         if (AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
                 wlUrlProbes = wlUrlProbes,
                 activeWhitelistRestrictedNetwork = DataStore.activeWhitelistRestrictedNetwork,
-                shouldQuickProbe = shouldQuickProbe,
                 urlOk = urlTestDelays.size,
-                urlConfirmed = AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(
-                    finalBest,
-                    urlTestDelays,
-                    probeStates,
-                ),
+                urlConfirmed = finalBest in urlTestDelays ||
+                    (urlTestCandidates.none { it.id == finalBest } &&
+                        AutoServerSelectorProbePolicy.wlPrepareHasUrlConfirmation(
+                            finalBest,
+                            urlTestDelays,
+                            probeStates,
+                        )),
             )
         ) {
             simpleModeLog(
