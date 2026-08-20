@@ -171,6 +171,42 @@ object SubscriptionCatalogDefaults {
             "https://raw.githubusercontent.com/ksenkovsolo/HardVPN-bypass-WhiteLists-/refs/heads/main/vpn-lte/WHITELIST-ALL.txt",
             ConnectPoolRole.WL,
         ),
+        CatalogSeed(
+            "goida-open",
+            "goida Обход чёрных",
+            "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/1.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "goida-wl",
+            "goida Обход белых SNI/CIDR",
+            "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "rkp-wl",
+            "RKP Белые списки",
+            "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "rkp-black",
+            "RKP Чёрные списки",
+            "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "etoneya-yt",
+            "etoneya YouTube",
+            "https://etoneya.su/whitelist",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "hiztin-gribi",
+            "VLESS-PO-GRIBI Обход",
+            "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
+            ConnectPoolRole.OPEN,
+        ),
     )
 
     fun builtinSourceId(sourceKey: String): String = "$BUILTIN_SOURCE_PREFIX$sourceKey"
