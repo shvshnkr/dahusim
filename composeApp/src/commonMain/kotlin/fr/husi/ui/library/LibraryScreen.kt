@@ -162,6 +162,7 @@ import fr.husi.ui.configuration.ConfigurationScreenViewModel
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import kotlinx.collections.immutable.toImmutableList
 import fr.husi.ui.GroupScreenViewModel
+import fr.husi.ui.ImportSubscriptionDialog
 import fr.husi.ui.MainViewModel
 import fr.husi.ui.MainViewModelAlertDialog
 import fr.husi.ui.MainViewModelUiEvent
@@ -690,6 +691,15 @@ fun LibraryScreen(
 
     showAlertDialog?.let { dialog ->
         MainViewModelAlertDialog(dialog) { showAlertDialog = null }
+    }
+
+    val importSubscriptionState by mainViewModel.importSubscriptionDialog.collectAsStateWithLifecycle()
+    importSubscriptionState?.let { state ->
+        ImportSubscriptionDialog(
+            state = state,
+            onConfirm = { mainViewModel.confirmImportSubscription(it) },
+            onDismiss = { mainViewModel.dismissImportSubscriptionDialog() },
+        )
     }
 }
 

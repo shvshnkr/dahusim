@@ -181,6 +181,7 @@ import fr.husi.resources.settings
 import fr.husi.resources.simple_mode_switch
 import fr.husi.resources.sort_mode
 import fr.husi.resources.undo
+import fr.husi.ui.ImportSubscriptionDialog
 import fr.husi.ui.MainViewModel
 import fr.husi.ui.MainViewModelUiEvent
 import fr.husi.ui.NavRoutes
@@ -963,6 +964,15 @@ fun ConfigurationScreen(
         MainViewModelAlertDialog(dialog) {
             showAlertDialog = null
         }
+    }
+
+    val importSubscriptionState by mainViewModel.importSubscriptionDialog.collectAsStateWithLifecycle()
+    importSubscriptionState?.let { state ->
+        ImportSubscriptionDialog(
+            state = state,
+            onConfirm = { mainViewModel.confirmImportSubscription(it) },
+            onDismiss = { mainViewModel.dismissImportSubscriptionDialog() },
+        )
     }
 }
 
