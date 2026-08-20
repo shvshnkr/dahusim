@@ -59,6 +59,9 @@ object AutoServerSelector {
     private const val URL_BATCH_CAP = 32
     /** Upper bound on connect-time TCP rounds (128 × 20 = 2560 ≥ full free-market pool). */
     private const val TCP_PROBE_MAX_ROUNDS = 20
+    /** Adaptive prepare TCP timeout: round 1 fast-culls bulk dead ports, later rounds calm down. */
+    private const val TCP_PROBE_TIMEOUT_MS_ROUND_1 = 800
+    private const val TCP_PROBE_TIMEOUT_MS_LATER_ROUNDS = 1200
     private const val PROFILE_FAILURE_COOLDOWN_MS = 30L * 60 * 1000
     /** Per VPN session: cap fallback reconnects so a huge queue cannot spin for hundreds of hops. */
     private const val MAX_SESSION_FALLBACK_STEPS = 32
@@ -768,7 +771,7 @@ object AutoServerSelector {
                         )
                     }
                 }
-                urlTestDelays = merged
+                    urlTestDelays = merged
                 }
             }
         } else {
@@ -1898,6 +1901,7 @@ object AutoServerSelector {
         when {
             poolMode == ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION -> WL_SUBSCRIPTION_URL_PROBE_EARLY_EXIT
             whitelistBuiltinOnly -> WL_URL_PROBE_EARLY_EXIT
+            poolMode == ConnectPoolPolicy.PoolBuildMode.MERGED -> 1
             else -> Int.MAX_VALUE
         }
 
@@ -2101,9 +2105,12 @@ object AutoServerSelector {
     /**
      * BS progressive sweep: TCP rounds of [tcpBatchCap] (round 1 priority-first, further rounds
      * in warm-state order over the untested remainder); after each round the URL wave tests only
-     * that round's TCP-alive candidates (per-profile, no group batch). The first url-ok ends the
-     * sweep and the caller connects; zero url-ok moves to the next round until the whole pool was
-     * covered or [TCP_PROBE_MAX_ROUNDS] rounds ran.
+     * that round's TCP-alive candidates (per-profile, no group batch) while the next TCP round
+     * already runs in parallel — the URL wave never blocks the network. The first url-ok cancels
+     * the in-flight TCP round and ends the sweep; zero url-ok merges the pipelined round's pings
+     * and moves on until the whole pool was covered or [TCP_PROBE_MAX_ROUNDS] rounds ran.
+     * Before any TCP round, freshly verified LKG candidates (probeState.lastUrlMs with LKG
+     * freshness) get a URL pre-seed — a live one returns instantly.
      */
     private suspend fun progressiveWlSweep(
         connectPool: List<ProxyEntity>,
@@ -2125,67 +2132,165 @@ object AutoServerSelector {
         val testedIds = LinkedHashSet<Long>()
         val maxRounds = ((connectPool.size + tcpBatchCap - 1) / tcpBatchCap)
             .coerceIn(1, TCP_PROBE_MAX_ROUNDS)
-        for (round in 1..maxRounds) {
-            ensurePrepareCurrent(session)
-            val remaining = connectPool.filter { it.id !in testedIds }
-            if (remaining.isEmpty()) break
-            val batch = if (round == 1) {
-                ConnectPoolPolicy.compactTcpBatch(probePoolOrdered, priorityFirstIds, maxTotal = tcpBatchCap)
-            } else {
-                ProbeScheduler.prioritizeTcpTargets(remaining, probeStates, priorityFirstIds)
-                    .take(tcpBatchCap)
+
+        val lkgCandidates = connectPool
+            .filter { proxy ->
+                val state = probeStates[proxy.id]
+                state != null && state.lastUrlMs > 0 &&
+                    AutoServerSelectorProbePolicy.isLastKnownGoodUrlFresh(proxy.id)
             }
-            if (batch.isEmpty()) break
-            batch.forEach { testedIds.add(it.id) }
+            .sortedWith(
+                compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
+                    .thenBy { it.id },
+            )
+        if (lkgCandidates.isNotEmpty()) {
+            lkgCandidates.forEach { urlTestedIds.add(it.id) }
+            setSimpleModeActivity("Testing URL 0/${lkgCandidates.size}")
             simpleModeLog(
                 "SimpleMode",
-                "H14 tcp_probe_round round=$round batch=${batch.size} cumulative=${testedIds.size} " +
-                    "pool=${connectPool.size} aliveSoFar=${pings.size} mode=wl_progressive",
+                "H17 urltest_started candidates=${lkgCandidates.size} mode=wl_lkg_preseed",
             )
-            val roundPings = quickTcpProbe(batch, tcpConcurrency, session) { _, _ ->
-                val cumulative = testedIds.size.coerceAtMost(connectPool.size)
-                setSimpleModeActivity("Testing TCP $cumulative/${connectPool.size}")
-                Probe2kProgress.publishScan(cumulative, connectPool.size)
+            val lkgDelays = urlTestTopCandidates(
+                lkgCandidates,
+                urlConcurrency,
+                session,
+                whitelistBuiltinOnly = true,
+                poolMode = poolMode,
+                forcePerProfile = true,
+            ) { done, total ->
+                setSimpleModeActivity("Testing URL $done/$total")
+                Probe2kProgress.publishScan(done, total)
             }
-            pings.putAll(roundPings)
-            if (roundPings.isEmpty()) {
-                if (testedIds.size >= connectPool.size) break
-                continue
+            if (lkgDelays.isNotEmpty()) {
+                return WlProgressiveSweepResult(
+                    pings = pings,
+                    testedCount = 0,
+                    urlCandidates = lkgCandidates,
+                    urlDelays = lkgDelays,
+                )
             }
+        }
+
+        val firstBatch = ConnectPoolPolicy.compactTcpBatch(
+            probePoolOrdered,
+            priorityFirstIds,
+            maxTotal = tcpBatchCap,
+        )
+        if (firstBatch.isEmpty()) {
+            return WlProgressiveSweepResult(pings, testedIds.size, urlCandidates, urlDelays)
+        }
+        firstBatch.forEach { testedIds.add(it.id) }
+        simpleModeLog(
+            "SimpleMode",
+            "H14 tcp_probe_round round=1 batch=${firstBatch.size} cumulative=${testedIds.size} " +
+                "pool=${connectPool.size} aliveSoFar=${pings.size} mode=wl_progressive " +
+                "timeoutMs=$TCP_PROBE_TIMEOUT_MS_ROUND_1",
+        )
+        var currentPings = quickTcpProbe(
+            firstBatch,
+            tcpConcurrency,
+            session,
+            TCP_PROBE_TIMEOUT_MS_ROUND_1,
+        ) { _, _ ->
+            val cumulative = testedIds.size.coerceAtMost(connectPool.size)
+            setSimpleModeActivity("Testing TCP $cumulative/${connectPool.size}")
+            Probe2kProgress.publishScan(cumulative, connectPool.size)
+        }
+        pings.putAll(currentPings)
+
+        var round = 1
+        var currentBatch = firstBatch
+        coroutineScope {
+            while (round <= maxRounds) {
+            ensurePrepareCurrent(session)
             val wavePool = buildWlUrlWavePool(
-                connectPool = batch.filter { it.id in roundPings && it.id !in urlTestedIds },
-                quickProbePings = roundPings,
+                connectPool = currentBatch.filter { it.id in currentPings && it.id !in urlTestedIds },
+                quickProbePings = currentPings,
                 priorityFirstIds = priorityFirstIds,
                 urlTestCap = urlTestCap,
                 extraTcp = extraUrlTestByTcp,
             )
-            if (wavePool.isEmpty()) {
-                if (testedIds.size >= connectPool.size) break
-                continue
+            if (wavePool.isNotEmpty()) {
+                wavePool.forEach { urlTestedIds.add(it.id) }
+                urlCandidates += wavePool
+                setSimpleModeActivity("Testing URL 0/${wavePool.size}")
+                simpleModeLog(
+                    "SimpleMode",
+                    "H17 urltest_started candidates=${wavePool.size} mode=wl_progressive_round round=$round " +
+                        "tcpAliveRound=${currentPings.size}",
+                )
             }
-            wavePool.forEach { urlTestedIds.add(it.id) }
-            urlCandidates += wavePool
-            setSimpleModeActivity("Testing URL 0/${wavePool.size}")
-            simpleModeLog(
-                "SimpleMode",
-                "H17 urltest_started candidates=${wavePool.size} mode=wl_progressive_round round=$round " +
-                    "tcpAliveRound=${roundPings.size}",
-            )
-            urlDelays.putAll(
-                urlTestTopCandidates(
-                    wavePool,
-                    urlConcurrency,
-                    session,
-                    whitelistBuiltinOnly = true,
-                    poolMode = poolMode,
-                    forcePerProfile = true,
-                ) { done, total ->
-                    setSimpleModeActivity("Testing URL $done/$total")
-                    Probe2kProgress.publishScan(done, total)
-                },
-            )
-            if (urlDelays.isNotEmpty()) break
-            if (testedIds.size >= connectPool.size) break
+
+            val nextRound = round + 1
+            val remainingNext = connectPool.filter { it.id !in testedIds }
+            val nextBatch = if (nextRound <= maxRounds && remainingNext.isNotEmpty()) {
+                ProbeScheduler.prioritizeTcpTargets(remainingNext, probeStates, priorityFirstIds)
+                    .take(tcpBatchCap)
+            } else {
+                emptyList()
+            }
+            if (nextBatch.isNotEmpty()) {
+                nextBatch.forEach { testedIds.add(it.id) }
+                simpleModeLog(
+                    "SimpleMode",
+                    "H14 tcp_probe_round round=$nextRound batch=${nextBatch.size} cumulative=${testedIds.size} " +
+                        "pool=${connectPool.size} aliveSoFar=${pings.size} mode=wl_progressive " +
+                        "timeoutMs=$TCP_PROBE_TIMEOUT_MS_LATER_ROUNDS",
+                )
+            }
+
+            val urlJob = async(Dispatchers.IO) {
+                if (wavePool.isEmpty()) {
+                    emptyMap()
+                } else {
+                    urlTestTopCandidates(
+                        wavePool,
+                        urlConcurrency,
+                        session,
+                        whitelistBuiltinOnly = true,
+                        poolMode = poolMode,
+                        forcePerProfile = true,
+                    ) { done, total ->
+                        setSimpleModeActivity("Testing URL $done/$total")
+                        Probe2kProgress.publishScan(done, total)
+                    }
+                }
+            }
+            val nextTcpJob = if (nextBatch.isEmpty()) {
+                null
+            } else {
+                async(Dispatchers.IO) {
+                    quickTcpProbe(
+                        nextBatch,
+                        tcpConcurrency,
+                        session,
+                        TCP_PROBE_TIMEOUT_MS_LATER_ROUNDS,
+                    ) { _, _ ->
+                        val cumulative = testedIds.size.coerceAtMost(connectPool.size)
+                        setSimpleModeActivity("Testing TCP $cumulative/${connectPool.size}")
+                        Probe2kProgress.publishScan(cumulative, connectPool.size)
+                    }
+                }
+            }
+
+            val waveDelays = urlJob.await()
+            if (waveDelays.isNotEmpty()) {
+                nextTcpJob?.cancel()
+                urlDelays.putAll(waveDelays)
+                break
+            }
+            if (nextTcpJob == null) {
+                if (testedIds.size >= connectPool.size) break
+                break
+            }
+            val nextPings = nextTcpJob.await()
+            pings.putAll(nextPings)
+            if (nextPings.isEmpty() && testedIds.size >= connectPool.size) break
+            round = nextRound
+            currentBatch = nextBatch
+            currentPings = nextPings
+
+            }
         }
         return WlProgressiveSweepResult(
             pings = pings,
@@ -2199,12 +2304,13 @@ object AutoServerSelector {
         proxies: List<ProxyEntity>,
         concurrency: Int,
         session: PrepareSession,
+        timeoutMs: Int = 1200,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Map<Long, Int> = coroutineScope {
         ProfileTcpProber.probeTcpBatch(
             proxies = proxies,
             concurrency = concurrency,
-            timeoutMs = 1200,
+            timeoutMs = timeoutMs,
             isActive = { isPrepareCurrent(session) },
             onProgress = onProgress,
         )

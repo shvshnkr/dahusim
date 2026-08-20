@@ -306,6 +306,13 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
                 whitelistBuiltinOnly = true,
             ),
         )
+        assertEquals(
+            1,
+            AutoServerSelector.urlTestEarlyExitTarget(
+                poolMode = ConnectPoolPolicy.PoolBuildMode.MERGED,
+                whitelistBuiltinOnly = false,
+            ),
+        )
     }
 
     @Test
