@@ -39,8 +39,8 @@ Usage: gh-workflow.sh <command> [options]
 
 Commands:
   build [--android|--linux|--windows] [--ref BRANCH] [--wait]   # manual pre-release (default ref: main; redesign → Android-only in CI)
-  status [--run-id ID]
-  promote [--run-id ID] [--dry-run] [--mandatory] [--min-version-code N]
+  status [--run-id ID] [--branch BRANCH]                        # default branch: main
+  promote [--ref BRANCH] [--run-id ID] [--dry-run] [--mandatory] [--min-version-code N]
           [--notes TEXT | --notes-file PATH | --from-changelog]
           [--no-changelog]
   changelog draft [--en] [--since REF]
@@ -54,6 +54,7 @@ Examples:
   gh-workflow.sh build --ref redesign --android --wait
   gh-workflow.sh changelog verify
   gh-workflow.sh promote --from-changelog --dry-run
+  gh-workflow.sh promote --ref redesign --from-changelog --dry-run
   gh-workflow.sh promote --run-id 26577000000
   gh-workflow.sh prune-prereleases
   gh-workflow.sh prune-prereleases --keep-run-id 26617034812 --dry-run
@@ -91,20 +92,29 @@ cmd_build() {
 }
 
 cmd_status() {
-  local run_id="${1:-}"
+  local run_id="" branch=main
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --run-id) run_id="$2"; shift 2 ;;
+      --branch) branch="$2"; shift 2 ;;
+      *) echo "Unknown status option: $1" >&2; exit 1 ;;
+    esac
+    shift
+  done
   local repo
   repo="$(resolve_gh_repo)"
   if [ -z "$run_id" ]; then
-    gh run list --repo "$repo" --workflow all-platforms-build.yml --branch main --limit 5
+    gh run list --repo "$repo" --workflow all-platforms-build.yml --branch "$branch" --limit 5
     return 0
   fi
   gh run view "$run_id" --repo "$repo"
 }
 
 cmd_promote() {
-  local run_id="" dry_run=false mandatory=false min_code="" notes="" notes_file="" from_changelog=true use_changelog=true
+  local run_id="" ref=main dry_run=false mandatory=false min_code="" notes="" notes_file="" from_changelog=true use_changelog=true
   while [ $# -gt 0 ]; do
     case "$1" in
+      --ref) ref="$2"; shift 2 ;;
       --run-id) run_id="$2"; shift 2 ;;
       --dry-run) dry_run=true; shift ;;
       --mandatory) mandatory=true; shift ;;
@@ -139,8 +149,8 @@ cmd_promote() {
   else
     args+=(-f "use_changelog=false")
   fi
-  gh workflow run promote-app-update.yml --repo "$repo" --ref main "${args[@]}"
-  echo "Triggered promote-app-update.yml on $repo"
+  gh workflow run promote-app-update.yml --repo "$repo" --ref "$ref" "${args[@]}"
+  echo "Triggered promote-app-update.yml on $repo (ref=$ref)"
 }
 
 cmd_changelog_draft() {

@@ -9,10 +9,11 @@ The app checks this manifest when **Settings → App updates → Check for app u
 ## Release flow
 
 1. Update [`docs/changelog/CHANGELOG.ru.md`](../docs/changelog/CHANGELOG.ru.md) section **`[Unreleased]`** (user-facing RU; no `VERSION_NAME` bump required for text to appear).
-2. Push to `main` with **shippable app/runtime** changes → **All platforms (auto pre-release)** builds rolling/desktop pre-releases (body includes **Что нового** from `[Unreleased]` or git since last promote). Commits that touch only CI, workflows, tests, changelog text, or `husi.properties` without app sources do **not** auto-build; run `gh-workflow.sh build` (or **Run workflow** on all-platforms) after matrices pass.
+2. Push to `main` **or `redesign`** with **shippable app/runtime** changes → **All platforms (auto pre-release)** builds rolling/desktop pre-releases (body includes **Что нового** from `[Unreleased]` or git since last promote). On `redesign` only Android is built (tag `android-redesign-<run_id>`). Commits that touch only CI, workflows, tests, changelog text, or `husi.properties` without app sources do **not** auto-build; run `gh-workflow.sh build` (or **Run workflow** on all-platforms) after matrices pass.
 3. Test artifacts manually.
 4. **Promote app update channel** (UI or CLI below):
-   - `run_id` — from successful all-platforms run (or empty = latest success).
+   - Workflow runs from `main` **or `redesign`**; with `redesign` it resolves the latest successful run on that branch and uses the `android-redesign-<run_id>` tag automatically.
+   - `run_id` — from successful all-platforms run (or empty = latest success on the workflow branch).
    - `use_changelog` — default **true**: same merge as pre-release → `app-update.json` field `notes`.
    - `offer_update` — `false` freezes the channel without deleting rolling releases.
    - `publish` — `false` prints manifest preview only (dry-run).
@@ -32,8 +33,8 @@ From repo root (Git Bash on Windows: `bash buildScript/ci/gh-workflow.sh …` or
 | Command | Purpose |
 |---------|---------|
 | `gh-workflow.sh build [--wait]` | Trigger **All platforms** |
-| `gh-workflow.sh status [--run-id]` | Inspect runs |
-| `gh-workflow.sh promote [--run-id] [--dry-run] [--from-changelog]` | **Promote app update channel** |
+| `gh-workflow.sh status [--branch BRANCH]` | Inspect runs (default branch: main) |
+| `gh-workflow.sh promote [--ref BRANCH] [--run-id] [--dry-run] [--from-changelog]` | **Promote app update channel** (default ref: main; use `--ref redesign` for the redesign channel) |
 | `gh-workflow.sh changelog verify` | OK if `[Unreleased]` has bullets or new commits since promote |
 | `gh-workflow.sh changelog draft` / `draft-en` | Git range since last promote (RU / EN subjects) |
 | `gh-workflow.sh changelog refresh` | Insert git draft under `[Unreleased]` |
@@ -66,7 +67,8 @@ OTA install requires the **same signing key** as the installed APK.
 ## Promote defaults
 
 - `min_version_code` empty → **0** (offer to all installed versions below `versionCode`).
-- Source tags default to `android-<run_id>`, `linux-desktop-linux-amd64-<run_id>`, `windows-desktop-windows-amd64-<run_id>`.
+- Source tags default to `android-<run_id>`, `linux-desktop-linux-amd64-<run_id>`, `windows-desktop-windows-amd64-<run_id>`
+  (on `redesign`: `android-redesign-<run_id>`; linux/windows are absent there and skipped).
   Promote falls back to legacy `rolling-<run_id>` when the Android tag from an older CI run is still named that way.
 
 ## User expectations

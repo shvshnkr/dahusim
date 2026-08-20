@@ -76,12 +76,15 @@ jobs:
       INPUT_USE_CHANGELOG: ${{ inputs.use_changelog }}
       INPUT_PUBLISH: ${{ inputs.publish }}
     steps:
-      - name: Require main branch
+      - name: Require main or redesign branch
         run: |
-          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            echo "promote-app-update must run on refs/heads/main (got ${{ github.ref }})"
-            exit 1
-          fi
+          case "${{ github.ref }}" in
+            refs/heads/main|refs/heads/redesign) ;;
+            *)
+              echo "promote-app-update must run on refs/heads/main or refs/heads/redesign (got ${{ github.ref }})"
+              exit 1
+              ;;
+          esac
 
       - uses: actions/checkout@v6
         with:
@@ -100,7 +103,7 @@ jobs:
 
           RUN_ID="${INPUT_RUN_ID:-}"
           if [ -z "$RUN_ID" ]; then
-            RUN_ID="$(gh run list --workflow "all-platforms-build.yml" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            RUN_ID="$(gh run list --workflow "all-platforms-build.yml" --branch "${{ github.ref_name }}" --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
 
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
@@ -114,8 +117,12 @@ jobs:
             exit 1
           fi
 
-          ANDROID_TAG="${INPUT_ANDROID_TAG:-android-${RUN_ID}}"
-          if [ -z "${INPUT_ANDROID_TAG:-}" ]; then
+          if [ -n "${INPUT_ANDROID_TAG:-}" ]; then
+            ANDROID_TAG="${INPUT_ANDROID_TAG}"
+          elif [ "${{ github.ref_name }}" = "redesign" ]; then
+            ANDROID_TAG="android-redesign-${RUN_ID}"
+          else
+            ANDROID_TAG="android-${RUN_ID}"
             if ! gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${ANDROID_TAG}" >/dev/null 2>&1; then
               LEGACY_TAG="rolling-${RUN_ID}"
               if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${LEGACY_TAG}" >/dev/null 2>&1; then

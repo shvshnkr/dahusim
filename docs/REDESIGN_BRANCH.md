@@ -22,9 +22,14 @@
 
 ## App-update
 
-- Канал [`app-update.json`](APP_UPDATE.md) публикуется **только** с `main` через **Promote app update channel**.
-- Redesign-сборки в канал не попадают; автообновление на redesign не таргетируется отдельно.
-- Promote workflow отклоняет запуск не с `refs/heads/main`.
+- Канал [`app-update.json`](APP_UPDATE.md) публикуется через **Promote app update channel** с веток `main` **или `redesign`**
+  (workflow разрешает оба ref; promote с `redesign` автоматически резолвит успешный раунд и тег `android-redesign-<run_id>`
+  на той же ветке — linux/windows на redesign не строятся и в канал не попадают).
+- Пока едем на redesign: promote запускается с redesign, канал ведёт пользователей на redesign-сборки
+  (`versionCode` на redesign выше main — оффер приходит корректно).
+- Promote workflow отклоняет запуск не с `refs/heads/main` / `refs/heads/redesign`.
+- Команды: `bash buildScript/ci/gh-workflow.sh promote --ref redesign --from-changelog --dry-run` (dry-run перед публикацией),
+  без `--dry-run` — публикация канала.
 
 ## Локальные команды
 
@@ -35,8 +40,10 @@ gh workflow run all-platforms-build.yml --repo shvshnkr/dahusim --ref redesign
 # Или через wrapper (main по умолчанию)
 bash buildScript/ci/gh-workflow.sh build --ref redesign --android --wait
 
-# Promote — только main
-bash buildScript/ci/gh-workflow.sh promote --dry-run
+# Promote — с ветки redesign (канал ведёт на redesign-сборку)
+bash buildScript/ci/gh-workflow.sh promote --ref redesign --from-changelog
+# Превью без публикации:
+bash buildScript/ci/gh-workflow.sh promote --ref redesign --from-changelog --dry-run
 ```
 
 ## Merge `main → redesign`
