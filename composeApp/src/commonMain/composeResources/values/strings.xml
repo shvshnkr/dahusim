@@ -47,6 +47,18 @@
     <string name="library_empty_system">No system groups yet</string>
     <string name="library_empty_system_action">Catalog feeds and built-in relays appear here</string>
     <string name="library_group_origin_builtin">Built-in relay</string>
+    <string name="library_search_hint">Search subscriptions…</string>
+    <string name="library_search_no_results">Nothing found</string>
+    <string name="library_role_all">All</string>
+    <string name="library_role_wl_hint">Only whitelist-pool subscriptions — these are used by simple mode</string>
+    <string name="library_group_updating">Updating…</string>
+    <string name="library_role_token_wl">WL</string>
+    <string name="library_role_token_open">OPEN</string>
+    <string name="library_role_token_builtin">builtin</string>
+    <plurals name="library_group_outdated_days">
+        <item quantity="one">Outdated %1$d day ago</item>
+        <item quantity="other">Outdated %1$d days ago</item>
+    </plurals>
     <string name="menu_about">About</string>
     <string name="menu_app_update">Updates</string>
     <string name="menu_quick_settings">Quick settings</string>

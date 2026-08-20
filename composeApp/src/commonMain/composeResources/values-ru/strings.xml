@@ -221,6 +221,20 @@
     <string name="library_empty_system">Системных групп пока нет</string>
     <string name="library_empty_system_action">Здесь фиды каталога и встроенные relay</string>
     <string name="library_group_origin_builtin">Встроенный relay</string>
+    <string name="library_search_hint">Поиск подписок…</string>
+    <string name="library_search_no_results">Ничего не найдено</string>
+    <string name="library_role_all">Все</string>
+    <string name="library_role_wl_hint">Только подписки для обхода белых списков — используются simple-режимом</string>
+    <string name="library_group_updating">Обновление…</string>
+    <string name="library_role_token_wl">WL</string>
+    <string name="library_role_token_open">OPEN</string>
+    <string name="library_role_token_builtin">builtin</string>
+    <plurals name="library_group_outdated_days">
+        <item quantity="one">Устарела %1$d день назад</item>
+        <item quantity="few">Устарела %1$d дня назад</item>
+        <item quantity="many">Устарела %1$d дней назад</item>
+        <item quantity="other">Устарела %1$d дней назад</item>
+    </plurals>
     <string name="logcat">Экспорт отладочной информации</string>
     <string name="version_x">Версия (%1$s)</string>
     <string name="server_port">Удаленный порт</string>

@@ -1,6 +1,8 @@
 package fr.husi.ui.library
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -21,24 +24,30 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.PaddingValues
 import com.ernestoyaquello.dragdropswipelazycolumn.DragDropSwipeLazyColumn
@@ -61,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -85,6 +95,7 @@ import fr.husi.resources.share_subscription
 import fr.husi.compose.rememberScrollHideState
 import fr.husi.compose.setPlainText
 import fr.husi.compose.withNavigation
+import fr.husi.database.ConnectPoolRole
 import fr.husi.database.GroupOrigin
 import fr.husi.database.isGroupDeletable
 import fr.husi.database.isSystemLibraryItem
@@ -114,6 +125,7 @@ import fr.husi.resources.ok
 import fr.husi.resources.playlist_add
 import fr.husi.resources.qr_code
 import fr.husi.resources.removed
+import fr.husi.resources.search
 import fr.husi.resources.share_qr_nfc
 import fr.husi.resources.share
 import fr.husi.resources.subscription_expire
@@ -122,7 +134,6 @@ import fr.husi.resources.subscription_used
 import fr.husi.resources.undo
 import fr.husi.resources.update
 import fr.husi.resources.update_all_subscription
-import fr.husi.resources.action_open
 import fr.husi.resources.drag_indicator
 import fr.husi.resources.library_add_fab
 import fr.husi.resources.library_empty_manual
@@ -132,8 +143,17 @@ import fr.husi.resources.library_empty_subscriptions_action
 import fr.husi.resources.library_empty_system
 import fr.husi.resources.library_empty_system_action
 import fr.husi.resources.library_group_origin_builtin
+import fr.husi.resources.library_group_outdated_days
+import fr.husi.resources.library_group_updating
 import fr.husi.resources.library_reorder
 import fr.husi.resources.library_reorder_done
+import fr.husi.resources.library_role_all
+import fr.husi.resources.library_role_token_builtin
+import fr.husi.resources.library_role_token_open
+import fr.husi.resources.library_role_token_wl
+import fr.husi.resources.library_role_wl_hint
+import fr.husi.resources.library_search_hint
+import fr.husi.resources.library_search_no_results
 import fr.husi.resources.no_proxies_found_in_file
 import fr.husi.ktx.onIoDispatcher
 import fr.husi.ktx.runOnIoDispatcher
@@ -161,6 +181,18 @@ enum class LibrarySegment {
     System,
 }
 
+enum class LibraryRoleFilter {
+    All,
+    Wl,
+    Open,
+}
+
+private val POOL_WL_COLOR = Color(0xFF5C6BC0)
+private val POOL_OPEN_COLOR = Color(0xFF2E7D32)
+private val POOL_WARN_COLOR = Color(0xFFC58A00)
+private const val OUTDATED_DAYS = 7L
+private const val OUTDATED_DAYS_SECONDS = 86_400L
+
 fun GroupItemUiState.matchesSegment(segment: LibrarySegment): Boolean {
     val group = this.group
     return when (segment) {
@@ -171,6 +203,28 @@ fun GroupItemUiState.matchesSegment(segment: LibrarySegment): Boolean {
 
         LibrarySegment.Manual ->
             group.type == GroupType.BASIC && group.isUserOwnedLibraryItem()
+    }
+}
+
+fun GroupItemUiState.matchesRoleFilter(filter: LibraryRoleFilter): Boolean {
+    val role = group.subscription?.connectPoolRole ?: ConnectPoolRole.ANY
+    return when (filter) {
+        LibraryRoleFilter.All -> true
+        LibraryRoleFilter.Wl -> role == ConnectPoolRole.WL
+        LibraryRoleFilter.Open -> role == ConnectPoolRole.OPEN
+    }
+}
+
+fun GroupItemUiState.matchesLibraryQuery(query: String): Boolean {
+    if (query.isBlank()) return true
+    val q = query.trim().lowercase()
+    return group.displayName().lowercase().contains(q) ||
+        group.subscription?.link?.lowercase()?.contains(q) == true
+}
+
+fun librarySegmentCounts(groups: List<GroupItemUiState>): Map<LibrarySegment, Int> = buildMap {
+    for (segment in LibrarySegment.entries) {
+        put(segment, groups.count { it.matchesSegment(segment) })
     }
 }
 
@@ -193,7 +247,9 @@ fun LibraryScreen(
 
     var segmentIndex by rememberSaveable { mutableIntStateOf(0) }
     val segment = LibrarySegment.entries[segmentIndex.coerceIn(LibrarySegment.entries.indices)]
-    var showUpdateAll by remember { mutableStateOf(false) }
+    var searchVisible by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var roleFilter by rememberSaveable { mutableStateOf(LibraryRoleFilter.All) }
     var qrDialogData by remember { mutableStateOf<Pair<String, String>?>(null) }
     var deleteGroupConfirm by remember { mutableStateOf<Long?>(null) }
     var showAlertDialog by remember { mutableStateOf<MainViewModelUiEvent.AlertDialog?>(null) }
@@ -239,8 +295,18 @@ fun LibraryScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val filteredGroups = remember(uiState.groups, segment) {
+    val segmentCounts = remember(uiState.groups) {
+        librarySegmentCounts(uiState.groups)
+    }
+    val segmentGroups = remember(uiState.groups, segment) {
         uiState.groups.filter { it.matchesSegment(segment) }
+    }
+    val filteredGroups = remember(uiState.groups, segment, roleFilter, searchQuery) {
+        uiState.groups.filter { item ->
+            item.matchesSegment(segment) &&
+                (segment != LibrarySegment.Subscriptions || item.matchesRoleFilter(roleFilter)) &&
+                item.matchesLibraryQuery(searchQuery)
+        }
     }
 
     LaunchedEffect(uiState.hiddenGroups) {
@@ -303,7 +369,7 @@ fun LibraryScreen(
                     )
                 },
                 actions = {
-                    if (filteredGroups.isNotEmpty() && segment != LibrarySegment.Manual) {
+                    if (segmentGroups.isNotEmpty() && segment != LibrarySegment.Manual) {
                         TextButton(
                             stringResource(
                                 if (reorderMode) {
@@ -316,12 +382,25 @@ fun LibraryScreen(
                             reorderMode = !reorderMode
                         }
                     }
+                    SimpleIconButton(
+                        imageVector = vectorResource(Res.drawable.search),
+                        contentDescription = stringResource(Res.string.library_search_hint),
+                        onClick = { searchVisible = !searchVisible },
+                    )
                     if (segment == LibrarySegment.Subscriptions) {
-                        SimpleIconButton(
-                            imageVector = vectorResource(Res.drawable.update),
-                            contentDescription = stringResource(Res.string.update_all_subscription),
-                            onClick = { showUpdateAll = true },
-                        )
+                        if (isRefreshing) {
+                            CircularWavyProgressIndicator(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp)
+                                    .size(22.dp),
+                            )
+                        } else {
+                            SimpleIconButton(
+                                imageVector = vectorResource(Res.drawable.update),
+                                contentDescription = stringResource(Res.string.update_all_subscription),
+                                onClick = { mainViewModel.updateAllSubscriptionGroups() },
+                            )
+                        }
                     }
                 },
                 windowInsets = windowInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
@@ -377,93 +456,120 @@ fun LibraryScreen(
                 mainViewModel.updateAllSubscriptionGroups()
             }
         }
-        Row(modifier = Modifier.fillMaxSize()) {
-            val listModifier = Modifier.weight(1f).fillMaxHeight()
-            if (segment == LibrarySegment.Subscriptions) {
-                PullToRefreshBox(
-                    modifier = listModifier,
-                    isRefreshing = isRefreshing,
-                    onRefresh = onPullRefresh,
-                    state = pullRefreshState,
-                ) {
-                    LibraryGroupList(
-                        segment = segment,
-                        onSegmentSelect = { segmentIndex = it.ordinal },
-                        filteredGroups = filteredGroups,
-                        reorderMode = reorderMode,
-                        listState = listState,
-                        dragDropListState = dragDropListState,
-                        contentPadding = contentPadding,
-                        mainViewModel = mainViewModel,
-                        viewModel = viewModel,
-                        openGroup = openGroup,
-                        openGroupSettings = openGroupSettings,
-                        onDeleteRequest = { deleteGroupConfirm = it },
-                        showQRDialog = { url, name -> qrDialogData = url to name },
-                        onAdd = { showAddSheet = true },
-                        onRefresh = onPullRefresh,
-                        snackbar = { message ->
-                            scope.launch {
-                                snackbarState.showSnackbar(
-                                    message = message,
-                                    actionLabel = resolveRepository().getString(Res.string.ok),
-                                    duration = SnackbarDuration.Short,
-                                )
-                            }
-                        },
-                    )
-                }
-            } else if (segment == LibrarySegment.Manual && !reorderMode) {
-                ManualServersContent(
-                    modifier = listModifier,
-                    contentPadding = contentPadding,
-                    segment = segment,
-                    onSegmentSelect = { segmentIndex = it.ordinal },
-                    configViewModel = configImportVm,
-                    serviceState = serviceStatus.state,
-                    onAdd = { showAddSheet = true },
-                    onManageFolders = { showManageFolders = true },
-                    onOpenProfileEditor = openProfileEditor,
-                    manualViewModel = manualViewModel,
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (searchVisible && !reorderMode) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    placeholder = { Text(stringResource(Res.string.library_search_hint)) },
+                    leadingIcon = { Icon(vectorResource(Res.drawable.search), null) },
+                    singleLine = true,
+                    shape = CircleShape,
                 )
-            } else {
-                Box(modifier = listModifier) {
-                    LibraryGroupList(
+            }
+            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                val listModifier = Modifier.weight(1f).fillMaxHeight()
+                if (segment == LibrarySegment.Subscriptions) {
+                    PullToRefreshBox(
+                        modifier = listModifier,
+                        isRefreshing = isRefreshing,
+                        onRefresh = onPullRefresh,
+                        state = pullRefreshState,
+                    ) {
+                        LibraryGroupList(
+                            segment = segment,
+                            onSegmentSelect = { segmentIndex = it.ordinal },
+                            filteredGroups = filteredGroups,
+                            reorderMode = reorderMode,
+                            listState = listState,
+                            dragDropListState = dragDropListState,
+                            contentPadding = contentPadding,
+                            segmentCounts = segmentCounts,
+                            roleFilter = roleFilter,
+                            onRoleFilterSelect = { roleFilter = it },
+                            searchQuery = searchQuery,
+                            reorderGroups = segmentGroups,
+                            mainViewModel = mainViewModel,
+                            viewModel = viewModel,
+                            openGroup = openGroup,
+                            openGroupSettings = openGroupSettings,
+                            onDeleteRequest = { deleteGroupConfirm = it },
+                            onSwipeDelete = { viewModel.undoableRemove(it) },
+                            showQRDialog = { url, name -> qrDialogData = url to name },
+                            onAdd = { showAddSheet = true },
+                            onRefresh = onPullRefresh,
+                            snackbar = { message ->
+                                scope.launch {
+                                    snackbarState.showSnackbar(
+                                        message = message,
+                                        actionLabel = resolveRepository().getString(Res.string.ok),
+                                        duration = SnackbarDuration.Short,
+                                    )
+                                }
+                            },
+                        )
+                    }
+                } else if (segment == LibrarySegment.Manual && !reorderMode) {
+                    ManualServersContent(
+                        modifier = listModifier,
+                        contentPadding = contentPadding,
                         segment = segment,
                         onSegmentSelect = { segmentIndex = it.ordinal },
-                        filteredGroups = filteredGroups,
-                        reorderMode = reorderMode,
-                        listState = listState,
-                        dragDropListState = dragDropListState,
-                        contentPadding = contentPadding,
-                        mainViewModel = mainViewModel,
-                        viewModel = viewModel,
-                        openGroup = openGroup,
-                        openGroupSettings = openGroupSettings,
-                        onDeleteRequest = { deleteGroupConfirm = it },
-                        showQRDialog = { url, name -> qrDialogData = url to name },
+                        configViewModel = configImportVm,
+                        serviceState = serviceStatus.state,
                         onAdd = { showAddSheet = true },
-                        onRefresh = onPullRefresh,
-                        snackbar = { message ->
-                            scope.launch {
-                                snackbarState.showSnackbar(
-                                    message = message,
-                                    actionLabel = resolveRepository().getString(Res.string.ok),
-                                    duration = SnackbarDuration.Short,
-                                )
-                            }
-                        },
+                        onManageFolders = { showManageFolders = true },
+                        onOpenProfileEditor = openProfileEditor,
+                        manualViewModel = manualViewModel,
                     )
+                } else {
+                    Box(modifier = listModifier) {
+                        LibraryGroupList(
+                            segment = segment,
+                            onSegmentSelect = { segmentIndex = it.ordinal },
+                            filteredGroups = filteredGroups,
+                            reorderMode = reorderMode,
+                            listState = listState,
+                            dragDropListState = dragDropListState,
+                            contentPadding = contentPadding,
+                            segmentCounts = segmentCounts,
+                            roleFilter = roleFilter,
+                            onRoleFilterSelect = { roleFilter = it },
+                            searchQuery = searchQuery,
+                            reorderGroups = segmentGroups,
+                            mainViewModel = mainViewModel,
+                            viewModel = viewModel,
+                            openGroup = openGroup,
+                            openGroupSettings = openGroupSettings,
+                            onDeleteRequest = { deleteGroupConfirm = it },
+                            onSwipeDelete = { viewModel.undoableRemove(it) },
+                            showQRDialog = { url, name -> qrDialogData = url to name },
+                            onAdd = { showAddSheet = true },
+                            onRefresh = onPullRefresh,
+                            snackbar = { message ->
+                                scope.launch {
+                                    snackbarState.showSnackbar(
+                                        message = message,
+                                        actionLabel = resolveRepository().getString(Res.string.ok),
+                                        duration = SnackbarDuration.Short,
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
+                val scrollState = if (reorderMode) dragDropListState.lazyListState else listState
+                BoxedVerticalScrollbar(
+                    modifier = Modifier
+                        .padding(contentPadding)
+                        .fillMaxHeight(),
+                    adapter = rememberScrollbarAdapter(scrollState = scrollState),
+                    style = defaultMaterialScrollbarStyle().copy(thickness = 12.dp),
+                )
             }
-            val scrollState = if (reorderMode) dragDropListState.lazyListState else listState
-            BoxedVerticalScrollbar(
-                modifier = Modifier
-                    .padding(contentPadding)
-                    .fillMaxHeight(),
-                adapter = rememberScrollbarAdapter(scrollState = scrollState),
-                style = defaultMaterialScrollbarStyle().copy(thickness = 12.dp),
-            )
         }
     }
 
@@ -514,24 +620,6 @@ fun LibraryScreen(
                 )
             }
         }
-    }
-
-    if (showUpdateAll) {
-        AlertDialog(
-            onDismissRequest = { showUpdateAll = false },
-            confirmButton = {
-                TextButton(stringResource(Res.string.ok)) {
-                    mainViewModel.updateAllSubscriptionGroups()
-                    showUpdateAll = false
-                }
-            },
-            dismissButton = {
-                TextButton(stringResource(Res.string.cancel)) { showUpdateAll = false }
-            },
-            icon = { Icon(vectorResource(Res.drawable.update), null) },
-            title = { Text(stringResource(Res.string.confirm)) },
-            text = { Text(stringResource(Res.string.update_all_subscription)) },
-        )
     }
 
     qrDialogData?.let { (url, name) ->
@@ -608,16 +696,24 @@ private fun LibraryGroupList(
     listState: androidx.compose.foundation.lazy.LazyListState,
     dragDropListState: DragDropSwipeLazyColumnState,
     contentPadding: PaddingValues,
+    segmentCounts: Map<LibrarySegment, Int> = emptyMap(),
+    roleFilter: LibraryRoleFilter = LibraryRoleFilter.All,
+    onRoleFilterSelect: (LibraryRoleFilter) -> Unit = {},
+    searchQuery: String = "",
+    reorderGroups: List<GroupItemUiState> = emptyList(),
     mainViewModel: MainViewModel,
     viewModel: GroupScreenViewModel,
     openGroup: (Long) -> Unit,
     openGroupSettings: (Long) -> Unit,
     onDeleteRequest: (Long) -> Unit,
+    onSwipeDelete: (Long) -> Unit,
     showQRDialog: (String, String) -> Unit,
     onAdd: () -> Unit,
     onRefresh: () -> Unit,
     snackbar: suspend (String) -> Unit,
 ) {
+    val filterActive = searchQuery.isNotBlank() ||
+        (segment == LibrarySegment.Subscriptions && roleFilter != LibraryRoleFilter.All)
     if (filteredGroups.isEmpty() && !reorderMode) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -628,15 +724,37 @@ private fun LibraryGroupList(
                     selected = segment,
                     onSelect = onSegmentSelect,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    counts = segmentCounts,
                 )
             }
+            if (segment == LibrarySegment.Subscriptions) {
+                item("roles") {
+                    LibraryRoleFilterRow(
+                        filter = roleFilter,
+                        onSelect = onRoleFilterSelect,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+            }
             item("empty") {
-                LibraryEmptyState(
-                    segment = segment,
-                    onAdd = onAdd,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp),
-                )
+                if (filterActive) {
+                    Text(
+                        text = stringResource(Res.string.library_search_no_results),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 32.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                } else {
+                    LibraryEmptyState(
+                        segment = segment,
+                        onAdd = onAdd,
+                        onRefresh = onRefresh,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp),
+                    )
+                }
             }
         }
         return
@@ -648,11 +766,12 @@ private fun LibraryGroupList(
                 selected = segment,
                 onSelect = onSegmentSelect,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                counts = segmentCounts,
             )
             DragDropSwipeLazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 state = dragDropListState,
-                items = filteredGroups.toImmutableList(),
+                items = reorderGroups.toImmutableList(),
                 key = { it.group.id },
                 contentType = { 0 },
                 userScrollEnabled = true,
@@ -676,6 +795,7 @@ private fun LibraryGroupList(
                         onUpdate = { mainViewModel.updateSubscriptionGroup(groupState.group) },
                         openGroupSettings = openGroupSettings,
                         onDeleteRequest = { onDeleteRequest(groupState.group.id) },
+                        onSwipeDelete = { onSwipeDelete(groupState.group.id) },
                         showQRDialog = showQRDialog,
                         snackbar = snackbar,
                     )
@@ -695,7 +815,17 @@ private fun LibraryGroupList(
                 selected = segment,
                 onSelect = onSegmentSelect,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                counts = segmentCounts,
             )
+        }
+        if (segment == LibrarySegment.Subscriptions) {
+            item("roles") {
+                LibraryRoleFilterRow(
+                    filter = roleFilter,
+                    onSelect = onRoleFilterSelect,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
         }
         items(filteredGroups, key = { it.group.id }) { groupState ->
             LibraryGroupCard(
@@ -706,6 +836,7 @@ private fun LibraryGroupList(
                 onUpdate = { mainViewModel.updateSubscriptionGroup(groupState.group) },
                 openGroupSettings = openGroupSettings,
                 onDeleteRequest = { onDeleteRequest(groupState.group.id) },
+                onSwipeDelete = { onSwipeDelete(groupState.group.id) },
                 showQRDialog = showQRDialog,
                 snackbar = snackbar,
             )
@@ -770,6 +901,7 @@ internal fun LibrarySegmentRow(
     selected: LibrarySegment,
     onSelect: (LibrarySegment) -> Unit,
     modifier: Modifier = Modifier,
+    counts: Map<LibrarySegment, Int>? = null,
 ) {
     FlowRow(
         modifier = modifier.fillMaxWidth(),
@@ -778,18 +910,71 @@ internal fun LibrarySegmentRow(
         FilterChip(
             selected = selected == LibrarySegment.Subscriptions,
             onClick = { onSelect(LibrarySegment.Subscriptions) },
-            label = { Text(stringResource(Res.string.library_segment_subscriptions)) },
+            label = {
+                Text(
+                    stringResource(Res.string.library_segment_subscriptions) +
+                        counts?.get(LibrarySegment.Subscriptions)?.let { " · $it" }.orEmpty(),
+                )
+            },
         )
         FilterChip(
             selected = selected == LibrarySegment.Manual,
             onClick = { onSelect(LibrarySegment.Manual) },
-            label = { Text(stringResource(Res.string.library_segment_manual)) },
+            label = {
+                Text(
+                    stringResource(Res.string.library_segment_manual) +
+                        counts?.get(LibrarySegment.Manual)?.let { " · $it" }.orEmpty(),
+                )
+            },
         )
         FilterChip(
             selected = selected == LibrarySegment.System,
             onClick = { onSelect(LibrarySegment.System) },
-            label = { Text(stringResource(Res.string.library_segment_system)) },
+            label = {
+                Text(
+                    stringResource(Res.string.library_segment_system) +
+                        counts?.get(LibrarySegment.System)?.let { " · $it" }.orEmpty(),
+                )
+            },
         )
+    }
+}
+
+@Composable
+internal fun LibraryRoleFilterRow(
+    filter: LibraryRoleFilter,
+    onSelect: (LibraryRoleFilter) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(
+                selected = filter == LibraryRoleFilter.All,
+                onClick = { onSelect(LibraryRoleFilter.All) },
+                label = { Text(stringResource(Res.string.library_role_all)) },
+            )
+            FilterChip(
+                selected = filter == LibraryRoleFilter.Wl,
+                onClick = { onSelect(LibraryRoleFilter.Wl) },
+                label = { Text(stringResource(Res.string.library_role_token_wl)) },
+            )
+            FilterChip(
+                selected = filter == LibraryRoleFilter.Open,
+                onClick = { onSelect(LibraryRoleFilter.Open) },
+                label = { Text(stringResource(Res.string.library_role_token_open)) },
+            )
+        }
+        if (filter == LibraryRoleFilter.Wl) {
+            Text(
+                text = stringResource(Res.string.library_role_wl_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 
@@ -805,6 +990,7 @@ private fun LibraryGroupCard(
     onUpdate: () -> Unit,
     openGroupSettings: (Long) -> Unit,
     onDeleteRequest: () -> Unit,
+    onSwipeDelete: () -> Unit,
     showQRDialog: (url: String, name: String) -> Unit,
     snackbar: suspend (message: String) -> Unit,
 ) {
@@ -813,82 +999,126 @@ private fun LibraryGroupCard(
     val group = state.group
     var showOptionsSheet by remember { mutableStateOf(false) }
     val optionsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val swipeState = rememberSwipeToDismissBoxState()
+    val deleteSwipeEnabled = !showDragHandle && group.isGroupDeletable()
+    val updateSwipeEnabled = deleteSwipeEnabled && group.type == GroupType.SUBSCRIPTION
 
-    OutlinedCard(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            if (state.isUpdating) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.size(8.dp))
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (showDragHandle) {
-                    Icon(
-                        imageVector = vectorResource(Res.drawable.drag_indicator),
-                        contentDescription = stringResource(Res.string.library_reorder),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .padding(8.dp)
-                            .then(dragHandleModifier),
-                    )
-                } else {
-                    Spacer(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .padding(end = 6.dp),
-                    )
+    LaunchedEffect(swipeState.currentValue) {
+        when (swipeState.currentValue) {
+            SwipeToDismissBoxValue.StartToEnd -> {
+                if (!state.isUpdating) {
+                    onUpdate()
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = group.displayName(),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = proxyCountLabel(state),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        text = groupSubtitle(state),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
+                swipeState.snapTo(SwipeToDismissBoxValue.Settled)
             }
+            SwipeToDismissBoxValue.EndToStart -> {
+                onSwipeDelete()
+                swipeState.snapTo(SwipeToDismissBoxValue.Settled)
+            }
+            else -> Unit
+        }
+    }
+
+    SwipeToDismissBox(
+        state = swipeState,
+        enableDismissFromStartToEnd = updateSwipeEnabled,
+        enableDismissFromEndToStart = deleteSwipeEnabled,
+        backgroundContent = {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(onClick = onOpen, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(Res.string.action_open))
-                }
-                if (group.type == GroupType.SUBSCRIPTION) {
-                    SimpleIconButton(
+                if (updateSwipeEnabled) {
+                    Icon(
                         imageVector = vectorResource(Res.drawable.update),
                         contentDescription = stringResource(Res.string.group_update),
-                        enabled = !state.isUpdating,
-                        onClick = onUpdate,
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
-                SimpleIconButton(
-                    imageVector = vectorResource(Res.drawable.more_vert),
-                    contentDescription = stringResource(Res.string.menu),
-                    onClick = { showOptionsSheet = true },
+                Icon(
+                    imageVector = vectorResource(Res.drawable.delete),
+                    contentDescription = stringResource(Res.string.delete),
+                    tint = MaterialTheme.colorScheme.error,
                 )
+            }
+        },
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        OutlinedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpen),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (showDragHandle) {
+                        Icon(
+                            imageVector = vectorResource(Res.drawable.drag_indicator),
+                            contentDescription = stringResource(Res.string.library_reorder),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .padding(8.dp)
+                                .then(dragHandleModifier),
+                        )
+                    }
+                    GroupAvatar(group)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = group.displayName(),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            LibraryRoleChip(group)
+                        }
+                        Text(
+                            text = groupSubtitle(state),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    LibraryGroupStatusChip(state)
+                    if (group.type == GroupType.SUBSCRIPTION) {
+                        if (state.isUpdating) {
+                            CircularWavyProgressIndicator(modifier = Modifier.size(20.dp))
+                        } else {
+                            SimpleIconButton(
+                                imageVector = vectorResource(Res.drawable.update),
+                                contentDescription = stringResource(Res.string.group_update),
+                                enabled = !state.isUpdating,
+                                onClick = onUpdate,
+                            )
+                        }
+                    }
+                    SimpleIconButton(
+                        imageVector = vectorResource(Res.drawable.more_vert),
+                        contentDescription = stringResource(Res.string.menu),
+                        onClick = { showOptionsSheet = true },
+                    )
+                }
+                SubscriptionUsageBar(subscription = group.subscription)
             }
         }
     }
@@ -952,6 +1182,178 @@ private fun LibraryGroupCard(
     }
 }
 
+/** Pool role chip: WL (indigo), OPEN (green), builtin (neutral). */
+@Composable
+private fun LibraryRoleChip(group: fr.husi.database.ProxyGroup) {
+    val (label, color) = when {
+        group.subscription?.connectPoolRole == ConnectPoolRole.WL ->
+            stringResource(Res.string.library_role_token_wl) to POOL_WL_COLOR
+
+        group.subscription?.connectPoolRole == ConnectPoolRole.OPEN ->
+            stringResource(Res.string.library_role_token_open) to POOL_OPEN_COLOR
+
+        group.resolvedOrigin() == GroupOrigin.BUILTIN ->
+            stringResource(Res.string.library_role_token_builtin) to MaterialTheme.colorScheme.onSurfaceVariant
+
+        else -> return
+    }
+    Box(
+        modifier = Modifier
+            .background(color.copy(alpha = 0.16f), RoundedCornerShape(999.dp))
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = color,
+        )
+    }
+}
+
+@Composable
+private fun GroupAvatar(group: fr.husi.database.ProxyGroup) {
+    val tone = when {
+        group.subscription?.connectPoolRole == ConnectPoolRole.WL -> POOL_WL_COLOR
+        group.subscription?.connectPoolRole == ConnectPoolRole.OPEN -> POOL_OPEN_COLOR
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val letter = group.displayName().trim().firstOrNull()?.uppercase() ?: "?"
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .background(tone.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = letter,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = tone,
+        )
+    }
+}
+
+/** Updating spinner, else "outdated N d" chip derived from subscription.lastUpdated. */
+@Composable
+private fun LibraryGroupStatusChip(state: GroupItemUiState) {
+    if (state.isUpdating) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            CircularWavyProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = stringResource(Res.string.library_group_updating),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        return
+    }
+    val subscription = state.group.subscription
+    val outdatedDays = if (subscription != null && subscription.lastUpdated > 0) {
+        (System.currentTimeMillis() / 1000L - subscription.lastUpdated) / OUTDATED_DAYS_SECONDS
+    } else {
+        null
+    }
+    if (outdatedDays != null && outdatedDays >= OUTDATED_DAYS) {
+        Text(
+            text = pluralStringResource(
+                Res.plurals.library_group_outdated_days,
+                outdatedDays.toInt(),
+                outdatedDays,
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = POOL_WARN_COLOR,
+            modifier = Modifier
+                .background(POOL_WARN_COLOR.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
+    }
+}
+
+/** Usage bar + traffic/expiry line; hidden when the subscription has no traffic data. */
+@Composable
+private fun SubscriptionUsageBar(subscription: fr.husi.database.SubscriptionBean?) {
+    if (subscription == null || (subscription.bytesUsed <= 0L && subscription.bytesRemaining <= 0L)) {
+        return
+    }
+    val total = subscription.bytesUsed + subscription.bytesRemaining
+    val fraction = if (total > 0L) {
+        (subscription.bytesUsed.toFloat() / total).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val fillColor = when {
+        fraction > 0.9f -> MaterialTheme.colorScheme.error
+        fraction > 0.75f -> POOL_WARN_COLOR
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val traffic = if (subscription.bytesRemaining > 0L) {
+        stringResource(
+            Res.string.subscription_traffic,
+            Libcore.formatBytes(subscription.bytesUsed),
+            Libcore.formatBytes(subscription.bytesRemaining),
+        )
+    } else {
+        stringResource(
+            Res.string.subscription_used,
+            Libcore.formatBytes(subscription.bytesUsed),
+        )
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(5.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(3.dp)),
+        ) {
+            if (fraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction)
+                        .height(5.dp)
+                        .background(fillColor, RoundedCornerShape(3.dp)),
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = traffic,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (subscription.expiryDate > 0L) {
+                val daysLeft = (subscription.expiryDate * 1000L - System.currentTimeMillis()) / 86_400_000L
+                val expireColor = when {
+                    daysLeft < 0L -> MaterialTheme.colorScheme.error
+                    daysLeft < OUTDATED_DAYS -> POOL_WARN_COLOR
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Text(
+                    text = stringResource(
+                        Res.string.subscription_expire,
+                        formatTime(subscription.expiryDate * 1000L),
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (expireColor != MaterialTheme.colorScheme.onSurfaceVariant) FontWeight.SemiBold else null,
+                    color = expireColor,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun proxyCountLabel(state: GroupItemUiState): String {
     val counts = state.counts
@@ -974,34 +1376,11 @@ private fun proxyCountLabel(state: GroupItemUiState): String {
 
 @Composable
 private fun groupSubtitle(state: GroupItemUiState): String {
-    val group = state.group
-    val subscription = group.subscription
-    if (subscription != null && (subscription.bytesUsed > 0L || subscription.bytesRemaining > 0L)) {
-        val traffic = if (subscription.bytesRemaining > 0L) {
-            stringResource(
-                Res.string.subscription_traffic,
-                Libcore.formatBytes(subscription.bytesUsed),
-                Libcore.formatBytes(subscription.bytesRemaining),
-            )
-        } else {
-            stringResource(
-                Res.string.subscription_used,
-                Libcore.formatBytes(subscription.bytesUsed),
-            )
-        }
-        if (subscription.expiryDate > 0) {
-            return "$traffic · ${stringResource(
-                Res.string.subscription_expire,
-                formatTime(subscription.expiryDate * 1000L),
-            )}"
-        }
-        return traffic
-    }
     return when {
-        group.resolvedOrigin() == GroupOrigin.BUILTIN ->
+        state.group.resolvedOrigin() == GroupOrigin.BUILTIN ->
             stringResource(Res.string.library_group_origin_builtin)
 
-        state.counts == 0L && group.type == GroupType.SUBSCRIPTION ->
+        state.counts == 0L && state.group.type == GroupType.SUBSCRIPTION ->
             stringResource(Res.string.group_status_empty_subscription)
 
         state.counts == 0L ->

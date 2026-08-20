@@ -1,5 +1,6 @@
 package fr.husi.ui.library
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +68,22 @@ internal fun LibraryAddSheet(
         }
     }
 
+    // Same path as the "Create subscription" row: clipboard first line classified via
+    // ImportLinkClassifier, whole text handed to parseProxy. Falls back to the group
+    // editor when the buffer is empty or not a subscription URL.
+    val importClipboard: () -> Unit = {
+        onDismiss()
+        scope.launch {
+            val clip = clipboard.getPlainText()?.trim()
+            val firstLine = clip?.lineSequence()?.firstOrNull()?.trim()
+            if (!firstLine.isNullOrBlank() && ImportLinkClassifier.looksLikeSubscriptionUrl(firstLine)) {
+                mainViewModel.parseProxy(clip)
+            } else {
+                onOpenGroupSettings(0L)
+            }
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -81,21 +99,37 @@ internal fun LibraryAddSheet(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
+            clipboardPreview?.let { preview ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            text = preview,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(stringResource(Res.string.action_import), onClick = importClipboard)
+                    }
+                }
+            }
             SheetActionRow(
                 text = stringResource(Res.string.group_create_subscription),
                 leadingIcon = { Icon(vectorResource(Res.drawable.link), null) },
-                onClick = {
-                    onDismiss()
-                    scope.launch {
-                        val clip = clipboard.getPlainText()?.trim()
-                        val firstLine = clip?.lineSequence()?.firstOrNull()?.trim()
-                        if (!firstLine.isNullOrBlank() && ImportLinkClassifier.looksLikeSubscriptionUrl(firstLine)) {
-                            mainViewModel.parseProxy(clip)
-                        } else {
-                            onOpenGroupSettings(0L)
-                        }
-                    }
-                },
+                onClick = importClipboard,
             )
             SheetActionRow(
                 text = stringResource(Res.string.action_import_file),
@@ -123,29 +157,6 @@ internal fun LibraryAddSheet(
                     onOpenGroupSettings(0L)
                 },
             )
-            clipboardPreview?.let { preview ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = preview,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(stringResource(Res.string.action_import)) {
-                        scope.launch {
-                            mainViewModel.parseProxy(clipboard.getPlainText())
-                        }
-                        onDismiss()
-                    }
-                }
-            }
         }
     }
 }
