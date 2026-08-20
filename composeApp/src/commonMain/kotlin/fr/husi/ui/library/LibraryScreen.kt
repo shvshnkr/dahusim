@@ -1014,6 +1014,10 @@ private fun LibraryGroupCard(
     val scope = rememberCoroutineScope()
     val group = state.group
     var showOptionsSheet by remember { mutableStateOf(false) }
+    // Keep in sync with the options-sheet rows below: groups without a link
+    // that are not deletable would open an empty sheet.
+    val hasOptionsActions =
+        group.subscription?.link?.blankAsNull() != null || group.isGroupDeletable()
     val optionsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val swipeState = rememberSwipeToDismissBoxState()
     val deleteSwipeEnabled = !showDragHandle && group.isGroupDeletable()
@@ -1128,11 +1132,13 @@ private fun LibraryGroupCard(
                             )
                         }
                     }
-                    SimpleIconButton(
-                        imageVector = vectorResource(Res.drawable.more_vert),
-                        contentDescription = stringResource(Res.string.menu),
-                        onClick = { showOptionsSheet = true },
-                    )
+                    if (hasOptionsActions) {
+                        SimpleIconButton(
+                            imageVector = vectorResource(Res.drawable.more_vert),
+                            contentDescription = stringResource(Res.string.menu),
+                            onClick = { showOptionsSheet = true },
+                        )
+                    }
                 }
                 SubscriptionUsageBar(subscription = group.subscription)
             }
