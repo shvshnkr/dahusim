@@ -39,7 +39,6 @@ import fr.husi.resources.link
 import fr.husi.resources.playlist_add
 import fr.husi.resources.qr_code
 import fr.husi.resources.share_qr_nfc
-import fr.husi.ui.ImportLinkClassifier
 import fr.husi.ui.MainViewModel
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -68,18 +67,18 @@ internal fun LibraryAddSheet(
         }
     }
 
-    // Same path as the "Create subscription" row: clipboard first line classified via
-    // ImportLinkClassifier, whole text handed to parseProxy. Falls back to the group
-    // editor when the buffer is empty or not a subscription URL.
+    // Clipboard import path: parseProxy classifies the text (subscription URLs →
+    // subscription dialog, vless/ss inline → profile import). Only an empty buffer
+    // falls back to the group editor.
     val importClipboard: () -> Unit = {
         onDismiss()
         scope.launch {
             val clip = clipboard.getPlainText()?.trim()
             val firstLine = clip?.lineSequence()?.firstOrNull()?.trim()
-            if (!firstLine.isNullOrBlank() && ImportLinkClassifier.looksLikeSubscriptionUrl(firstLine)) {
-                mainViewModel.parseProxy(clip)
-            } else {
+            if (firstLine.isNullOrBlank()) {
                 onOpenGroupSettings(0L)
+            } else {
+                mainViewModel.parseProxy(clip)
             }
         }
     }
