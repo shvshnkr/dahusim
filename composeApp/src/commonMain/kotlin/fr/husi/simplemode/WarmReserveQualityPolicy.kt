@@ -33,7 +33,7 @@ internal object WarmReserveQualityPolicy {
         if (state != null && (state.state == ProbeState.DEAD || state.state == ProbeState.CEMETERY)) {
             return Int.MAX_VALUE
         }
-        if (AutoServerSelectorProbePolicy.isRecentlyDegraded(sample.profileId, sample.nowMs)) {
+        if (AutoServerSelectorProbePolicy.isRecentlyDegraded(profileId = sample.profileId, nowMs = sample.nowMs)) {
             return DEGRADED_SCORE
         }
         val base = when {
