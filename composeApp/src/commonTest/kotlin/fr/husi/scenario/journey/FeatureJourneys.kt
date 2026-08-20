@@ -118,6 +118,15 @@ object FeatureJourneys {
             testClass = "fr.husi.scenario.journey.SimpleAllServersDeadPromptTimeoutJourneyTest",
         ),
         FeatureJourney(
+            id = "simple_all_servers_dead_banner",
+            userPromise = "After the revival watch exhausts, the UI keeps a persistent \"no working servers\" banner instead of silently returning to Stopped",
+            entryPoints = listOf(
+                "SimpleModeConnectCoordinator.handleAllServersDead",
+                "SimpleHomeScreen.onAllServersDead",
+            ),
+            testClass = "fr.husi.scenario.journey.SimpleAllServersDeadBannerJourneyTest",
+        ),
+        FeatureJourney(
             id = "wl_server_revival_watch",
             userPromise = "BS dead sweep (WL pool or open-fallback 0 url-ok) keeps watching and auto-connects when a flapping server revives — one Connect tap, not a retry loop",
             entryPoints = listOf(

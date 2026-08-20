@@ -110,6 +110,11 @@ object SimpleModeConnectCoordinator {
         when (choice) {
             SimpleModeAllServersDeadChoice.WaitForGoogle -> {
                 DataStore.autoConnectPausedUntilGoogle = true
+                // Persistent banner instead of the 30s prompt alone: the prompt can time out or
+                // be dismissed, and a silent Stopped state reads as "Connect is broken" on BS
+                // (field 2026-08-21 — user tapped Connect, all servers were dead, nothing
+                // explained why). The UI shows it until the next attempt / successful connect.
+                withContext(Dispatchers.Main) { host.onAllServersDead() }
                 resolveRepository().stopService()
             }
             SimpleModeAllServersDeadChoice.ExitApp -> exitApplication()
@@ -450,6 +455,7 @@ object SimpleModeConnectCoordinator {
         fun requestVpnConnect()
         fun onVpnPermissionDenied()
         fun onNoInternet()
+        fun onAllServersDead()
         fun onNoProfile()
         fun onNeedForegroundForPermission()
         fun onNeedUnlockForPermission()

@@ -28,6 +28,7 @@ class SimpleNoInternetBlockedJourneyTest : FeatureJourneyTest() {
         override fun onNoInternet() {
             noInternetCalls++
         }
+        override fun onAllServersDead() {}
         override fun onNoProfile() {}
         override fun onNeedForegroundForPermission() {}
         override fun onNeedUnlockForPermission() {}

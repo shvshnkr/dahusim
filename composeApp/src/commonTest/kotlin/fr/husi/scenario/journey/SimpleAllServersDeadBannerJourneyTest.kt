@@ -13,11 +13,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * All-servers-dead prompt must never freeze the app: an unresolved/lost prompt resolves to
- * WaitForGoogle and stops the service, so the UI returns to Stopped instead of hanging in
- * "Preparing…" (field log 2026-08-18 02:46, BS — prompt deferred never completed).
+ * After the revival watch exhausts (BS night, all probes dead) the UI must show a persistent
+ * "no working servers" banner instead of silently returning to Stopped — the 30s prompt alone
+ * can time out or be dismissed, and a silent Stopped state reads as "Connect is broken"
+ * (field 2026-08-21: user tapped Connect on BS, all servers were dead, nothing explained why).
  */
-class SimpleAllServersDeadPromptTimeoutJourneyTest : FeatureJourneyTest() {
+class SimpleAllServersDeadBannerJourneyTest : FeatureJourneyTest() {
 
     private class CountingRepository : Repository by FakeRepository() {
         var stopServiceCalls = 0
@@ -26,12 +27,15 @@ class SimpleAllServersDeadPromptTimeoutJourneyTest : FeatureJourneyTest() {
         }
     }
 
-    private class NeverPromptHost : ConnectHost {
+    private open class CountingHost : ConnectHost {
+        var allServersDeadCalls = 0
         override fun setPermissionPending(pending: Boolean) {}
         override fun requestVpnConnect() {}
         override fun onVpnPermissionDenied() {}
         override fun onNoInternet() {}
-        override fun onAllServersDead() {}
+        override fun onAllServersDead() {
+            allServersDeadCalls++
+        }
         override fun onNoProfile() {}
         override fun onNeedForegroundForPermission() {}
         override fun onNeedUnlockForPermission() {}
@@ -49,28 +53,33 @@ class SimpleAllServersDeadPromptTimeoutJourneyTest : FeatureJourneyTest() {
     }
 
     @Test
-    fun unresolvedAllServersDeadPromptResolvesToWaitForGoogleAndStopsService() = runTest {
+    fun unresolvedAllServersDeadPromptShowsBannerAndStopsService() = runTest {
+        val host = CountingHost()
         SimpleModeConnectCoordinator.handleAllServersDead(
-            host = NeverPromptHost(),
+            host = host,
             promptTimeoutMs = 100L,
         )
 
+        // Lost/timed-out prompt must still surface the persistent banner (the prompt alone
+        // is gone after 30s — the UI would otherwise sit in silent Stopped).
+        assertEquals(1, host.allServersDeadCalls)
         assertEquals(1, countingRepository.stopServiceCalls)
         assertTrue(DataStore.autoConnectPausedUntilGoogle)
     }
 
     @Test
-    fun answeredAllServersDeadPromptStopsServiceImmediately() = runTest {
-        val answeredHost = object : ConnectHost by NeverPromptHost() {
+    fun answeredWaitForGoogleShowsBannerAndStopsService() = runTest {
+        val host = object : CountingHost() {
             override suspend fun promptAllServersDead(): SimpleModeAllServersDeadChoice =
                 SimpleModeAllServersDeadChoice.WaitForGoogle
         }
 
         SimpleModeConnectCoordinator.handleAllServersDead(
-            host = answeredHost,
+            host = host,
             promptTimeoutMs = 10_000L,
         )
 
+        assertEquals(1, host.allServersDeadCalls)
         assertEquals(1, countingRepository.stopServiceCalls)
         assertTrue(DataStore.autoConnectPausedUntilGoogle)
     }

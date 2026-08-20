@@ -1058,6 +1058,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_no_internet_pause">No internet access detected. Auto-connect checks are paused until connectivity returns.</string>
     <string name="simple_mode_no_internet_banner_title">No internet</string>
     <string name="simple_mode_no_internet_banner_subtitle">Husi can't connect — check mobile data or Wi-Fi.</string>
+    <string name="simple_mode_all_servers_dead_banner_title">No working servers</string>
+    <string name="simple_mode_all_servers_dead_banner_subtitle">All servers are down right now — Husi will wait and retry.</string>
     <string name="manual_profile_probe_failed">The selected server did not respond. Choose another profile or use auto-connect.</string>
     <string name="simple_mode_all_servers_dead_title">No working servers</string>
     <string name="simple_mode_all_servers_dead_message">Your subscription profiles did not respond to health checks. You can wait for normal internet outside the whitelist (for list updates), or exit the app.</string>
