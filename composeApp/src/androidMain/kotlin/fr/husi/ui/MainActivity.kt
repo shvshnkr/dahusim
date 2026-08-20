@@ -62,9 +62,13 @@ class MainActivity : ComposeActivity(), AndroidScopeComponent {
                     AppTheme {
                         MainScreen(
                             moveToBackground = { moveTaskToBack(true) },
+                            // One-shot: drop the extra so activity recreation (rotation,
+                            // process restore) does not re-run the import dialog.
                             initialProcessText = intent
                                 .takeIf { it.action == Intent.ACTION_PROCESS_TEXT }
-                                ?.getStringExtra(Intent.EXTRA_PROCESS_TEXT),
+                                ?.getStringExtra(Intent.EXTRA_PROCESS_TEXT)
+                                ?.also { intent.removeExtra(Intent.EXTRA_PROCESS_TEXT) }
+                                ?.takeIf { savedInstanceState == null },
                         )
                     }
                 }
