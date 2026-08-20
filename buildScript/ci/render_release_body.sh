@@ -43,7 +43,7 @@ case "$platform" in
       echo
       echo "**versionName:** \`$VER\` · **versionCode:** \`$VER_CODE\` · **commit:** \`$SHORT_SHA\` · **CI:** #${RUN_NUMBER} · **run:** \`${RUN_ID}\`"
       echo
-      echo "**Как скачать:** внизу страницы блок **Assets** — по одному APK на архитектуру (**arm64-v8a**, **armeabi-v7a**, **x86_64**, **x86**). Имена вида \`dahusim_<версия>_play_debug_<abi>.apk\`."
+      echo "**Как скачать:** внизу страницы блок **Assets** — по одному APK на архитектуру (**arm64-v8a**, **armeabi-v7a**, **x86_64**, **x86**). Имена вида \`dahusim_<версия>_play_<тип>_<abi>.apk\` (\`release\` при настроенном keystore, иначе \`debug\`)."
       echo
       echo "**Этот pre-release — только Android APK.** Сборки **Linux / Windows desktop** (zip, deb, …) публикуются **другими** workflows; для desktop на ПК нужен **Java 21+**, см. README."
       echo

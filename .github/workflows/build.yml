@@ -81,10 +81,12 @@ jobs:
           if-no-files-found: error
 
   android-play-all-abi:
-    name: Play debug APK (все ABI)
+    name: Play APK (все ABI)
     runs-on: ubuntu-latest
     timeout-minutes: 180
     needs: libcore
+    outputs:
+      build_type: ${{ steps.assemble.outputs.build_type }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -129,6 +131,7 @@ jobs:
           fi
 
       - name: Assemble Play APK (release if keystore, else debug)
+        id: assemble
         env:
           BUILD_PLUGIN: none
           ORG_GRADLE_PROJECT_skipDesktopLibPreCheck: "true"
@@ -139,10 +142,10 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${KEYSTORE_PASS:-}" ] && [ -f release.keystore ]; then
-            echo "build_type=release" >> "$GITHUB_ENV"
+            echo "build_type=release" >> "$GITHUB_OUTPUT"
             ./gradlew :composeApp:exportLibraryDefinitions assemblePlayReleaseAllAbi --no-daemon
           else
-            echo "build_type=debug" >> "$GITHUB_ENV"
+            echo "build_type=debug" >> "$GITHUB_OUTPUT"
             ./gradlew :composeApp:exportLibraryDefinitions assemblePlayDebugAllAbi --no-daemon
           fi
 
@@ -180,7 +183,7 @@ jobs:
       - name: Version, rename APK by ABI, release notes
         id: rel
         env:
-          BUILD_TYPE: ${{ env.build_type }}
+          BUILD_TYPE: ${{ needs.android-play-all-abi.outputs.build_type }}
         run: |
           set -e
           chmod +x buildScript/ci/version_name.sh
