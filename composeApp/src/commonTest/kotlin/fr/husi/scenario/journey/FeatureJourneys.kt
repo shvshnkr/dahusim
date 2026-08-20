@@ -50,6 +50,26 @@ object FeatureJourneys {
             testClass = "fr.husi.scenario.journey.LibraryManualFlatListJourneyTest",
         ),
         FeatureJourney(
+            id = "library_filter_search_counts",
+            userPromise = "Library filters subscriptions by pool role (WL/OPEN), searches by name/link, segment tabs show live counts",
+            entryPoints = listOf(
+                "LibraryRoleFilter",
+                "GroupItemUiState.matchesRoleFilter",
+                "GroupItemUiState.matchesLibraryQuery",
+                "librarySegmentCounts",
+            ),
+            testClass = "fr.husi.scenario.journey.LibraryFilteringJourneyTest",
+        ),
+        FeatureJourney(
+            id = "simple_scan_clears_after_prepare",
+            userPromise = "Scanning N/N progress is cleared when prepare finishes — a stale 1/1 line never sticks",
+            entryPoints = listOf(
+                "Probe2kProgress.clearScan",
+                "AutoServerSelector.prepareForConnect",
+            ),
+            testClass = "fr.husi.scenario.journey.SimpleScanClearJourneyTest",
+        ),
+        FeatureJourney(
             id = "full_mode_expert_health",
             userPromise = "Full mode with expert recover gets tunnel health watchdog and telegram-aligned dashboard test",
             entryPoints = listOf(

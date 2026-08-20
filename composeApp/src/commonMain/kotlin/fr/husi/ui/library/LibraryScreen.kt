@@ -228,6 +228,12 @@ fun librarySegmentCounts(groups: List<GroupItemUiState>): Map<LibrarySegment, In
     }
 }
 
+/** Days since [lastUpdated] (epoch seconds), or null when the subscription was never updated. */
+fun subscriptionOutdatedDays(lastUpdated: Int, nowSeconds: Long = System.currentTimeMillis() / 1000L): Long? {
+    if (lastUpdated <= 0) return null
+    return (nowSeconds - lastUpdated) / OUTDATED_DAYS_SECONDS
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun LibraryScreen(
@@ -1255,11 +1261,7 @@ private fun LibraryGroupStatusChip(state: GroupItemUiState) {
         return
     }
     val subscription = state.group.subscription
-    val outdatedDays = if (subscription != null && subscription.lastUpdated > 0) {
-        (System.currentTimeMillis() / 1000L - subscription.lastUpdated) / OUTDATED_DAYS_SECONDS
-    } else {
-        null
-    }
+    val outdatedDays = subscriptionOutdatedDays(subscription?.lastUpdated ?: 0)
     if (outdatedDays != null && outdatedDays >= OUTDATED_DAYS) {
         Text(
             text = pluralStringResource(
