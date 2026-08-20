@@ -39,3 +39,27 @@
 - `BaseService.kt` / `SimpleModeSessionHealth.kt` — post-connect и periodic tunnel health
 
 При сомнении: на WL **не добавляй** в tunnel health домены, которые и так открыты с телефона без VPN.
+
+## Полевой BS-тест (чеклист для агентов)
+
+BS-режим доступен не всегда: на мобильном интернете Google может быть жив (`H37 google=true wlOnly=false`) —
+это **OPEN**, не BS. БС-валидация фич autoselect требует `google=false wlOnly=true` (обычно ночное/флаповое окно).
+
+Рецепт (телефон VBC0223426003938, простой режим):
+1. `adb install -r androidApp/build/outputs/apk/play/debug/husi-1.2.0-alpha.39-redesign-play-arm64-v8a-debug.apk` → `adb shell dumpsys package fr.husi.debug | grep versionCode` (должен совпасть с тестируемым VERSION_CODE).
+2. `adb shell svc wifi disable` → `adb shell "dumpsys wifi"` на `WifiState 0` (EnabledState→DisabledState). Активный uplink — мобильный (rmnet*).
+3. Запуск: `adb shell am force-stop fr.husi.debug` → `adb shell am start -n fr.husi.debug/fr.husi.ui.MainActivity` (ИМЕННО `fr.husi.ui.MainActivity`, не `fr.husi.MainActivity`).
+4. Тап Подключить: `adb shell "input tap 610 1769"`. При «Waiting for servers…» НЕ закрывать — ждать `H21 server_revival_watch attempt=N` (BS-ночь).
+5. Проверка контекста на поле: `H37 reachability_route … google=false … wlOnly=true` (иначе не BS, смотри §Термины).
+6. Забрать лог: `adb shell "run-as fr.husi.debug cat cache/simple-mode/simple_mode_app.log"` → `$TEMP/bs_session<N>_<CODE>.log`. Метрика — по `H21 preconnect_done elapsedMs=… result=Success|AllProbesDead`.
+7. Вернуть: `adb shell svc wifi enable` → `WifiState 1` (EnabledState).
+8. Worklog append: поля `maps_updated`/`map_sync`; лог сохранить.
+
+### BS-чеклист по кодам (грейдинг по «времени от тапа до живого туннеля»)
+
+| Код | Ожидание | Референс |
+|-----|----------|----------|
+| 751 (revival watch) | H22 dead-end → H21 `server_revival_watch` attempt=1..N, exhausted — без мёртвого коннекта | 406s ночь → мёртвого коннекта нет (валидировано 20.08) |
+| 752 (MERGED-all + sweep) | H4 `wl_pool_merged_from_start` → H24 `poolMode=MERGED pool≈2331` → H14 `tcp_probe_round` batch=128 | preconnect 57с (валидировано 20.08) |
+| 753 (early-connect + pre-cache) | H4 `early_connect` при 1-м url-ok (без ranking), pre-cache DataStore-читаний | preconnect 75,5с при 0-url-ok 6 раундов (валидировано 20.08) |
+| 754 (pipelining + LKG pre-seed + adaptive TCP) | Даже в 0-url-ok окне: H14 `timeoutMs=800/1200` + H17 `mode=wl_progressive_round` (URL N ∥ TCP N+1); при свежих LKG — `H17 mode=wl_lkg_preseed` → коннект | цель: <40с в 0-url-ok окне; <~25с при свежих LKG; 753 было 75,5с. **НЕ валидирован** (BS-режима днём нет на LTE) |
