@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>daHusiM — Subscription management redesign mockup</title>
+<style>
+  :root {
+    --bg: #f7f5f2; --surface: #ffffff; --text: #1c1b1f; --text2: #49454f;
+    --outline: #cac4d0; --tone-soft: rgba(92,107,192,.12);
+    --wl: #5C6BC0; --open: #2E7D32; --err: #B3261E; --warn: #C58A00;
+    --chipbg: #ece7e2;
+  }
+  body[data-theme="dark"] {
+    --bg: #141218; --surface: #211f26; --text: #e6e0e9; --text2: #cac4d0;
+    --outline: #3b3940; --tone-soft: rgba(92,107,192,.18);
+    --chipbg: #2e2a33;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: #0e0c11; color: #e6e0e9;
+    display: flex; gap: 32px; align-items: flex-start; justify-content: center; padding: 32px 16px; flex-wrap: wrap; }
+  .panel { width: 340px; display: flex; flex-direction: column; gap: 14px; }
+  .panel h1 { font-size: 18px; }
+  .panel p.sub { font-size: 12.5px; color: #cac4d0; line-height: 1.5; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { border: 1px solid #49454f; background: #211f26; color: #e6e0e9; padding: 7px 12px;
+    border-radius: 999px; font-size: 12.5px; cursor: pointer; transition: .15s; }
+  .btn:hover { border-color: #938f99; }
+  .btn.active { background: #e6e0e9; color: #141218; border-color: #e6e0e9; }
+  .btn.wide { width: 100%; }
+  .group { border: 1px solid #3b3940; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .group .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #938f99; }
+  .row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #cac4d0; }
+  input[type=checkbox] { accent-color: #5C6BC0; width: 16px; height: 16px; }
+
+  /* ---------- phone ---------- */
+  .phone { width: 390px; height: 844px; background: var(--bg); border-radius: 44px;
+    border: 2px solid #3b3940; overflow: hidden; position: relative; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .phone::before { content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 28px; background: #141218; border-radius: 0 0 18px 18px; z-index: 5; }
+  .screen { flex: 1; display: flex; flex-direction: column; padding: 0 16px; overflow: hidden; }
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 40px 4px 10px; }
+  .menu-btn { font-size: 20px; color: var(--text2); width: 32px; height: 32px; display: grid; place-items: center; cursor: pointer; border-radius: 50%; }
+  .menu-btn:hover { background: var(--tone-soft); }
+  .title { font-size: 19px; font-weight: 600; color: var(--text); flex: 1; }
+  .tbar-btn { font-size: 17px; color: var(--text2); width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer; border-radius: 50%; }
+  .tbar-btn:hover { background: var(--tone-soft); }
+  .tbar-btn .spin { display: none; width: 15px; height: 15px; border: 2px solid var(--tone-soft); border-top-color: var(--wl); border-radius: 50%; animation: rot .9s linear infinite; }
+  .tbar-btn.updating .spin { display: block; }
+  .tbar-btn.updating .glyph { display: none; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  .search { display: none; margin-bottom: 8px; }
+  .search input { width: 100%; background: var(--chipbg); border: 1px solid transparent; border-radius: 999px;
+    padding: 8px 16px; font-size: 13.5px; color: var(--text); outline: none; }
+  .search input:focus { border-color: var(--wl); }
+  .search input::placeholder { color: var(--text2); }
+  .search.visible { display: block; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tab { flex: 1; text-align: center; padding: 7px 4px; border-radius: 10px; font-size: 12.5px; color: var(--text2); cursor: pointer; background: transparent; }
+  .tab .cnt { opacity: .7; font-size: 11px; }
+  .tab.active { background: var(--tone-soft); color: var(--wl); font-weight: 600; }
+
+  .roles { display: flex; gap: 6px; margin-bottom: 10px; }
+  .role { padding: 4px 12px; border-radius: 999px; font-size: 11.5px; cursor: pointer; border: 1px solid var(--outline); color: var(--text2); background: transparent; }
+  .role.active { background: var(--tone-soft); color: var(--wl); border-color: transparent; font-weight: 600; }
+  .hint { font-size: 11px; color: var(--text2); margin: -4px 0 8px; }
+
+  .list { flex: 1; overflow: hidden auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; }
+  .card { background: var(--surface); border-radius: 16px; padding: 12px 14px; position: relative; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08); transition: transform .1s; border: 1px solid transparent; }
+  .card:hover { transform: translateY(-1px); }
+  .card.error { border-color: rgba(179,38,30,.35); }
+  .card .row1 { display: flex; align-items: center; gap: 10px; }
+  .card .avatar { width: 34px; height: 34px; border-radius: 10px; background: var(--tone-soft); display: grid; place-items: center; font-size: 17px; }
+  .card .name { flex: 1; font-size: 14.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip { font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: .04em; }
+  .chip.wl { background: rgba(92,107,192,.16); color: #8b9bf0; }
+  .chip.open { background: rgba(46,125,50,.16); color: #66bb6a; }
+  .chip.builtin { background: var(--chipbg); color: var(--text2); }
+  .chip.err { background: rgba(179,38,30,.14); color: #ef6a60; }
+  .chip.ok { background: rgba(46,125,50,.16); color: #66bb6a; }
+  .card .row2 { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-left: 44px; }
+  .card .sub { font-size: 12px; color: var(--text2); flex: 1; }
+  .card .upd { font-size: 15px; color: var(--text2); cursor: pointer; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; }
+  .card .upd:hover { background: var(--tone-soft); }
+  .card .menu { font-size: 16px; color: var(--text2); cursor: pointer; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; }
+  .card .menu:hover { background: var(--tone-soft); }
+  .card .usage { margin-top: 8px; }
+  .usage .bar { height: 5px; border-radius: 3px; background: var(--chipbg); overflow: hidden; }
+  .usage .fill { height: 100%; width: 0; background: var(--wl); border-radius: 3px; transition: width .4s; }
+  .usage .fill.warn { background: var(--warn); }
+  .usage .fill.danger { background: var(--err); }
+  .usage .meta { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text2); margin-top: 4px; }
+  .usage .meta .exp.warn { color: var(--warn); font-weight: 600; }
+  .usage .meta .exp.danger { color: #ef6a60; font-weight: 600; }
+  .swipehint { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--text2); opacity: 0; }
+  .card.swiping .swipehint { opacity: 1; }
+  .card.swiping .row2 .sub { display: none; }
+
+  .fab { position: absolute; bottom: 18px; right: 20px; width: 54px; height: 54px; border-radius: 50%;
+    background: var(--wl); color: #fff; display: grid; place-items: center; font-size: 24px; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(92,107,192,.45); z-index: 4; transition: .15s; border: none; }
+  .fab:hover { transform: scale(1.05); }
+
+  .sheet { position: absolute; inset: 0; background: rgba(0,0,0,.45); z-index: 6; display: none; align-items: flex-end; }
+  .sheet.visible { display: flex; }
+  .sheet .body { width: 100%; background: var(--bg); border-radius: 24px 24px 0 0; padding: 18px 20px 24px; }
+  .sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--outline); margin: 0 auto 14px; }
+  .sheet h3 { font-size: 15px; color: var(--text); margin-bottom: 12px; }
+  .clip { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px dashed var(--outline);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+  .clip .t { flex: 1; font-size: 11.5px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .clip .go { font-size: 12px; color: var(--wl); font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .opt { display: flex; align-items: center; gap: 12px; padding: 12px 6px; border-radius: 12px; cursor: pointer; font-size: 14px; color: var(--text); }
+  .opt:hover { background: var(--tone-soft); }
+  .opt .ic { width: 34px; height: 34px; border-radius: 10px; background: var(--tone-soft); display: grid; place-items: center; font-size: 15px; }
+  .opt.danger { color: #ef6a60; }
+  .opt.danger .ic { background: rgba(179,38,30,.14); }
+</style>
+</head>
+<body data-theme="dark">
+
+  <div class="phone">
+    <div class="screen">
+      <div class="topbar">
+        <div class="menu-btn">☰</div>
+        <div class="title">Подписки</div>
+        <div class="tbar-btn" id="btnSearch" title="Поиск">🔍</div>
+        <div class="tbar-btn" id="btnUpdateAll" title="Обновить всё"><span class="glyph">⟳</span><span class="spin"></span></div>
+        <div class="tbar-btn" title="Изменить порядок">⇅</div>
+      </div>
+      <div class="search" id="searchBox"><input id="searchInput" placeholder="Поиск подписки…"></div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="subs">Подписки <span class="cnt">· 5</span></div>
+        <div class="tab" data-tab="manual">Вручную <span class="cnt">· 2</span></div>
+        <div class="tab" data-tab="system">Система <span class="cnt">· 3</span></div>
+      </div>
+      <div class="roles" id="roleRow">
+        <div class="role active" data-role="all">Все</div>
+        <div class="role" data-role="wl">WL</div>
+        <div class="role" data-role="open">OPEN</div>
+      </div>
+      <div class="hint" id="roleHint" style="display:none">Только серверы для обхода белых списков — используются simple-режимом</div>
+
+      <div class="list" id="list"></div>
+    </div>
+    <div class="fab" id="fab">+</div>
+
+    <div class="sheet" id="sheet">
+      <div class="body">
+        <div class="grab"></div>
+        <h3>Добавить</h3>
+        <div class="clip">
+          <div class="t" id="clipText">https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/wl-standalone.txt</div>
+          <div class="go">Импорт</div>
+        </div>
+        <div class="opt" data-act="sub"><div class="ic">🔗</div>Создать подписку (по ссылке)</div>
+        <div class="opt" data-act="file"><div class="ic">📄</div>Импорт из файла</div>
+        <div class="opt" data-act="qr"><div class="ic">▦</div>Сканировать QR/NFC</div>
+        <div class="opt" data-act="group"><div class="ic">📁</div>Создать группу вручную</div>
+        <div class="opt danger" data-act="close"><div class="ic">✕</div>Закрыть</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h1>Мокап управления подписками (redesign)</h1>
+    <p class="sub">Карточка-статус вместо карточки-панели кнопок: tap → детали, свайпы →
+      быстрые действия, ⋮ → меню. Фильтр по ролям пула WL/OPEN — под simple-режим.</p>
+    <div class="group">
+      <div class="lbl">Состояние карточек</div>
+      <div class="controls" id="cardBtns">
+        <button class="btn active" data-st="ok">ok</button>
+        <button class="btn" data-st="updating">обновляется</button>
+        <button class="btn" data-st="error">ошибка</button>
+        <button class="btn" data-st="outdated">устарела</button>
+      </div>
+      <label class="row"><input type="checkbox" id="swipeToggle"> свайп-подсказка</label>
+      <label class="row"><input type="checkbox" id="themeToggle" checked> тёмная тема</label>
+      <button class="btn wide" id="btnUpdateAll2">Обновить все подписки (прогресс на всех карточках)</button>
+      <button class="btn wide" id="btnAdd">Открыть шит «Добавить»</button>
+    </div>
+    <p class="sub">Идеи: поиск по имени/ссылке, счётчики на сегментах, чипы статуса
+      (ошибка → «повторить», устарела N дней), usage-бар + срок истечения (оранж &lt; 7 дней,
+      красный — просрочено), update-all без confirm-диалога.</p>
+  </div>
+
+<script>
+  const SUBS = [
+    { id: 0, emoji: "🌐", name: "zieng2 wl", role: "wl", count: "142 сервера · 89 alive", upd: "Обновлено 2 ч назад",
+      usage: 62, used: "8.4 / 22.6 GB", exp: "до 01.09.2026", expCls: "" },
+    { id: 1, emoji: "🚀", name: "goida Обход чёрных", role: "open", count: "12 серверов", upd: "Обновлено вчера",
+      usage: 0, used: "", exp: "", expCls: "" },
+    { id: 2, emoji: "🏳", name: "RKP Белые списки", role: "wl", count: "50 серверов", upd: "Обновлено 1 мин назад",
+      usage: 0, used: "", exp: "", expCls: "" },
+    { id: 3, emoji: "▶", name: "etoneya YouTube", role: "open", count: "8 серверов", upd: "Обновлено 5 дней назад",
+      usage: 0, used: "", exp: "", expCls: "" },
+    { id: 4, emoji: "🛡", name: "AetrisVPN", role: "wl", count: "230 серверов · 61 alive", upd: "Обновлено 6 дней назад",
+      usage: 97, used: "21.9 / 22.6 GB", exp: "до 22.08.2026", expCls: "danger" },
+  ];
+  let state = "ok", role = "all", swiping = false, searching = false;
+
+  const el = id => document.getElementById(id);
+
+  function chip(role) {
+    if (role === "wl") return '<span class="chip wl">WL</span>';
+    if (role === "open") return '<span class="chip open">OPEN</span>';
+    return '<span class="chip builtin">builtin</span>';
+  }
+  function statusRow(s) {
+    if (s === "updating") return '<span class="chip ok" style="opacity:.9">⟳ обновление…</span>';
+    if (s === "error") return '<span class="chip err">⚠ Ошибка — повторить</span>';
+    if (s === "outdated") return '<span class="chip" style="background:rgba(197,138,0,.15);color:#e2a83e">устарела 5 дней</span>';
+    return "";
+  }
+  function render() {
+    const q = el("searchInput").value.trim().toLowerCase();
+    const list = el("list");
+    list.innerHTML = "";
+    SUBS.forEach(s => {
+      if (role !== "all" && s.role !== role) return;
+      if (q && !(s.name.toLowerCase().includes(q) || s.count.toLowerCase().includes(q))) return;
+      const expCls = s.expCls && state === "ok" ? s.expCls : "";
+      const fillCls = state === "ok" ? (s.usage > 90 ? "danger" : s.usage > 75 ? "warn" : "") : "";
+      const usageBar = state === "ok" && s.usage > 0
+        ? `<div class="usage"><div class="bar"><div class="fill ${fillCls}" style="width:${s.usage}%"></div></div>
+           <div class="meta"><span>${s.used}</span><span class="exp ${expCls}">${s.exp}</span></div></div>` : "";
+      const updIcon = state === "updating"
+        ? '<span class="upd" style="display:grid;place-items:center"><span class="spin" style="width:13px;height:13px;border:2px solid var(--tone-soft);border-top-color:var(--wl);border-radius:50%;display:inline-block;animation:rot .9s linear infinite"></span></span>'
+        : '<span class="upd">⟳</span>';
+      list.innerHTML += `
+        <div class="card ${state === "error" ? "error" : ""} ${swiping ? "swiping" : ""}">
+          ${swiping ? '<span class="swipehint">→ обновить &nbsp; · &nbsp; удалить ←</span>' : ""}
+          <div class="row1"><div class="avatar">${s.emoji}</div>
+            <div class="name">${s.name} ${chip(s.role)}</div>
+            ${statusRow(state)}</div>
+          <div class="row2"><div class="sub">${state === "updating" ? "обновление…" : s.count}</div>
+            ${updIcon}<span class="menu">⋮</span></div>
+          ${usageBar}
+        </div>`;
+    });
+    if (!list.innerHTML) list.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px 0;font-size:13px">Ничего не найдено</div>';
+  }
+  function setState(st) {
+    state = st;
+    document.querySelectorAll("#cardBtns .btn").forEach(b => b.classList.toggle("active", b.dataset.st === st));
+    el("btnUpdateAll").classList.toggle("updating", st === "updating");
+    render();
+  }
+
+  document.querySelectorAll("#cardBtns .btn").forEach(b => b.addEventListener("click", () => setState(b.dataset.st)));
+  document.querySelectorAll(".role").forEach(r => r.addEventListener("click", () => {
+    document.querySelectorAll(".role").forEach(x => x.classList.remove("active"));
+    r.classList.add("active");
+    role = r.dataset.role;
+    el("roleHint").style.display = role === "wl" ? "block" : "none";
+    render();
+  }));
+  document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+  }));
+  el("swipeToggle").addEventListener("change", e => { swiping = e.target.checked; render(); });
+  el("themeToggle").addEventListener("change", e => { document.body.dataset.theme = e.target.checked ? "dark" : "light"; render(); });
+  el("btnSearch").addEventListener("click", () => {
+    searching = !searching;
+    el("searchBox").classList.toggle("visible", searching);
+    if (searching) el("searchInput").focus();
+  });
+  el("searchInput").addEventListener("input", render);
+  el("btnUpdateAll").addEventListener("click", () => setState(state === "updating" ? "ok" : "updating"));
+  el("btnUpdateAll2").addEventListener("click", () => setState(state === "updating" ? "ok" : "updating"));
+  el("btnAdd").addEventListener("click", () => el("sheet").classList.add("visible"));
+  el("fab").addEventListener("click", () => el("sheet").classList.add("visible"));
+  el("sheet").addEventListener("click", e => {
+    const opt = e.target.closest("[data-act]");
+    if (!opt) return;
+    if (opt.dataset.act === "close") el("sheet").classList.remove("visible");
+  });
+  render();
+</script>
+</body>
+</html>
