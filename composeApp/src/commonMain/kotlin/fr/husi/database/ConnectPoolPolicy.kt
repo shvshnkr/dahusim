@@ -380,15 +380,19 @@ internal object ConnectPoolPolicy {
         totalCap: Int,
     ): List<ProxyEntity> {
         if (totalCap <= 0 || proxies.isEmpty()) return emptyList()
-        val byGroup = proxies.groupBy { it.groupId }
-        val orderedGroups = byGroup.entries.sortedBy { (_, list) -> list.minOf { it.userOrder } }
+        // Sort each group once; the round-robin below used to re-sort every group on every
+        // round, which made MERGED pool builds quadratic on big subscription groups
+        // (~26s on device for a 5k-proxy dominant group; field BS session 2026-08-21).
+        val sortedGroups = proxies.groupBy { it.groupId }
+            .values
+            .map { groupProxies -> groupProxies.sortedBy { it.userOrder } }
+            .sortedBy { groupProxies -> groupProxies.first().userOrder }
         val picked = LinkedHashSet<Long>()
         var round = 0
         while (picked.size < totalCap) {
             var added = false
-            for ((_, groupProxies) in orderedGroups) {
-                val sorted = groupProxies.sortedBy { it.userOrder }
-                val proxy = sorted.getOrNull(round) ?: continue
+            for (groupProxies in sortedGroups) {
+                val proxy = groupProxies.getOrNull(round) ?: continue
                 if (picked.add(proxy.id)) {
                     added = true
                     if (picked.size >= totalCap) break

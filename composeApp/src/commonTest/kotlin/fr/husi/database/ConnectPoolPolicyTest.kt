@@ -262,6 +262,42 @@ class ConnectPoolPolicyTest {
     }
 
     @Test
+    fun mergedStratifiedRoundRobinDominantGroupStaysLinear() {
+        // Field shape (BS session 2026-08-21): one dominant WL group (5k proxies) + many
+        // small ones. The round-robin used to re-sort every group on every round — quadratic,
+        // ~26s MERGED pool build on device, blowing the 30s adapt prepare timeout.
+        val groups = buildList {
+            add(group(1L, "White lists big", sourceId = "white-lattice"))
+            for (g in 2L..16L) add(group(g, "White lists $g", sourceId = "wl-standalone"))
+        }
+        val proxies = buildList {
+            for (i in 1L..4000L) add(proxy(id = i, groupId = 1L, order = i))
+            for (g in 2L..16L) {
+                for (i in 1L..40L) add(proxy(id = g * 100000 + i, groupId = g, order = g * 10000 + i))
+            }
+        }
+        val result = ConnectPoolPolicy.build(
+            mode = ConnectPoolPolicy.PoolBuildMode.MERGED,
+            allProxies = proxies,
+            groups = groups,
+            handoffIds = emptySet(),
+            probeStates = emptyMap(),
+        )
+        val ids = result.orderedProxies.map { it.id }
+        assertEquals(ConnectPoolPolicy.MERGED_PREPARE_CAP, ids.size)
+        // Round-robin head row: the lowest-order proxy of every group comes first,
+        // groups ordered by their min userOrder (group 1 has the lowest head).
+        assertEquals(1L, ids[0])
+        for (g in 2L..16L) {
+            assertTrue(g * 100000 + 1L in ids.take(16))
+        }
+        // Small groups exhaust after 40 rounds; the dominant group fills the rest in userOrder.
+        assertEquals(2L, ids[16])
+        assertEquals(3L, ids[32])
+        assertEquals((41L..3496L).toList(), ids.takeLast(3456))
+    }
+
+    @Test
     fun compactTcpBatchCapsPriorityAtMaxTotal() {
         val pool = (1L..10L).map { proxy(it, 1L, it) }
         val batch = ConnectPoolPolicy.compactTcpBatch(pool, pool.map { it.id }.toSet(), maxTotal = 4)
