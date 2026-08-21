@@ -1,0 +1,164 @@
+name: Simple mode UI tests (Compose)
+
+on:
+  pull_request:
+    paths:
+      - "composeApp/src/commonMain/kotlin/fr/husi/ui/simple/**"
+      - "composeApp/src/commonMain/kotlin/fr/husi/simplemode/**"
+      - "composeApp/src/commonMain/composeResources/**"
+      - "composeApp/src/commonTest/**"
+      - "composeApp/src/desktopTest/**"
+      - "composeApp/build.gradle.kts"
+      - "buildSrc/**"
+      - "gradle/**"
+      - "husi.properties"
+      - ".github/workflows/ui-compose-test.yml"
+  push:
+    branches: [main, redesign]
+    paths:
+      - "composeApp/src/commonMain/kotlin/fr/husi/ui/simple/**"
+      - "composeApp/src/commonMain/kotlin/fr/husi/simplemode/**"
+      - "composeApp/src/commonMain/composeResources/**"
+      - "composeApp/src/commonTest/**"
+      - "composeApp/src/desktopTest/**"
+      - "composeApp/build.gradle.kts"
+      - "buildSrc/**"
+      - "gradle/**"
+      - "husi.properties"
+      - ".github/workflows/ui-compose-test.yml"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: simple-mode-ui-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  libcore-desktop-linux-amd64:
+    name: libcore desktop linux/amd64 (once)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Go version
+        id: goversion
+        run: |
+          source buildScript/init/version.sh
+          echo "go_version=${GO_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ steps.goversion.outputs.go_version }}
+          cache-dependency-path: libcore/go.sum
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Resolve cronet-go version
+        id: cronet-go-version
+        run: |
+          echo "version=$(tr -d '[:space:]' < .github/CRONET_GO_VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout cronet-go
+        uses: actions/checkout@v6
+        with:
+          repository: sagernet/cronet-go
+          ref: ${{ steps.cronet-go-version.outputs.version }}
+          path: cronet-go
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Cache cronet toolchain
+        uses: ./.github/actions/cronet-toolchain-linux
+        with:
+          cronet-version: ${{ steps.cronet-go-version.outputs.version }}
+
+      - name: Build libcore (desktop linux/amd64)
+        env:
+          CRONET_GO_ROOT: ${{ github.workspace }}/cronet-go
+        run: |
+          ./run lib core --desktop --desktoptargets linux/amd64
+
+      - name: Verify libcore jar
+        run: |
+          test -f composeApp/libs/libcore-desktop-linux-amd64.jar
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libcore-desktop-linux-amd64-simple-ui
+          path: composeApp/libs/libcore-desktop-linux-amd64.jar
+          if-no-files-found: error
+
+  simple-mode-ui-tests:
+    name: simple mode UI tests
+    needs: libcore-desktop-linux-amd64
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: libcore-desktop-linux-amd64-simple-ui
+          path: composeApp/libs
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: ./.github/actions/setup-dahusim-gradle
+
+      - name: Geo / Gradle init assets
+        run: ./run init action gradle
+
+      - name: Packaging tools (headless desktop tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Write local.properties
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          echo "sdk.dir=${SDK}" > local.properties
+
+      - name: Run simple mode UI tests
+        env:
+          BUILD_PLUGIN: none
+          GRADLE_OPTS: -Xmx3584m -XX:MaxMetaspaceSize=512m -Dkotlin.daemon.jvm.options=-Xmx2048m
+        run: |
+          xvfb-run -a --server-args="-screen 0 1280x720x24" \
+            ./gradlew :composeApp:exportLibraryDefinitions :composeApp:simpleModeUiTest --no-daemon
+
+      - name: Publish JUnit report in Checks
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: |
+            composeApp/build/test-results/simpleModeUiTest/**/*.xml
+          check_name: "Simple mode UI tests"
+          detailed_summary: true
+          include_passed: false
+          fail_on_failure: false
+          annotate_only: true

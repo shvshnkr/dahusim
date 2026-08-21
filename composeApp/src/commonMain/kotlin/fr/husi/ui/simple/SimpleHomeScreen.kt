@@ -42,6 +42,7 @@ import fr.husi.compose.rememberVpnServiceLauncher
 import fr.husi.database.DataStore
 import fr.husi.database.Probe2kProgress
 import fr.husi.ktx.exitApplication
+import fr.husi.ktx.onIoDispatcher
 import fr.husi.platform.PlatformInfo
 import fr.husi.repository.resolveRepository
 import fr.husi.resources.Res
@@ -219,12 +220,19 @@ fun SimpleHomeScreen(
     }
     LaunchedEffect(status.state) {
         val progress = isSimpleModeProgressActivity(DataStore.simpleModeActivity)
-        when {
-            status.state == ServiceState.Connected && !progress && !SimpleModeConnectCoordinator.isInFlight() ->
-                DataStore.simpleModeActivity = ""
+        val shouldClear = when {
+            status.state == ServiceState.Connected && !progress && !SimpleModeConnectCoordinator.isInFlight() -> true
             (status.state == ServiceState.Stopped || status.state == ServiceState.Idle) &&
                 !SimpleModeConnectCoordinator.isInFlight() &&
-                !progress -> DataStore.simpleModeActivity = ""
+                !progress -> true
+            else -> false
+        }
+        if (shouldClear) {
+            // The synchronous DataStore write (runBlocking) must not run on the composition
+            // thread (desktop: EDT inside FlushCoroutineDispatcher). Completing the write
+            // resumes the activity flow collector through the same dispatcher lock and
+            // deadlocks — exposed deterministically by desktop Compose UI tests.
+            onIoDispatcher { DataStore.simpleModeActivity = "" }
         }
     }
     LaunchedEffect(activityText) {
@@ -524,7 +532,7 @@ fun SimpleHomeScreen(
     }
 }
 
-private fun statusTone(
+internal fun statusTone(
     state: ServiceState,
     permissionPending: Boolean,
     activityText: String,

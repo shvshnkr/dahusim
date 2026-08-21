@@ -359,6 +359,11 @@ kotlin {
                 implementation(libcoreDesktopJar)
             }
         }
+        val desktopTest by getting {
+            dependencies {
+                implementation(libs.jetbrains.compose.ui.test)
+            }
+        }
     }
 }
 
@@ -403,6 +408,15 @@ compose.resources {
 }
 
 aboutLibraries {
+    // RU/restricted uplinks: license/funding enrichment fetches remote SPDX data and can hang
+    // forever (HttpURLConnection without timeouts). Opt-in offline mode for local builds:
+    // -PaboutLibraries.offlineMode=true or ABOUT_LIBRARIES_OFFLINE=true
+    offlineMode.set(
+        providers.gradleProperty("aboutLibraries.offlineMode")
+            .orElse(providers.environmentVariable("ABOUT_LIBRARIES_OFFLINE"))
+            .map { it.toBoolean() }
+            .orElse(false),
+    )
     collect {
         configPath = file("src/commonMain/aboutlibraries")
     }
@@ -564,5 +578,19 @@ val fieldLogScenarioTest by tasks.registering(Test::class) {
     systemProperty("husi.unitTest", "true")
     filter {
         includeTestsMatching("fr.husi.scenario.fieldlog.*")
+    }
+}
+
+val simpleModeUiTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Run simple-mode screen Compose UI tests (statusTone render, banners, power button)"
+    val desktopTest = tasks.named<Test>("desktopTest")
+    dependsOn("desktopTestClasses")
+    testClassesDirs = desktopTest.get().testClassesDirs
+    classpath = desktopTest.get().classpath
+    useJUnitPlatform()
+    systemProperty("husi.unitTest", "true")
+    filter {
+        includeTestsMatching("fr.husi.ui.simple.*")
     }
 }
