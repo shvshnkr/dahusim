@@ -136,6 +136,15 @@ object FeatureJourneys {
             ),
             testClass = "fr.husi.scenario.journey.WlServerRevivalWatchJourneyTest",
         ),
+        FeatureJourney(
+            id = "simple_adapt_timeout_activity_clear",
+            userPromise = "After an adapt prepare timeout without a tunnel rebuild the stale Preparing activity is cleared, so a healthy Connected session never sticks in Preparing",
+            entryPoints = listOf(
+                "SimpleModeVpnCoordinator.applyReselectAndRestart",
+                "SimpleModeNetworkAdaptation.clearActivityAfterPrepareTimeout",
+            ),
+            testClass = "fr.husi.scenario.journey.SimpleAdaptTimeoutActivityClearJourneyTest",
+        ),
     )
 
     fun byId(id: String): FeatureJourney? = all.find { it.id == id }

@@ -395,6 +395,10 @@ internal object SimpleModeVpnCoordinator {
                     requestTunnelReload(whitelistOnly, "${reason}_timeout", reloadProfileId)
                     return true
                 }
+                // No tunnel rebuild for this trigger: the session stays up. Clear the stale
+                // prepare activity so the UI returns to Connected instead of sticking in
+                // Preparing (field BS session 2026-08-21, sub_transport_recover).
+                SimpleModeNetworkAdaptation.clearActivityAfterPrepareTimeout(reason)
                 return false
             }
         } catch (_: CancellationException) {
