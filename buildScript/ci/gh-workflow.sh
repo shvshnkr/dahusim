@@ -72,7 +72,7 @@ cmd_build() {
       --android) android=true; linux=false; windows=false ;;
       --linux) android=false; linux=true; windows=false ;;
       --windows) android=false; linux=false; windows=true ;;
-      --ref) ref="$2"; shift 2 ;;
+      --ref) ref="$2"; shift 2; continue ;;
       --wait) wait=true ;;
       *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
