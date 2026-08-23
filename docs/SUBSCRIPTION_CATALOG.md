@@ -96,6 +96,8 @@ PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 `razlo4ka-open` (Razlo4ka) is a general-purpose VLESS list refreshed upstream every few hours.
 
+`etoneya-yt` (etoneya.su/whitelist) was removed in generation 13: the site is dead — every fetch hangs until the 15s HTTP timeout, so the seed only poisoned preconnect and background refreshes (field: failStreak 26, state SUSPECT).
+
 `aetris-blacklist` (AetrisVPN BlackList, open) and `aetris-wl-lite` (AetrisVPN WhiteList Lite, WL) are the ЧС/БС-lite variants from the same author as `aetris-vpn` (flaafix), auto-updated upstream.
 
 `kizyak-beta6` (КIЗЯК VPN 6, open), `kizyak-beta6-bl` (КIЗЯК VPN BLACKLIST, WL) and `kizyak-testru` (КIЗЯК VPN TEST_RU, open) are general-purpose VLESS/hysteria2/trojan lists from `Maskkost93/kizyak-vpn-4.0` (same ecosystem as `igareck/vpn-configs-for-russia`; the BL variant carries `[BL]`-tagged nodes like `black-vless-rus-mobile`, so it is pool_role `wl`).

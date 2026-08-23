@@ -41,6 +41,11 @@ object SubscriptionHttpFetch {
         val whitelistRestricted: Boolean? = null,
         /** null → [DataStore.serviceState.connected] at fetch time. */
         val vpnConnected: Boolean? = null,
+        /**
+         * Per-request HTTP timeout (ms); null → [SubscriptionUpdateFetchOverrides.fetchTimeoutMs]
+         * for the current update, else the default (15s, mirrors libcore C.TCPTimeout).
+         */
+        val timeoutMs: Int? = null,
         val logContext: String? = null,
     )
 
@@ -116,6 +121,12 @@ object SubscriptionHttpFetch {
         link: String,
         vpnConnected: Boolean,
     ): RawFetch {
+        val timeoutMs = request.timeoutMs
+            ?: SubscriptionUpdateFetchOverrides.fetchTimeoutMs
+            ?: DEFAULT_FETCH_TIMEOUT_MS
+        if (SubscriptionFetchTestHooks.enabled) {
+            SubscriptionFetchTestHooks.lastTimeoutMs = timeoutMs
+        }
         if (SubscriptionFetchTestHooks.shouldFailFetch(link)) {
             throw IllegalStateException("test hook: fetch failed for $link")
         }
@@ -135,12 +146,16 @@ object SubscriptionHttpFetch {
             setURL(link)
             Logs.d("subscription fetch UA (${request.purpose.name}): ${request.userAgent}")
             setUserAgent(request.userAgent)
+            setTimeout(timeoutMs)
         }.execute()
         return RawFetch(
             content = response.contentString,
             subscriptionUserInfo = response.getHeader("Subscription-Userinfo"),
         )
     }
+
+    /** Mirrors libcore C.TCPTimeout (libcore/deps/sing-box/constant/timeout.go). */
+    internal const val DEFAULT_FETCH_TIMEOUT_MS = 15_000
 
     internal fun buildTextFeedResponse(
         raw: String,

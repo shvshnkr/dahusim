@@ -14,6 +14,10 @@ object SubscriptionFetchTestHooks {
     var failForFetchLinks: Set<String>? = null
         private set
 
+    /** Last HTTP timeout (ms) applied by [fr.husi.group.SubscriptionHttpFetch] while [enabled]. */
+    var lastTimeoutMs: Int? = null
+        internal set
+
     fun install(bodyByLink: Map<String, String>, failForFetchLinks: Set<String> = emptySet()) {
         enabled = true
         this.bodyByLink = bodyByLink
@@ -24,6 +28,7 @@ object SubscriptionFetchTestHooks {
         enabled = false
         bodyByLink = null
         failForFetchLinks = null
+        lastTimeoutMs = null
     }
 
     internal fun bodyFor(canonicalLink: String): String? {

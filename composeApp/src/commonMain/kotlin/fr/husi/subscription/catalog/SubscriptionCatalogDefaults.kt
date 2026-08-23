@@ -196,12 +196,6 @@ object SubscriptionCatalogDefaults {
             ConnectPoolRole.OPEN,
         ),
         CatalogSeed(
-            "etoneya-yt",
-            "etoneya YouTube",
-            "https://etoneya.su/whitelist",
-            ConnectPoolRole.OPEN,
-        ),
-        CatalogSeed(
             "hiztin-gribi",
             "VLESS-PO-GRIBI Обход",
             "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",

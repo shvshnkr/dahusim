@@ -1,10 +1,11 @@
 HUSI_SUBSCRIPTION_CATALOG_V1
-generation=12
+generation=13
 allow_empty=false
 REMOVE|mifa-main
 REMOVE|mifa-hysteria
 REMOVE|vless-wl-rus-mobile-2
 REMOVE|antarktida-open
+REMOVE|etoneya-yt
 UPSERT|swordware-main|Swordware|https://raw.githubusercontent.com/mbelspb-gif/gdffgd/refs/heads/main/Swordware.net|RAW|default|open
 UPSERT|black-vless-rus-mobile|BLACK VLESS RUS mobile|https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt|RAW|default|wl
 UPSERT|vless-wl-rus-mobile|Vless Reality White Lists Rus Mobile|https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt|RAW|default|wl

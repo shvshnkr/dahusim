@@ -95,6 +95,7 @@ object SubscriptionAutoUpdateRunner {
         nowSeconds: Long = currentEpochSeconds(),
         mode: SubscriptionUpdateMode = SubscriptionUpdateMode.BackgroundEco,
         connectRefresh: Boolean = false,
+        fetchTimeoutMs: Int? = null,
         onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
     ): SubscriptionAutoUpdateOutcome {
         return runWithResult(
@@ -102,6 +103,7 @@ object SubscriptionAutoUpdateRunner {
             nowSeconds = nowSeconds,
             mode = mode,
             connectRefresh = connectRefresh,
+            fetchTimeoutMs = fetchTimeoutMs,
             onBeforeUpdate = onBeforeUpdate,
         )
     }
@@ -111,6 +113,7 @@ object SubscriptionAutoUpdateRunner {
         nowSeconds: Long,
         mode: SubscriptionUpdateMode = SubscriptionUpdateMode.BackgroundEco,
         connectRefresh: Boolean = false,
+        fetchTimeoutMs: Int? = null,
         onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
     ): SubscriptionAutoUpdateOutcome {
         val due = dueSubscriptionsResolved(
@@ -119,7 +122,7 @@ object SubscriptionAutoUpdateRunner {
             connectRefresh = connectRefresh,
             mode = mode,
         )
-        val summaries = executeDueUpdates(due, mode, onBeforeUpdate)
+        val summaries = executeDueUpdates(due, mode, onBeforeUpdate, fetchTimeoutMs)
         val statesAfter = SubscriptionUpdateStateStore.loadMap(summaries.map { it.groupId })
         val allSucceeded = summaries.all { summary ->
             SubscriptionUpdateEligibility.countsAsSuccessForWorker(
@@ -169,6 +172,7 @@ object SubscriptionAutoUpdateRunner {
             ),
             mode,
             onBeforeUpdate,
+            null,
         )
     }
 
@@ -180,11 +184,17 @@ object SubscriptionAutoUpdateRunner {
         onBeforeUpdate: suspend (ProxyGroup) -> Unit = {},
     ): SubscriptionAutoUpdateOutcome? {
         val effectiveBudgetMs = budgetMs.coerceAtLeast(0L)
+        val fetchTimeoutMs = if (mode == SubscriptionUpdateMode.ForegroundInteractive && connectRefresh) {
+            effectiveBudgetMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        } else {
+            null
+        }
         return withTimeoutOrNull(effectiveBudgetMs) {
             runWithResult(
                 nowSeconds = nowSeconds,
                 mode = mode,
                 connectRefresh = connectRefresh,
+                fetchTimeoutMs = fetchTimeoutMs,
                 onBeforeUpdate = onBeforeUpdate,
             )
         }
@@ -279,6 +289,7 @@ object SubscriptionAutoUpdateRunner {
         due: List<ProxyGroup>,
         mode: SubscriptionUpdateMode,
         onBeforeUpdate: suspend (ProxyGroup) -> Unit,
+        fetchTimeoutMs: Int?,
     ): List<SingleUpdateSummary> = coroutineScope {
         if (due.isEmpty()) return@coroutineScope emptyList()
         val parallelism = parallelismForMode(mode).coerceIn(1, due.size)
@@ -291,7 +302,7 @@ object SubscriptionAutoUpdateRunner {
                             "mode=$mode index=${index + 1}/${due.size}",
                     )
                     onBeforeUpdate(profile)
-                    runSingleUpdate(profile)
+                    runSingleUpdate(profile, fetchTimeoutMs)
                 }
             }
         }.awaitAll()
@@ -305,8 +316,11 @@ object SubscriptionAutoUpdateRunner {
         )
     }
 
-    private suspend fun runSingleUpdate(profile: ProxyGroup): SingleUpdateSummary {
-        val first = runSingleUpdateOnce(profile, bypassVpn = false)
+    private suspend fun runSingleUpdate(
+        profile: ProxyGroup,
+        fetchTimeoutMs: Int?,
+    ): SingleUpdateSummary {
+        val first = runSingleUpdateOnce(profile, bypassVpn = false, fetchTimeoutMs = fetchTimeoutMs)
         if (first.staleTransportFailure && DataStore.serviceState.connected) {
             val uplink = probeSimpleModeNetwork()
             if (SubscriptionAutoUpdateTransportPolicy.shouldRetryWithBypass(
@@ -319,7 +333,11 @@ object SubscriptionAutoUpdateRunner {
                     "H19 subscription_fetch_bypass_tunnel group=${profile.displayName()} " +
                         "wlOnly=${uplink.whitelistOnly}",
                 )
-                return runSingleUpdateOnce(profile, bypassVpn = true)
+                return runSingleUpdateOnce(
+                    profile,
+                    bypassVpn = true,
+                    fetchTimeoutMs = fetchTimeoutMs,
+                )
             }
         }
         return first
@@ -328,9 +346,12 @@ object SubscriptionAutoUpdateRunner {
     private suspend fun runSingleUpdateOnce(
         profile: ProxyGroup,
         bypassVpn: Boolean,
+        fetchTimeoutMs: Int?,
     ): SingleUpdateSummary {
         val previousBypass = SubscriptionUpdateFetchOverrides.bypassVpn
+        val previousFetchTimeout = SubscriptionUpdateFetchOverrides.fetchTimeoutMs
         SubscriptionUpdateFetchOverrides.bypassVpn = bypassVpn
+        SubscriptionUpdateFetchOverrides.fetchTimeoutMs = fetchTimeoutMs
         return try {
             runCatching {
                 when (val r = GroupUpdater.executeUpdate(profile, false)) {
@@ -372,6 +393,7 @@ object SubscriptionAutoUpdateRunner {
             }
         } finally {
             SubscriptionUpdateFetchOverrides.bypassVpn = previousBypass
+            SubscriptionUpdateFetchOverrides.fetchTimeoutMs = previousFetchTimeout
         }
     }
 }
