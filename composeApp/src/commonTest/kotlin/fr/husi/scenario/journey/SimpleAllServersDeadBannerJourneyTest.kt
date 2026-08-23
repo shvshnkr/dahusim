@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * After the revival watch exhausts (BS night, all probes dead) the UI must show a persistent
+ * After the revival watch exhausts (BS active, all probes dead) the UI must show a persistent
  * "no working servers" banner instead of silently returning to Stopped — the 30s prompt alone
  * can time out or be dismissed, and a silent Stopped state reads as "Connect is broken"
  * (field 2026-08-21: user tapped Connect on BS, all servers were dead, nothing explained why).

@@ -43,13 +43,17 @@
 ## Полевой BS-тест (чеклист для агентов)
 
 BS-режим доступен не всегда: на мобильном интернете Google может быть жив (`H37 google=true wlOnly=false`) —
-это **OPEN**, не BS. БС-валидация фич autoselect требует `google=false wlOnly=true` (обычно ночное/флаповое окно).
+это **OPEN**, не BS. БС-валидация фич autoselect требует `google=false wlOnly=true`.
+
+**BS не привязан ко времени суток.** Белые списки включают в любой момент, днём и ночью (например, при атаках
+дронов на регион) — «ночного BS-окна» нет. Ориентир — только телеметрия `H37 google=false wlOnly=true`, а не часы;
+0-url-ok окна случаются на BS-флапах подписок вне зависимости от времени.
 
 Рецепт (телефон VBC0223426003938, простой режим):
 1. `adb install -r androidApp/build/outputs/apk/play/debug/husi-1.2.0-alpha.39-redesign-play-arm64-v8a-debug.apk` → `adb shell dumpsys package fr.husi.debug | grep versionCode` (должен совпасть с тестируемым VERSION_CODE).
 2. `adb shell svc wifi disable` → `adb shell "dumpsys wifi"` на `WifiState 0` (EnabledState→DisabledState). Активный uplink — мобильный (rmnet*).
 3. Запуск: `adb shell am force-stop fr.husi.debug` → `adb shell am start -n fr.husi.debug/fr.husi.ui.MainActivity` (ИМЕННО `fr.husi.ui.MainActivity`, не `fr.husi.MainActivity`).
-4. Тап Подключить: `adb shell "input tap 610 1769"`. При «Waiting for servers…» НЕ закрывать — ждать `H21 server_revival_watch attempt=N` (BS-ночь).
+4. Тап Подключить: `adb shell "input tap 610 1769"`. При «Waiting for servers…» НЕ закрывать — ждать `H21 server_revival_watch attempt=N` (BS: `google=false wlOnly=true`).
 5. Проверка контекста на поле: `H37 reachability_route … google=false … wlOnly=true` (иначе не BS, смотри §Термины).
 6. Забрать лог: `adb shell "run-as fr.husi.debug cat cache/simple-mode/simple_mode_app.log"` → `$TEMP/bs_session<N>_<CODE>.log`. Метрика — по `H21 preconnect_done elapsedMs=… result=Success|AllProbesDead`.
 7. Вернуть: `adb shell svc wifi enable` → `WifiState 1` (EnabledState).
@@ -62,7 +66,7 @@ BS-режим доступен не всегда: на мобильном инт
 | 751 (revival watch) | H22 dead-end → H21 `server_revival_watch` attempt=1..N, exhausted — без мёртвого коннекта | 406s ночь → мёртвого коннекта нет (валидировано 20.08) |
 | 752 (MERGED-all + sweep) | H4 `wl_pool_merged_from_start` → H24 `poolMode=MERGED pool≈2331` → H14 `tcp_probe_round` batch=128 | preconnect 57с (валидировано 20.08) |
 | 753 (early-connect + pre-cache) | H4 `early_connect` при 1-м url-ok (без ranking), pre-cache DataStore-читаний | preconnect 75,5с при 0-url-ok 6 раундов (валидировано 20.08) |
-| 754 (pipelining + LKG pre-seed + adaptive TCP) | Даже в 0-url-ok окне: H14 `timeoutMs=800/1200` + H17 `mode=wl_progressive_round` (URL N ∥ TCP N+1); при свежих LKG — `H17 mode=wl_lkg_preseed` → коннект | цель: <40с в 0-url-ok окне; <~25с при свежих LKG; 753 было 75,5с. **НЕ валидирован** (BS-режима днём нет на LTE) |
+| 754 (pipelining + LKG pre-seed + adaptive TCP) | Даже в 0-url-ok окне: H14 `timeoutMs=800/1200` + H17 `mode=wl_progressive_round` (URL N ∥ TCP N+1); при свежих LKG — `H17 mode=wl_lkg_preseed` → коннект | цель: <40с в 0-url-ok окне; <~25с при свежих LKG; 753 было 75,5с. **НЕ валидирован** (на поле в тот период BS-режима не было; BS бывает в любой момент — не откладывать валидацию только на ночь) |
 | 760 (dead-end без quick probe + bound synthetic WL) | 0-url-ok sweep (в т.ч. `shouldQuickProbe=false` sequential 36) → H22 `prepare_wl_no_url_ok` → H21 `server_revival_watch`; фейковый Connected на мёртвом туннеле → H34 `session_health_synthetic_limit` через ≤3 synthetic-цикла → H30 session_recover | поле 21.08 (код 758): 72460 (сервер на GitHub IP, L3-блок на BS) держал «Connected» 75с+ с `inconclusive=underlying_proxy_dial_only` + `synthetic=true`; фолбэк не шёл. Проверить: после dead-end нет `connect_profile` до revival-verif; synthetic-limit срабатывает ≤90с |
 | 762 (плашка «Нет рабочих серверов» после exhausted) | revival watch exhausted → `all_servers_dead_prompt_timeout` → плашка «Нет рабочих серверов» (не немое «Остановлено»); сброс при тапе/Connected/activity | поле 21.08 (код 761): юзер «нажимаю Подключить на БС — ничего не подключается», пустая БД подписок на BS → пул=1 → exhausted → UI молчал. Проверить: тап на BS с мёртвыми серверами → 6 мин watch → exhausted → плашка, OCR title/subtitle |
 | 763 (линейное построение MERGED-пула) | `stratifiedSample` пересортировывал все группы в каждом раунде round-robin (квадрат) — на MERGED-пуле с доминирующей WL-группой `H4→H24` ~26с → prepare не укладывался в 30с adapt-таймаут → reload мёртвого LKG-профиля → бесконечный цикл 502 | поле 21.08 (код 761): 5+ циклов по ~51с `502 Bad Gateway` на 1722, пул 4096 никогда не зондировался. После фикса (код 763): `H4→H24` 1.96с, тап→Connected 24.3с, `post_connect_url_test_success delayMs=376`. Проверить: `H4→H24` ≤~3с при subsWlMarked>5000; нет 502-цикла |

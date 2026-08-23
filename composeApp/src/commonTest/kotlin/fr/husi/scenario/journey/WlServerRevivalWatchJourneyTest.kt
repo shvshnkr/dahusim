@@ -36,7 +36,7 @@ class WlServerRevivalWatchJourneyTest : FeatureJourneyTest() {
 
     @Test
     fun bsOpenFallbackZeroUrlOkDeadEndsIntoRevivalWatch() = runTest {
-        // BS night: WL pool 0 url-ok → open fallback 0 url-ok with tcp-alive nodes. The sweep
+        // BS active: WL pool 0 url-ok → open fallback 0 url-ok with tcp-alive nodes. The sweep
         // must NOT DEGRADED-continue into a dead tunnel — it dead-ends and the watch takes over.
         assertTrue(
             AutoServerSelectorProbePolicy.wlNoUrlOkDeadEndsPrepare(
