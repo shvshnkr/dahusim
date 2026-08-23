@@ -125,6 +125,7 @@ internal object AutoServerSelectorProbePolicy {
         val circuitOpen = TelegramTargetCircuit.isOpen()
         val decision = when {
             success -> OpenPrepareDecision.OK
+            !circuitOpen -> OpenPrepareDecision.HARD_DEAD
             else -> OpenPrepareDecision.DEGRADED
         }
         return OpenPrepareDecisionOutcome(
@@ -229,7 +230,7 @@ internal object AutoServerSelectorProbePolicy {
         DataStore.autoSelectLastKnownGoodUrlProfileId = profileId
     }
 
-    private object TelegramTargetCircuit {
+    internal object TelegramTargetCircuit {
         private val results = ArrayDeque<Boolean>()
         private var openUntilMs: Long = 0L
 
@@ -260,5 +261,18 @@ internal object AutoServerSelectorProbePolicy {
         }
 
         fun sampleCount(): Int = results.size
+
+        fun resetForTest() {
+            results.clear()
+            openUntilMs = 0L
+        }
+
+        fun seedOpenForTest(open: Boolean) {
+            openUntilMs = if (open) {
+                System.currentTimeMillis() + TELEGRAM_TARGET_COOLDOWN_MS
+            } else {
+                0L
+            }
+        }
     }
 }

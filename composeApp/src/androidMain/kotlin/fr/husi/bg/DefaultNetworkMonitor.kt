@@ -61,7 +61,9 @@ object DefaultNetworkMonitor {
         access.withLock {
             if (refCount == 0) return
             if (--refCount > 0) return
-            stopCarrierRestoreWatchdog()
+            if (!SimpleModeCarrierReconnect.isPendingValid()) {
+                stopCarrierRestoreWatchdog()
+            }
             AndroidDefaultNetworkListener.stop(this)
         }
     }

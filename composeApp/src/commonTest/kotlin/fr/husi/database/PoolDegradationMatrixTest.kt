@@ -7,12 +7,13 @@ class PoolDegradationMatrixTest {
 
     @Test
     fun openDecisionMatrixAcrossAliveRatios() {
+        AutoServerSelectorProbePolicy.TelegramTargetCircuit.resetForTest()
         val total = 20
         val matrix = listOf(
             Triple(0, 0, AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD),
-            Triple(2, 0, AutoServerSelectorProbePolicy.OpenPrepareDecision.DEGRADED),
-            Triple(4, 0, AutoServerSelectorProbePolicy.OpenPrepareDecision.DEGRADED),
-            Triple(7, 0, AutoServerSelectorProbePolicy.OpenPrepareDecision.DEGRADED),
+            Triple(2, 0, AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD),
+            Triple(4, 0, AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD),
+            Triple(7, 0, AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD),
             Triple(10, 1, AutoServerSelectorProbePolicy.OpenPrepareDecision.OK),
             Triple(14, 1, AutoServerSelectorProbePolicy.OpenPrepareDecision.OK),
             Triple(20, 2, AutoServerSelectorProbePolicy.OpenPrepareDecision.OK),

@@ -16,6 +16,7 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
         DataStore.autoSelectProxyIdSetHash = 0L
         DataStore.autoSelectLastProbeWhitelistOnly = false
         DataStore.autoSelectLastHandoffPreserveOkAt = 0L
+        AutoServerSelectorProbePolicy.TelegramTargetCircuit.resetForTest()
     }
 
     @Test
@@ -183,8 +184,24 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
 
     @Test
     fun openPrepareDegradedWhenTcpAliveButNoTelegramUrl() {
+        AutoServerSelectorProbePolicy.TelegramTargetCircuit.seedOpenForTest(open = true)
         assertEquals(
             AutoServerSelectorProbePolicy.OpenPrepareDecision.DEGRADED,
+            AutoServerSelectorProbePolicy.decideOpenPrepare(
+                wlUrlProbes = false,
+                shouldQuickProbe = true,
+                tcpAlive = 3,
+                urlOk = 0,
+                openMessengerProbe = true,
+            ).decision,
+        )
+    }
+
+    @Test
+    fun openPrepareHardDeadWhenTcpAliveButNoTelegramUrlAndCircuitClosed() {
+        AutoServerSelectorProbePolicy.TelegramTargetCircuit.seedOpenForTest(open = false)
+        assertEquals(
+            AutoServerSelectorProbePolicy.OpenPrepareDecision.HARD_DEAD,
             AutoServerSelectorProbePolicy.decideOpenPrepare(
                 wlUrlProbes = false,
                 shouldQuickProbe = true,

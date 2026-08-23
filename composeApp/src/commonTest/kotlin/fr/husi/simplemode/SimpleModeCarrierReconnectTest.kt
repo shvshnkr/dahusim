@@ -93,6 +93,25 @@ class SimpleModeCarrierReconnectTest : HusiKoinTest() {
     }
 
     @Test
+    fun clearPendingResetsSimpleModeActivity() {
+        DataStore.simpleMode = true
+        UnderlyingCarrierState.clear()
+        try {
+            UnderlyingCarrierState.markAwaitingRestoreForTest()
+            SimpleModeCarrierReconnect.markPending("test")
+            assertTrue(SimpleModeCarrierReconnect.isPendingValid())
+            assertEquals("Network changed, reconnecting…", DataStore.simpleModeActivity)
+
+            SimpleModeCarrierReconnect.clearPending("test")
+
+            assertFalse(SimpleModeCarrierReconnect.isPendingValid())
+            assertEquals("", DataStore.simpleModeActivity)
+        } finally {
+            UnderlyingCarrierState.clear()
+        }
+    }
+
+    @Test
     fun tryResumeIfDueStartsServiceInSimpleMode() {
         DataStore.simpleMode = true
         DataStore.selectedProxy = 5597L

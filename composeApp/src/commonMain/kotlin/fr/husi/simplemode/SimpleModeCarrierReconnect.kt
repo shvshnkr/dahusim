@@ -39,6 +39,7 @@ internal object SimpleModeCarrierReconnect {
     fun clearPending(reason: String) {
         if (DataStore.simpleModePendingCarrierReconnectAt <= 0L) return
         DataStore.simpleModePendingCarrierReconnectAt = 0L
+        DataStore.simpleModeActivity = ""
         simpleModeLog("SimpleMode", "H42 carrier_reconnect_cleared reason=$reason")
     }
 

@@ -1661,7 +1661,25 @@ object AutoServerSelector {
             whitelistOnly = wlUrlProbes,
             tier = lkgTier,
         ) ?: return null
-        if (lkgDelay <= 0) return null
+        if (lkgDelay > 0) {
+            ensurePrepareCurrent(session)
+            simpleModeLog(
+                "SimpleMode",
+                "H26 lkg_fast_path_early_return good=$goodId delayMs=$lkgDelay",
+            )
+            return finalizeRankedSelection(
+                proxies = proxies,
+                priorityFirstIds = priorityFirstIds,
+                selectedBefore = selectedBefore,
+                quickProbePings = emptyMap(),
+                urlTestDelays = mapOf(goodId to lkgDelay),
+                preferId = goodId,
+                poolMode = poolMode,
+                subscriptionWlIds = subscriptionWlIds,
+                userProxyIds = userProxyIds,
+                userMode = userMode,
+            )
+        }
         ensurePrepareCurrent(session)
         val urlPool = buildStratifiedUrlPool(
             proxies = listOf(good) + proxies.filter { it.id != goodId },
@@ -1673,7 +1691,7 @@ object AutoServerSelector {
             userMode = userMode,
         )
         val urlDelays = if (urlPool.size <= 1) {
-            mapOf(goodId to lkgDelay)
+            emptyMap()
         } else {
             urlTestTopCandidates(
                 urlPool,
