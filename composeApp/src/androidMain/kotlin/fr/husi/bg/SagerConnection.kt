@@ -59,7 +59,15 @@ class SagerConnection(
 
     override fun onServiceConnected(name: ComponentName?, binder: IBinder) {
         this.binder = binder
-        if (listenForDeath) binder.linkToDeath(this, 0)
+        if (listenForDeath) {
+            try {
+                binder.linkToDeath(this, 0)
+            } catch (_: RemoteException) {
+                handleDeadBinding()
+                tryReconnect()
+                return
+            }
+        }
         service = IServiceControlStub.asInterface(binder)
         try {
             service?.registerObserver(observer)
@@ -71,21 +79,31 @@ class SagerConnection(
     }
 
     override fun onServiceDisconnected(name: ComponentName?) {
-        BackendState.setConnected(false)
-        unregisterObserver()
-        binder = null
-        service = null
-        resetStatus()
+        handleDeadBinding()
+        tryReconnect()
+    }
+
+    override fun onBindingDied(name: ComponentName?) {
+        handleDeadBinding()
+        tryReconnect()
+    }
+
+    override fun onNullBinding(name: ComponentName?) {
+        handleDeadBinding()
         tryReconnect()
     }
 
     override fun binderDied() {
+        handleDeadBinding()
+        tryReconnect()
+    }
+
+    private fun handleDeadBinding() {
         BackendState.setConnected(false)
         unregisterObserver()
         binder = null
         service = null
         resetStatus()
-        tryReconnect()
     }
 
     fun connect(context: Context) {

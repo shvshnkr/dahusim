@@ -11,6 +11,7 @@ import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -2085,7 +2086,7 @@ object AutoServerSelector {
             }
         }
         onProgress(0, total)
-        perProfile.map { proxy ->
+        val jobs = perProfile.map { proxy ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
                     if (!isPrepareCurrent(session) || !currentCoroutineContext().isActive) {
@@ -2118,7 +2119,17 @@ object AutoServerSelector {
                     }
                 }
             }
-        }.awaitAll()
+        }
+        for (job in jobs) {
+            if (!whitelistBuiltinOnly) {
+                val doneNow = synchronized(result) { result.size }
+                if (doneNow >= earlyExitTarget) {
+                    jobs.filter { it.isActive }.forEach { it.cancel() }
+                    break
+                }
+            }
+            job.join()
+        }
     }
 
     private data class TcpProbeBatchResult(
