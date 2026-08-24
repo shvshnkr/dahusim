@@ -42,8 +42,7 @@ object SubscriptionHttpFetch {
         /** null → [DataStore.serviceState.connected] at fetch time. */
         val vpnConnected: Boolean? = null,
         /**
-         * Per-request HTTP timeout (ms); null → [SubscriptionUpdateFetchOverrides.fetchTimeoutMs]
-         * for the current update, else the default (15s, mirrors libcore C.TCPTimeout).
+         * Per-request HTTP timeout (ms); null → default (15s, mirrors libcore C.TCPTimeout).
          */
         val timeoutMs: Int? = null,
         val logContext: String? = null,
@@ -83,10 +82,15 @@ object SubscriptionHttpFetch {
             )
         }
 
-        // Bounded fallback chain: primary (mirror on WL) first, then the canonical link. The
-        // whitelist mirror is flaky (field: 2026-08-18 02:46/02:55 preconnect refresh timeouts
-        // on BS killed 8 fetches mid-flight); the direct host is sometimes reachable after all.
-        val attempts = linkedSetOf(fetchLink, request.canonicalLink)
+        // Bounded fallback chain: on BS uplink (mirror path) the canonical GitHub host is
+        // L3-blocked, so the mirror is the only reachable path — a second attempt would burn
+        // the full per-attempt timeout (audit A.2; field 2026-08-18 02:46/02:55: 8 mirror
+        // fetches killed mid-flight by budget). Off BS the fetch link is the canonical itself.
+        val attempts = if (whitelistRestricted && !vpnConnected) {
+            linkedSetOf(fetchLink)
+        } else {
+            linkedSetOf(fetchLink, request.canonicalLink)
+        }
         var lastFailure: Throwable? = null
         for (link in attempts) {
             try {
@@ -121,9 +125,7 @@ object SubscriptionHttpFetch {
         link: String,
         vpnConnected: Boolean,
     ): RawFetch {
-        val timeoutMs = request.timeoutMs
-            ?: SubscriptionUpdateFetchOverrides.fetchTimeoutMs
-            ?: DEFAULT_FETCH_TIMEOUT_MS
+        val timeoutMs = request.timeoutMs ?: DEFAULT_FETCH_TIMEOUT_MS
         if (SubscriptionFetchTestHooks.enabled) {
             SubscriptionFetchTestHooks.lastTimeoutMs = timeoutMs
         }

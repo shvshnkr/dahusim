@@ -568,21 +568,28 @@ object AutoServerSelector {
         var urlTestCandidates: List<ProxyEntity> = emptyList()
 
         if (shouldQuickProbe) {
-            val parallelUrlPool = ProbeScheduler.filterUrlCandidatesForWarmState(
-                candidates = buildStratifiedUrlPool(
-                    proxies = connectPool,
-                    cap = parallelUrlPoolSize,
-                    priorityFirstIds = priorityFirstIds,
+            var parallelUrlPool: List<ProxyEntity> = emptyList()
+            if (!wlUrlProbes) {
+                // WL sweep path (progressiveWlSweep) never consumes this stratified pool;
+                // building it cost a full DataStore-backed sort per quick-probe on BS.
+                val cachedWarmRankingEnabled = DataStore.probe2kWarmRankingEnabled
+                parallelUrlPool = ProbeScheduler.filterUrlCandidatesForWarmState(
+                    candidates = buildStratifiedUrlPool(
+                        proxies = connectPool,
+                        cap = parallelUrlPoolSize,
+                        priorityFirstIds = priorityFirstIds,
+                        probeStates = probeStates,
+                        poolMode = poolMode,
+                        subscriptionWlIds = subscriptionWhitelistIds,
+                        userProxyIds = userProxyIds,
+                        userMode = userMode,
+                        warmRankingEnabled = cachedWarmRankingEnabled,
+                    ),
                     probeStates = probeStates,
-                    poolMode = poolMode,
-                    subscriptionWlIds = subscriptionWhitelistIds,
-                    userProxyIds = userProxyIds,
-                    userMode = userMode,
-                ),
-                probeStates = probeStates,
-                networkHandoff = effectiveHandoff,
-                whitelistBuiltinOnly = wlUrlProbes,
-            )
+                    networkHandoff = effectiveHandoff,
+                    whitelistBuiltinOnly = wlUrlProbes,
+                )
+            }
             simpleModeLog(
                 "SimpleMode",
                 "H14 quick_probe_started tcp_batch=$tcpBatchCap pool=${connectPool.size} " +
@@ -1881,6 +1888,7 @@ object AutoServerSelector {
         subscriptionWlIds: Set<Long> = emptySet(),
         userProxyIds: Set<Long> = emptySet(),
         userMode: UserPoolMode = UserPoolMode.OFF,
+        warmRankingEnabled: Boolean = DataStore.probe2kWarmRankingEnabled,
     ): List<ProxyEntity> {
         if (proxies.isEmpty() || cap <= 0) return emptyList()
         val rotation = stratifiedListRotationOffset(proxies, probeStates)
@@ -1894,6 +1902,7 @@ object AutoServerSelector {
                     subscriptionWlIds = subscriptionWlIds,
                     userProxyIds = userProxyIds,
                     userMode = userMode,
+                    warmRankingEnabled = warmRankingEnabled,
                 ),
             )
             if (rotation <= 0 || sorted.size <= 1) {
@@ -2006,16 +2015,17 @@ object AutoServerSelector {
     }
 
     /** Order used to start URL tests in parallel with TCP (no TCP results yet). */
-    private fun heuristicPreTcpOrder(
+    internal fun heuristicPreTcpOrder(
         priorityFirstIds: Set<Long>,
         probeStates: Map<Long, ProxyProbeState> = emptyMap(),
         poolMode: ConnectPoolPolicy.PoolBuildMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
         subscriptionWlIds: Set<Long> = emptySet(),
         userProxyIds: Set<Long> = emptySet(),
         userMode: UserPoolMode = UserPoolMode.OFF,
+        warmRankingEnabled: Boolean,
     ): Comparator<ProxyEntity> =
         compareBy<ProxyEntity> { if (it.id in priorityFirstIds) 0 else 1 }
-            .thenBy { warmProbeStateRank(probeStates, it.id) }
+            .thenBy { warmProbeStateRank(probeStates, it.id, warmRankingEnabled) }
             .thenBy { statusRank(it.status) }
             .thenBy { pingRank(it.ping) }
             .thenByDescending { throughputRank(it) }
@@ -2199,12 +2209,14 @@ object AutoServerSelector {
             }
         }
         for (job in jobs) {
-            if (!whitelistBuiltinOnly) {
-                val doneNow = synchronized(result) { result.size }
-                if (doneNow >= earlyExitTarget) {
-                    jobs.filter { it.isActive }.forEach { it.cancel() }
-                    break
-                }
+            val doneNow = synchronized(result) { result.size }
+            if (doneNow >= earlyExitTarget) {
+                // WL (whitelistBuiltinOnly) included: after early-exit target is reached, cancel
+                // the rest of the wave instead of waiting out dead in-flight probes (up to the
+                // per-URL timeout). Report full progress so the UI does not stick mid-wave.
+                jobs.filter { it.isActive }.forEach { it.cancel() }
+                onProgress(total, total)
+                break
             }
             job.join()
         }

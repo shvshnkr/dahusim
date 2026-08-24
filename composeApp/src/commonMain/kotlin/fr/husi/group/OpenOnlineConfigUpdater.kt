@@ -76,6 +76,7 @@ object OpenOnlineConfigUpdater : GroupUpdater() {
         subscription: SubscriptionBean,
         byUser: Boolean,
         warnings: MutableList<GroupUpdateWarning>,
+        fetchTimeoutMs: Int?,
     ): GroupUpdateResult.Success {
         val repository = resolveRepository()
         val token: OOCSubscriptionToken

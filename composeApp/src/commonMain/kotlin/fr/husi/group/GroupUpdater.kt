@@ -84,6 +84,7 @@ abstract class GroupUpdater {
         subscription: SubscriptionBean,
         byUser: Boolean,
         warnings: MutableList<GroupUpdateWarning>,
+        fetchTimeoutMs: Int? = null,
     ): GroupUpdateResult.Success
 
     private suspend fun forceResolve(profiles: List<AbstractBean>) = coroutineScope {
@@ -336,6 +337,7 @@ abstract class GroupUpdater {
             proxyGroup: ProxyGroup,
             byUser: Boolean,
             allowDisconnectedUpdate: Boolean = false,
+            fetchTimeoutMs: Int? = null,
         ): GroupUpdateResult {
             var added = false
             _updatingGroups.update { current ->
@@ -371,7 +373,7 @@ abstract class GroupUpdater {
                         SubscriptionType.OOCv1 -> OpenOnlineConfigUpdater
                         SubscriptionType.SIP008 -> SIP008Updater
                         else -> throw IllegalArgumentException()
-                    }.doUpdate(proxyGroup, subscription, byUser, warnings)
+                    }.doUpdate(proxyGroup, subscription, byUser, warnings, fetchTimeoutMs)
                     // #region agent log
                     simpleModeLog(
                         "SimpleMode",

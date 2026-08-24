@@ -376,6 +376,67 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
         assertTrue(wave.isEmpty())
     }
 
+    @Test
+    fun stratifiedHeuristicOrderAppliesWarmRankWithExplicitFlag() {
+        // audit C.2: heuristicPreTcpOrder used to read DataStore.probe2kWarmRankingEnabled
+        // inside every comparison; the explicit flag must drive the same rank behavior.
+        val pool = (1L..8L).map { plainProxy(it) }
+        val states = mapOf(
+            2L to ProxyProbeState(profileId = 2L, state = ProbeState.ALIVE),
+            5L to ProxyProbeState(profileId = 5L, state = ProbeState.DEAD),
+        )
+        val comparator = AutoServerSelector.heuristicPreTcpOrder(
+            priorityFirstIds = emptySet(),
+            probeStates = states,
+            poolMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
+            warmRankingEnabled = true,
+        )
+        val order = pool.sortedWith(comparator).map { it.id }
+        // ALIVE (2) → UNKNOWN (rest) → DEAD (5); ties fall back to id.
+        assertEquals(listOf(2L, 1L, 3L, 4L, 6L, 7L, 8L, 5L), order)
+        // Deterministic: same comparator, same input → same order.
+        assertEquals(order, pool.sortedWith(comparator).map { it.id })
+    }
+
+    @Test
+    fun stratifiedHeuristicOrderSkipsWarmRankWhenFlagFalse() {
+        val pool = (1L..8L).map { plainProxy(it) }
+        val states = mapOf(
+            2L to ProxyProbeState(profileId = 2L, state = ProbeState.ALIVE),
+            5L to ProxyProbeState(profileId = 5L, state = ProbeState.DEAD),
+        )
+        val order = pool.sortedWith(
+            AutoServerSelector.heuristicPreTcpOrder(
+                priorityFirstIds = emptySet(),
+                probeStates = states,
+                poolMode = ConnectPoolPolicy.PoolBuildMode.OPEN,
+                warmRankingEnabled = false,
+            ),
+        ).map { it.id }
+        // warmProbeStateRank returns 0 for every proxy when disabled → pure id tie-break.
+        assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L), order)
+    }
+
+    @Test
+    fun stratifiedHeuristicOrderMatchesLegacyDataStoreValue() {
+        // Behavior-neutral refactor regression: sorting with the explicit flag equal to the
+        // stored probe2kWarmRankingEnabled must reproduce the legacy (per-comparison read)
+        // order — priority first, then warm rank, then id.
+        DataStore.probe2kWarmRankingEnabled = true
+        val legacyFlag = DataStore.probe2kWarmRankingEnabled
+        val pool = (1L..6L).map { plainProxy(it) }
+        val states = mapOf(3L to ProxyProbeState(profileId = 3L, state = ProbeState.ALIVE))
+        val order = pool.sortedWith(
+            AutoServerSelector.heuristicPreTcpOrder(
+                priorityFirstIds = setOf(5L),
+                probeStates = states,
+                poolMode = ConnectPoolPolicy.PoolBuildMode.MERGED,
+                warmRankingEnabled = legacyFlag,
+            ),
+        ).map { it.id }
+        assertEquals(listOf(5L, 3L, 1L, 2L, 4L, 6L), order)
+    }
+
     private fun plainProxy(id: Long) = ProxyEntity().apply {
         this.id = id
         status = ProxyEntity.STATUS_INITIAL

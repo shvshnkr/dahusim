@@ -349,12 +349,10 @@ object SubscriptionAutoUpdateRunner {
         fetchTimeoutMs: Int?,
     ): SingleUpdateSummary {
         val previousBypass = SubscriptionUpdateFetchOverrides.bypassVpn
-        val previousFetchTimeout = SubscriptionUpdateFetchOverrides.fetchTimeoutMs
         SubscriptionUpdateFetchOverrides.bypassVpn = bypassVpn
-        SubscriptionUpdateFetchOverrides.fetchTimeoutMs = fetchTimeoutMs
         return try {
             runCatching {
-                when (val r = GroupUpdater.executeUpdate(profile, false)) {
+                when (val r = GroupUpdater.executeUpdate(profile, false, fetchTimeoutMs = fetchTimeoutMs)) {
                     is GroupUpdateResult.Success -> {
                         SingleUpdateSummary(
                             success = true,
@@ -393,7 +391,6 @@ object SubscriptionAutoUpdateRunner {
             }
         } finally {
             SubscriptionUpdateFetchOverrides.bypassVpn = previousBypass
-            SubscriptionUpdateFetchOverrides.fetchTimeoutMs = previousFetchTimeout
         }
     }
 }

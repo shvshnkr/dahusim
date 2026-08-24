@@ -39,6 +39,7 @@ object RawUpdater : GroupUpdater() {
         subscription: SubscriptionBean,
         byUser: Boolean,
         warnings: MutableList<GroupUpdateWarning>,
+        fetchTimeoutMs: Int?,
     ): GroupUpdateResult.Success {
 
         var proxies: List<AbstractBean>
@@ -72,6 +73,7 @@ object RawUpdater : GroupUpdater() {
                     userAgent = SubscriptionFetchProfile.resolveUserAgent(subscription),
                     purpose = SubscriptionHttpFetch.FetchPurpose.GroupUpdate,
                     logContext = "group=${proxyGroup.displayName()}",
+                    timeoutMs = fetchTimeoutMs,
                 ),
             )
             val body = fetch.body

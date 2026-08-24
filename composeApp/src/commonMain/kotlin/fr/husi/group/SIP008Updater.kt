@@ -78,6 +78,7 @@ object SIP008Updater : GroupUpdater() {
         subscription: SubscriptionBean,
         byUser: Boolean,
         warnings: MutableList<GroupUpdateWarning>,
+        fetchTimeoutMs: Int?,
     ): GroupUpdateResult.Success {
         val repository = resolveRepository()
         if (subscription.link.startsWith("http://")) Logs.w("Use SIP008 with HTTP!")

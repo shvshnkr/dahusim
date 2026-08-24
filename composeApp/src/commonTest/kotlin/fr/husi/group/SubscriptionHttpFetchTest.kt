@@ -1,6 +1,5 @@
 package fr.husi.group
 
-import fr.husi.bg.SubscriptionUpdateFetchOverrides
 import fr.husi.fmt.FmtTestConstant
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -114,7 +113,7 @@ class SubscriptionHttpFetchTest {
     }
 
     @Test
-    fun `wl github fetch falls back to direct when mirror fails`() = runBlocking {
+    fun `wl github mirror failure does not fall back to canonical on bs uplink`() = runBlocking {
         val canonical =
             "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
         val body = "${FmtTestConstant.VLESS_GRPC_URL}"
@@ -123,17 +122,18 @@ class SubscriptionHttpFetchTest {
             failForFetchLinks = setOf(WhitelistSubscriptionFetch.yandexTranslateUrl(canonical)),
         )
         try {
-            val response = SubscriptionHttpFetch.fetchText(
-                SubscriptionHttpFetch.Request(
-                    canonicalLink = canonical,
-                    userAgent = "test",
-                    whitelistRestricted = true,
-                    vpnConnected = false,
-                ),
-            )
-            assertEquals(canonical, response.fetchLink)
-            assertFalse(response.viaYandexMirror)
-            assertTrue(response.body.contains("vless://"))
+            // canonical body is available, but on BS uplink the mirror is the only attempt
+            val failure = assertFailsWith<IllegalStateException> {
+                SubscriptionHttpFetch.fetchText(
+                    SubscriptionHttpFetch.Request(
+                        canonicalLink = canonical,
+                        userAgent = "test",
+                        whitelistRestricted = true,
+                        vpnConnected = false,
+                    ),
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("test hook"))
         } finally {
             SubscriptionFetchTestHooks.clear()
         }
@@ -193,38 +193,34 @@ class SubscriptionHttpFetchTest {
     }
 
     @Test
-    fun `fetch applies preconnect timeout override`() = runBlocking {
+    fun `fetch applies explicit request timeout`() = runBlocking {
         val canonical = "https://etoneya.su/whitelist"
         SubscriptionFetchTestHooks.install(
             bodyByLink = mapOf(canonical to "${FmtTestConstant.VLESS_GRPC_URL}"),
         )
-        val previous = SubscriptionUpdateFetchOverrides.fetchTimeoutMs
         try {
-            SubscriptionUpdateFetchOverrides.fetchTimeoutMs = 2800
             SubscriptionHttpFetch.fetchText(
                 SubscriptionHttpFetch.Request(
                     canonicalLink = canonical,
                     userAgent = "test",
                     whitelistRestricted = true,
                     vpnConnected = false,
+                    timeoutMs = 2800,
                 ),
             )
             assertEquals(2800, SubscriptionFetchTestHooks.lastTimeoutMs)
         } finally {
-            SubscriptionUpdateFetchOverrides.fetchTimeoutMs = previous
             SubscriptionFetchTestHooks.clear()
         }
     }
 
     @Test
-    fun `fetch falls back to default timeout without override`() = runBlocking {
+    fun `fetch falls back to default timeout without request timeout`() = runBlocking {
         val canonical = "https://raw.githubusercontent.com/foo/bar.txt"
         SubscriptionFetchTestHooks.install(
             bodyByLink = mapOf(canonical to "${FmtTestConstant.VLESS_GRPC_URL}"),
         )
-        val previous = SubscriptionUpdateFetchOverrides.fetchTimeoutMs
         try {
-            SubscriptionUpdateFetchOverrides.fetchTimeoutMs = null
             SubscriptionHttpFetch.fetchText(
                 SubscriptionHttpFetch.Request(
                     canonicalLink = canonical,
@@ -235,32 +231,6 @@ class SubscriptionHttpFetchTest {
             )
             assertEquals(SubscriptionHttpFetch.DEFAULT_FETCH_TIMEOUT_MS, SubscriptionFetchTestHooks.lastTimeoutMs)
         } finally {
-            SubscriptionUpdateFetchOverrides.fetchTimeoutMs = previous
-            SubscriptionFetchTestHooks.clear()
-        }
-    }
-
-    @Test
-    fun `per-request timeout wins over override`() = runBlocking {
-        val canonical = "https://raw.githubusercontent.com/foo/bar.txt"
-        SubscriptionFetchTestHooks.install(
-            bodyByLink = mapOf(canonical to "${FmtTestConstant.VLESS_GRPC_URL}"),
-        )
-        val previous = SubscriptionUpdateFetchOverrides.fetchTimeoutMs
-        try {
-            SubscriptionUpdateFetchOverrides.fetchTimeoutMs = 2800
-            SubscriptionHttpFetch.fetchText(
-                SubscriptionHttpFetch.Request(
-                    canonicalLink = canonical,
-                    userAgent = "test",
-                    whitelistRestricted = true,
-                    vpnConnected = false,
-                    timeoutMs = 900,
-                ),
-            )
-            assertEquals(900, SubscriptionFetchTestHooks.lastTimeoutMs)
-        } finally {
-            SubscriptionUpdateFetchOverrides.fetchTimeoutMs = previous
             SubscriptionFetchTestHooks.clear()
         }
     }
