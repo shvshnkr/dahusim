@@ -24,7 +24,11 @@ import fr.husi.database.AutoServerSelector
 import fr.husi.database.DataStore
 import fr.husi.database.DirectProfileUrlProbe
 import fr.husi.database.ProxyEntity
+import fr.husi.database.ProxyProbeStateStore
 import fr.husi.database.SagerDatabase
+import fr.husi.database.UserPoolPolicy
+import fr.husi.database.UserSubscriptionTag
+import fr.husi.database.WarmReservePool
 import fr.husi.ktx.Logs
 import fr.husi.ktx.broadcastReceiver
 import fr.husi.ktx.ensureMixedPortAvailable
@@ -46,8 +50,12 @@ import fr.husi.simplemode.SimpleModeConnectedMaintenance
 import fr.husi.simplemode.SimpleModeSessionHealth
 import fr.husi.simplemode.SimpleModeSessionHealthPolicy
 import fr.husi.simplemode.SimpleModeVpnSessionMarker
+import fr.husi.simplemode.WarmReserveLiveProbe
 import fr.husi.simplemode.WarmReserveMaintainer
 import fr.husi.simplemode.WarmReserveSessionCache
+import fr.husi.simplemode.WarmReserveSwitchPolicy
+import fr.husi.simplemode.WarmSwitchDecision
+import fr.husi.simplemode.prepareManualProfileReload
 import fr.husi.simplemode.SimpleModeCarrierReconnect
 import fr.husi.simplemode.SimpleModeConnectCoordinator
 import fr.husi.simplemode.SimpleModeTunnelRestart
@@ -66,6 +74,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.UnknownHostException
@@ -155,12 +164,16 @@ class BaseService {
                 }
 
                 Action.SWITCH_SERVER -> runOnDefaultDispatcher {
-                    onMainDispatcher {
-                        collapseStatusBar(ctx)
-                        ctx.startActivity(
-                            Intent(ctx, fr.husi.ui.SwitchActivity::class.java)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                        )
+                    onMainDispatcher { collapseStatusBar(ctx) }
+                    if (DataStore.switchUseFullProfilePicker) {
+                        onMainDispatcher {
+                            ctx.startActivity(
+                                Intent(ctx, fr.husi.ui.SwitchActivity::class.java)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    } else {
+                        performInstantWarmSwitch()
                     }
                 }
 
@@ -180,6 +193,78 @@ class BaseService {
                 collapse.invoke(statusBarManager)
             } catch (_: Exception) {
             }
+        }
+
+        /**
+         * One-tap notification «Сменить» (variant A): headless warm-switch decision — live
+         * parallel URL probes of the connected server + reserves, quality scoring, then the same
+         * apply path as SwitchActivity.applySwitchAndFinish (applyManualSwitch +
+         * prepareManualProfileReload + reloadService). Only a toast is shown; a non-switch
+         * outcome keeps the current connection (never stops the service).
+         */
+        private suspend fun performInstantWarmSwitch() {
+            val rawQueue = WarmReserveSwitchPolicy.parseQueue(DataStore.autoSelectFallbackQueue)
+            val groups = SagerDatabase.groupDao.allGroups().first()
+            val userTag = UserSubscriptionTag.resolve(
+                SagerDatabase.proxyDao.getAll(),
+                groups,
+            )
+            val queue = UserPoolPolicy.filterProxyIds(
+                UserPoolPolicy.effectiveMode(),
+                rawQueue,
+                userTag.userProxyIds,
+            )
+            val connectedId = resolveConnectedProfileId()
+            if (queue.isEmpty() || connectedId <= 0L) {
+                showToast(resolveRepository().getString(Res.string.switch_warm_none))
+                return
+            }
+            val probeStates = ProxyProbeStateStore.loadMap(queue)
+            val reserveIds = WarmReservePool.selectReserveIds(queue, connectedId, probeStates)
+            if (reserveIds.isEmpty()) {
+                showToast(resolveRepository().getString(Res.string.switch_warm_none))
+                return
+            }
+            val liveUrlMs = WarmReserveLiveProbe.probeUrlDelaysParallel(
+                profileIds = listOf(connectedId) + reserveIds,
+                whitelistOnly = DataStore.activeWhitelistRestrictedNetwork,
+            )
+            val decision = WarmReserveSwitchPolicy.decideLiveManualSwitch(
+                queue = queue,
+                connectedId = connectedId,
+                liveUrlMs = liveUrlMs,
+                probeStates = probeStates,
+            )
+            simpleModeLog(
+                "SimpleMode",
+                "H37 instant_warm_switch decision=${decision::class.simpleName} connected=$connectedId " +
+                    "reserves=$reserveIds queueFiltered=${queue.size}/${rawQueue.size}",
+            )
+            when (decision) {
+                is WarmSwitchDecision.SwitchTo -> {
+                    WarmReserveSessionCache.markLive(decision.profileId)
+                    AutoServerSelector.applyManualSwitch(decision.profileId)
+                    prepareManualProfileReload()
+                    resolveRepository().reloadService()
+                    showToast(resolveRepository().getString(Res.string.switch_warm_switched))
+                }
+
+                WarmSwitchDecision.AlreadyOnBest -> {
+                    showToast(resolveRepository().getString(Res.string.switch_warm_already_best))
+                }
+
+                WarmSwitchDecision.NoReserves, WarmSwitchDecision.NoLiveData -> {
+                    showToast(resolveRepository().getString(Res.string.switch_warm_none))
+                }
+            }
+        }
+
+        private fun resolveConnectedProfileId(): Long {
+            val fromService = ServiceRegistry.baseService?.data?.proxy?.profile?.id ?: 0L
+            if (fromService > 0L) return fromService
+            val current = DataStore.currentProfile
+            if (current > 0L) return current
+            return DataStore.selectedProxy
         }
 
         var closeReceiverRegistered = false

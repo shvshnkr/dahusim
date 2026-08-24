@@ -132,6 +132,62 @@ class WarmReserveSwitchPolicyTest : HusiKoinTest() {
     }
 
     @Test
+    fun decideLiveManualSwitchSwitchesToLiveReserve() {
+        val now = System.currentTimeMillis()
+        val queue = listOf(1L, 2L, 3L)
+        val states = mapOf(
+            1L to ProxyProbeState(profileId = 1L, state = ProbeState.ALIVE, lastUrlMs = 200, lastOkAt = now),
+            2L to ProxyProbeState(profileId = 2L, state = ProbeState.ALIVE, lastUrlMs = 80, lastOkAt = now),
+        )
+        val decision = WarmReserveSwitchPolicy.decideLiveManualSwitch(
+            queue = queue,
+            connectedId = 1L,
+            liveUrlMs = mapOf(1L to 200, 2L to 80),
+            probeStates = states,
+            target = 2,
+        )
+        assertEquals(WarmSwitchDecision.SwitchTo(2L), decision)
+    }
+
+    @Test
+    fun decideLiveManualSwitchAlreadyOnBestWhenConnectedFaster() {
+        val now = System.currentTimeMillis()
+        val queue = listOf(1L, 2L, 3L)
+        val states = mapOf(
+            1L to ProxyProbeState(profileId = 1L, state = ProbeState.ALIVE, lastUrlMs = 100, lastOkAt = now),
+            2L to ProxyProbeState(profileId = 2L, state = ProbeState.ALIVE, lastUrlMs = 400, lastOkAt = now),
+        )
+        val decision = WarmReserveSwitchPolicy.decideLiveManualSwitch(
+            queue = queue,
+            connectedId = 1L,
+            liveUrlMs = mapOf(1L to 100, 2L to 400),
+            probeStates = states,
+            target = 2,
+        )
+        assertEquals(WarmSwitchDecision.AlreadyOnBest, decision)
+    }
+
+    @Test
+    fun decideLiveManualSwitchExcludesReservesThatFailedLiveProbe() {
+        val now = System.currentTimeMillis()
+        val queue = listOf(1L, 2L, 3L)
+        val states = mapOf(
+            1L to ProxyProbeState(profileId = 1L, state = ProbeState.ALIVE, lastUrlMs = 200, lastOkAt = now),
+            2L to ProxyProbeState(profileId = 2L, state = ProbeState.ALIVE, lastUrlMs = 80, lastOkAt = now),
+        )
+        // Even with a fresh persisted state, a reserve that failed the live probe must not win:
+        // otherwise the switch lands on a dead server and the service stops (field 2026-08-24).
+        val decision = WarmReserveSwitchPolicy.decideLiveManualSwitch(
+            queue = queue,
+            connectedId = 1L,
+            liveUrlMs = mapOf(1L to 200, 2L to null),
+            probeStates = states,
+            target = 2,
+        )
+        assertEquals(WarmSwitchDecision.NoReserves, decision)
+    }
+
+    @Test
     fun decideManualSwitchAlreadyOnBestWhenConnectedFaster() {
         val now = System.currentTimeMillis()
         val queue = listOf(1L, 2L, 3L)

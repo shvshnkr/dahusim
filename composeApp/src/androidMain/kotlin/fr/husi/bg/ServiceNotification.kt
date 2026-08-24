@@ -20,7 +20,6 @@ import fr.husi.ktx.runOnMainDispatcher
 import fr.husi.lib.R
 import fr.husi.repository.resolveAndroidRepository
 import fr.husi.repository.resolveRepository
-import fr.husi.ui.SwitchActivity
 import fr.husi.resources.Res
 import fr.husi.resources.action_switch
 import fr.husi.resources.forward_success
@@ -190,14 +189,10 @@ class ServiceNotification(
             val switchAction = NotificationCompat.Action.Builder(
                 0,
                 runBlocking { resolveRepository().getString(Res.string.action_switch) },
-                PendingIntent.getActivity(
-                    service,
-                    0,
-                    Intent(service, SwitchActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    flags,
+                PendingIntent.getBroadcast(
+                    service, 0, Intent(Action.SWITCH_SERVER).setPackage(service.packageName), flags,
                 ),
-            ).setShowsUserInterface(true).build()
+            ).setShowsUserInterface(false).build()
             it.addAction(switchAction)
 
             val resetUpstreamAction = NotificationCompat.Action.Builder(

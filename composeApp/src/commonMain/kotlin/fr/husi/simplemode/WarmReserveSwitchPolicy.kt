@@ -13,7 +13,7 @@ data class WarmSwitchCandidate(
 )
 
 enum class NotificationSwitchAction {
-    /** One-tap switch to [WarmReserveSwitchPolicy.pickBestWarmTarget]. */
+    /** One-tap switch to the best warm reserve via [WarmReserveSwitchPolicy.decideLiveManualSwitch]. */
     INSTANT_WARM,
     /** Legacy [fr.husi.ui.SwitchActivity] profile picker. */
     OPEN_FULL_PICKER,
@@ -78,6 +78,30 @@ internal object WarmReserveSwitchPolicy {
         return WarmReserveQualityPolicy.compareForManualSwitch(
             connectedId = connectedId,
             reserveIds = reserveIds,
+            liveUrlMs = liveUrlMs,
+            probeStates = probeStates,
+        )
+    }
+
+    /**
+     * Live-verified decision for the headless notification switch: reserves that failed the live
+     * probe are excluded, so a dead reserve can never be picked (field 2026-08-24: persisted-only
+     * pick switched to a dead reserve and the service stopped). Non-switch outcomes keep the
+     * current connection.
+     */
+    fun decideLiveManualSwitch(
+        queue: List<Long>,
+        connectedId: Long,
+        liveUrlMs: Map<Long, Int?>,
+        probeStates: Map<Long, ProxyProbeState>,
+        target: Int = WarmReservePool.targetCount(),
+    ): WarmSwitchDecision {
+        val reserveIds = WarmReservePool.selectReserveIds(queue, connectedId, probeStates, target)
+        val liveReserves = reserveIds.filter { liveUrlMs[it] != null }
+        if (liveReserves.isEmpty()) return WarmSwitchDecision.NoReserves
+        return WarmReserveQualityPolicy.compareForManualSwitch(
+            connectedId = connectedId,
+            reserveIds = liveReserves,
             liveUrlMs = liveUrlMs,
             probeStates = probeStates,
         )

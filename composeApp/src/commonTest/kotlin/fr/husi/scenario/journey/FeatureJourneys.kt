@@ -145,6 +145,27 @@ object FeatureJourneys {
             ),
             testClass = "fr.husi.scenario.journey.SimpleAdaptTimeoutActivityClearJourneyTest",
         ),
+        FeatureJourney(
+            id = "simple_screen_state_tones",
+            userPromise = "Simple screen keeps problem states visible: FAILED (no internet / all servers dead) instead of silent Stopped, RECOVERING pulse with the Attempt N of M fallback pill, always-shown step trail with the failing stage red",
+            entryPoints = listOf(
+                "SimpleHomeScreen.statusTone",
+                "SimpleModeActivityText.isSimpleModeRecoveringActivity",
+                "AutoServerSelectorSessionFallback.parseQueue",
+            ),
+            testClass = "fr.husi.scenario.journey.SimpleScreenStateTonesJourneyTest",
+        ),
+        FeatureJourney(
+            id = "notification_switch_instant_warm",
+            userPromise = "Notification «Сменить» headlessly switches to the best warm reserve verified by live probes (never the dead one) without opening the picker UI; non-switch outcomes keep the connection and only show a toast; the full picker opens only when configured",
+            entryPoints = listOf(
+                "WarmReserveSwitchPolicy.decideLiveManualSwitch",
+                "WarmReserveQualityPolicy.compareForManualSwitch",
+                "WarmReserveSwitchPolicy.resolveNotificationAction",
+                "WarmReservePool.selectReserveIds",
+            ),
+            testClass = "fr.husi.scenario.journey.NotificationSwitchInstantWarmJourneyTest",
+        ),
     )
 
     fun byId(id: String): FeatureJourney? = all.find { it.id == id }
