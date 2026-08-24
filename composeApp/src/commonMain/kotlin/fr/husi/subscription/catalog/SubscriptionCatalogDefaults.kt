@@ -86,7 +86,6 @@ object SubscriptionCatalogDefaults {
             "https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/BlackList.txt",
             ConnectPoolRole.WL,
         ),
-        CatalogSeed("wlrus-blackl", "wlrus blackl", "https://wlrus.lol/confs/blackl.txt", ConnectPoolRole.WL),
         CatalogSeed(
             "migiti-wl",
             "MiGiTi WL",

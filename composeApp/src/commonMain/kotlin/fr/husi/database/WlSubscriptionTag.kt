@@ -14,7 +14,6 @@ internal object WlSubscriptionTag {
         "white-lattice",
         "white-list-vpn-black",
         "aetris-vpn",
-        "wlrus-blackl",
         "black-vless-rus-mobile",
         "vless-wl-rus-mobile",
         "tri-228-wl",

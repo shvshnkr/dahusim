@@ -1,5 +1,5 @@
 HUSI_SUBSCRIPTION_CATALOG_V1
-generation=13
+generation=14
 allow_empty=false
 REMOVE|mifa-main
 REMOVE|mifa-hysteria
@@ -17,7 +17,7 @@ UPSERT|zieng2-wl|zieng2 wl|https://hub.mos.ru/zieng2/wl/raw/main/list_universal.
 UPSERT|wl-standalone|WL standalone|https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-feeds/wl-standalone.txt|RAW|default|wl
 UPSERT|white-lattice|WhiteLattice|https://raw.githubusercontent.com/HikaruApps/WhiteLattice/refs/heads/main/subscriptions/config.txt|RAW|default|wl
 UPSERT|white-list-vpn-black|WhiteListVpn BlackList|https://raw.githubusercontent.com/SilentGhostCodes/WhiteListVpn/refs/heads/main/BlackList.txt|RAW|default|wl
-UPSERT|wlrus-blackl|wlrus blackl|https://wlrus.lol/confs/blackl.txt|RAW|default|wl
+REMOVE|wlrus-blackl
 UPSERT|migiti-wl|MiGiTi WL|https://raw.githubusercontent.com/misha12333211-ctrl/proxy-subs/refs/heads/main/1.txt|RAW|default|wl
 REMOVE|migiti-open
 UPSERT|vlessfo-open|Vlessforu|https://sub.vlessfo.ru/vlessforu/working_configs.txt|RAW|default|open
