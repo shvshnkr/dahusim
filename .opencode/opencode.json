@@ -1,0 +1,33 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Канон правил: AGENTS.md (gitignored, локальный) — источник истины.
+  // Скиллы сессии: .agents/skills/* — читаются нативно (skill tool OpenCode).
+  // Политика: авторазрешение (как в ~/VPN) — "*": "allow" по умолчанию,
+  // RED — только деструктивные команды. Last matching rule wins.
+  "instructions": ["AGENTS.md"],
+  "permission": {
+    "bash": {
+      // OWNER — auto-approve (дефолт)
+      "*": "allow",
+      // GREEN — явные allow (канон: read-only + локальные unit-тесты)
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git fetch*": "allow",
+      "git branch*": "allow",
+      "git ls-files*": "allow",
+      "sed*": "allow",
+      "*gradlew.bat :composeApp:desktopTest*": "allow",
+      // RED — deny (деструктив)
+      "git push --force*": "deny",
+      "git push -f*": "deny",
+      "git reset --hard*": "deny",
+      "git clean -f*": "deny",
+      "rm -rf*": "deny",
+      "rmdir /s*": "deny",
+      "Remove-Item -Recurse*": "deny"
+    },
+    "edit": "allow",
+    "webfetch": "allow"
+  }
+}

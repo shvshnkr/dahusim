@@ -1,0 +1,70 @@
+{
+  // Тонкий адаптер Zed. Канон правил — AGENTS.md + docs/ (Zed читает их нативно).
+  // Политика терминала: AGENTS.md → Dev environment / Dev rules.
+  // Priority: deny > confirm > allow > default.
+  "agent": {
+    "tool_permissions": {
+      "default": "confirm",
+      "tools": {
+        "terminal": {
+          "default": "confirm",
+          "always_allow": [
+            { "pattern": "^git\\s+(status|diff|log|fetch|branch|ls-files)\\b" },
+            { "pattern": "gradlew\\.bat\\s+:composeApp:desktopTest" }
+          ],
+          "always_confirm": [
+            { "pattern": "^git\\s+(add|commit|push|pull|merge|rebase|reset|checkout|clean)\\b" },
+            { "pattern": "gh-workflow\\.sh" },
+            { "pattern": "gradlew\\.bat" },
+            { "pattern": "^gh\\b" }
+          ],
+          "always_deny": [
+            { "pattern": "git\\s+push\\s+(-f|--force)\\b" },
+            { "pattern": "git\\s+reset\\s+--hard\\b" },
+            { "pattern": "git\\s+clean\\s+-f\\b" },
+            { "pattern": "rm\\s+-rf" },
+            { "pattern": "rmdir\\s+/s" }
+          ]
+        },
+        "edit_file": {
+          "default": "confirm",
+          "always_allow": [
+            { "pattern": "\\.(kt|kts|toml|md|json|jsonc|properties|txt|xml|yml|yaml|ps1|sh)$" }
+          ],
+          "always_deny": [
+            { "pattern": "release\\.keystore" },
+            { "pattern": "happ_keys\\.json" },
+            { "pattern": "\\.(pem|key|p12|pfx|jks)$" }
+          ]
+        },
+        "skill": {
+          "default": "allow"
+        }
+      }
+    },
+    "profiles": {
+      "dahusim-slice": {
+        "name": "Dahusim slice",
+        "tools": {
+          "read_file": true,
+          "grep": true,
+          "glob": true,
+          "terminal": true,
+          "edit_file": true,
+          "skill": true
+        }
+      },
+      "dahusim-readonly": {
+        "name": "Dahusim read-only",
+        "tools": {
+          "read_file": true,
+          "grep": true,
+          "glob": true,
+          "terminal": false,
+          "edit_file": false,
+          "skill": true
+        }
+      }
+    }
+  }
+}

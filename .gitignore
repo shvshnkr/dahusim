@@ -56,6 +56,9 @@ docs/CODE_REVIEW_PROMPT.md
 /external
 
 # Repo-root scratch (debug / one-off; do not ship)
+/nul
+/opencode.db
+/tmp_datastore.pb
 /_helper.kt
 /_run_scanner_patch.py
 /_profile_*.txt
@@ -67,3 +70,4 @@ docs/CODE_REVIEW_PROMPT.md
 
 # Build logs
 /logs/
+/artifacts/
