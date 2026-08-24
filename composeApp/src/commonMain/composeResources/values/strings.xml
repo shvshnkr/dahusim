@@ -109,7 +109,7 @@
     <string name="quick_settings_subscription_update_parallelism_active">Parallel subscription refresh (in app)</string>
     <string name="quick_settings_subscription_update_parallelism_active_summary">How many subscription groups to update at once when you refresh manually. Does not change server health probes.</string>
     <string name="quick_settings_subscription_update_parallelism_background">Parallel subscription refresh (background)</string>
-    <string name="quick_settings_subscription_update_parallelism_background_summary">Quiet subscription updates while VPN is off. Lower values save battery.</string>
+    <string name="quick_settings_subscription_update_parallelism_background_summary">Quiet subscription updates while КВН is off. Lower values save battery.</string>
     <string name="app_update_settings">App updates</string>
     <string name="app_update_check_enabled">Check for app updates</string>
     <string name="app_update_check_enabled_sum">Uses GitHub app-update-channel manifest</string>
@@ -168,7 +168,7 @@
     <string name="probe_2k_warm_ranking_summary">Uses saved probe state before live URL tests</string>
     <string name="probe_2k_builtin_cap_enabled">Limit built-in share in fallback queue</string>
     <string name="probe_2k_background_scheduler_enabled">Background TCP maintenance</string>
-    <string name="probe_2k_background_scheduler_summary">Light TCP scan while disconnected (no VPN)</string>
+    <string name="probe_2k_background_scheduler_summary">Light TCP scan while disconnected (no КВН)</string>
     <string name="probe_2k_power_preset">Power preset</string>
     <string name="probe_2k_power_low">Low</string>
     <string name="probe_2k_power_normal">Normal</string>
@@ -179,7 +179,7 @@
     <string name="probe_2k_activity_scan">Scanning servers %1$d/%2$d…</string>
     <string name="probe_2k_pool_line">Pool: %1$d alive · %2$d candidate · %3$d jail · %4$d unknown</string>
     <string name="probe_2k_warm_reserve_count">Warm fallback reserve</string>
-    <string name="probe_2k_warm_reserve_summary">Experimental: URL-checks backup servers while VPN is on (1–4). More checks use more battery.</string>
+    <string name="probe_2k_warm_reserve_summary">Experimental: URL-checks backup servers while КВН is on (1–4). More checks use more battery.</string>
     <string name="probe_2k_warm_reserve_status">Reserve status: %1$s</string>
     <string name="user_pool_mode">Personal subscriptions priority</string>
     <string name="user_pool_mode_off">Off (equal with catalog)</string>
@@ -255,7 +255,7 @@
     <!-- misc -->
     <string name="service_mode">Service Mode</string>
     <string name="service_mode_proxy">Proxy only</string>
-    <string name="service_mode_vpn" translatable="false">VPN</string>
+    <string name="service_mode_vpn" translatable="false">КВН</string>
     <string name="port_proxy">Proxy Port</string>
     <string name="allow_access">Allow Connections from the LAN</string>
     <string name="allow_access_sum">Bind inbound servers to 0.0.0.0</string>
@@ -329,7 +329,7 @@
     <string name="edit_config">Edit Config</string>
     <!-- feature category -->
     <string name="metered">Metered Hint</string>
-    <string name="metered_summary">Hint system to treat VPN as metered</string>
+    <string name="metered_summary">Hint system to treat КВН as metered</string>
     <string name="menu_route">Route</string>
     <string name="route_add">Create Route</string>
     <string name="delete_route_prompt">Are you sure you want to remove this route?</string>
@@ -366,8 +366,8 @@
     <string name="enable_mux">Enable Multiplexer</string>
     <string name="mux_sum">Mux is designed to reduce connecting handshake latency, not to increase connection throughput. Using Mux to watch videos, download or speed test is usually counter productive. If the server does not support it, you will not be able to access the Internet.</string>
     <string name="tcp_keep_alive_interval">TCP keep active packet delivery interval</string>
-    <string name="proxied_apps">Apps VPN mode</string>
-    <string name="proxied_apps_summary">Configure VPN mode for selected apps</string>
+    <string name="proxied_apps">Apps КВН mode</string>
+    <string name="proxied_apps_summary">Configure КВН mode for selected apps</string>
     <string name="on">On</string>
     <string name="off">Off</string>
     <string name="search_apps">Search…</string>
@@ -378,7 +378,7 @@
     <string name="direct_boot_aware">Allow Toggling in Lock Screen</string>
     <string name="direct_boot_aware_summary">Your selected profile information will be less protected</string>
     <!-- notification category -->
-    <string name="service_vpn">VPN Service</string>
+    <string name="service_vpn">КВН Service</string>
     <string name="service_proxy">Proxy Service</string>
     <string name="forward_success">Proxy started.</string>
     <string name="invalid_server">Invalid server name</string>
@@ -386,8 +386,8 @@
     <string name="stop">Stop</string>
     <string name="stopping">Shutting down…</string>
     <string name="vpn_error">%1$s</string>
-    <string name="vpn_permission_denied">Permission denied to create a VPN service</string>
-    <string name="reboot_required">Failed to start VPN service. You might need to reboot your device.</string>
+    <string name="vpn_permission_denied">Permission denied to create a КВН service</string>
+    <string name="reboot_required">Failed to start КВН service. You might need to reboot your device.</string>
     <!-- alert category -->
     <string name="profile_empty">Please select a profile</string>
     <string name="connect">Connect</string>
@@ -547,7 +547,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="connection_test_refused">Connection refused</string>
     <string name="connection_test_unreachable">Unreachable</string>
     <string name="connection_test_timeout">Timeout</string>
-    <string name="append_http_proxy">Append HTTP Proxy to VPN</string>
+    <string name="append_http_proxy">Append HTTP Proxy to КВН</string>
     <string name="append_http_proxy_sum">HTTP proxy will be used directly from (browser/ some supported apps), without going through the virtual NIC device (Android 10+)</string>
     <string name="protocol_settings">Protocol Settings</string>
     <string name="trojan_provider">Trojan Provider</string>
@@ -775,8 +775,8 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="inbound_credentials_warning">Not set — local SOCKS5/HTTP inbound will require auth; random credentials will be auto-generated on connect to mitigate the VLESS-SOCKS5 attack.</string>
     <string name="http_upgrade_host">HTTPUpgrade Host</string>
     <string name="http_upgrade_path">HTTPUpgrade Path</string>
-    <string name="scan_vpn_app">Scan VPN apps</string>
-    <string name="scan_vpn_app_introduce">Check the VPN installed on the device and its type.</string>
+    <string name="scan_vpn_app">Scan КВН apps</string>
+    <string name="scan_vpn_app_introduce">Check the КВН installed on the device and its type.</string>
     <string name="vpn_app_type">App type</string>
     <string name="vpn_core_type">Core type</string>
     <string name="vpn_core_path">Detected path</string>
@@ -855,7 +855,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="mux_max_streams">Max streams</string>
     <string name="override_address">Override Address</string>
     <string name="override_port">Override Port</string>
-    <string name="allow_apps_bypass_vpn">Allow Apps to bypass VPN</string>
+    <string name="allow_apps_bypass_vpn">Allow Apps to bypass КВН</string>
     <string name="clash_mode">Clash Mode</string>
     <string name="sniff_timeout">Sniff timeout</string>
     <string name="network_type">Network Type</string>
@@ -1018,24 +1018,33 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_activity_verifying_last">Verifying last server…</string>
     <string name="simple_mode_activity_verifying_internet">Verifying internet access…</string>
     <string name="simple_mode_activity_connecting_server">Connecting to server…</string>
-    <string name="simple_mode_activity_starting_vpn">Starting VPN…</string>
-    <string name="simple_mode_activity_permission_vpn">Allow VPN when prompted…</string>
-    <string name="simple_mode_activity_permission_foreground">Return to the app to allow VPN…</string>
+    <string name="simple_mode_activity_starting_vpn">Starting КВН…</string>
+    <string name="simple_mode_activity_permission_vpn">Allow КВН when prompted…</string>
+    <string name="simple_mode_activity_permission_foreground">Return to the app to allow КВН…</string>
     <string name="simple_mode_activity_network_changed">Network changed, reconnecting…</string>
     <string name="simple_mode_activity_connection_unstable">Connection unstable, rechecking…</string>
     <string name="simple_mode_activity_server_unstable">Server unstable, switching…</string>
-    <string name="simple_mode_vpn_check_failed_reconnect">VPN is connected but the health check failed — tap Disconnect, then Connect again.</string>
+    <string name="simple_mode_vpn_check_failed_reconnect">КВН is connected but the health check failed — tap Disconnect, then Connect again.</string>
     <string name="simple_mode_unclean_stop_title">Connection dropped in the background</string>
     <string name="simple_mode_unclean_stop_battery_restricted">You did not disconnect manually. Battery optimization is often the cause — tap the button below or Connect.</string>
-    <string name="simple_mode_unclean_stop_battery_already_off">Battery optimization is already off. Possible causes: closed from Recents, power saving, vendor background limits, or system stop. Tap Connect to turn VPN back on.</string>
-    <string name="simple_mode_unclean_stop_huawei_launch">On Huawei/Honor, battery optimization may already be off while App launch still stops VPN in the background. Open launch settings below, allow auto-launch and background activity for this app, then tap Connect.</string>
+    <string name="simple_mode_unclean_stop_battery_already_off">Battery optimization is already off. Possible causes: closed from Recents, power saving, vendor background limits, or system stop. Tap Connect to turn КВН back on.</string>
+    <string name="simple_mode_unclean_stop_huawei_launch">On Huawei/Honor, battery optimization may already be off while App launch still stops КВН in the background. Open launch settings below, allow auto-launch and background activity for this app, then tap Connect.</string>
     <string name="simple_mode_open_huawei_launch_manager">App launch settings</string>
-    <string name="simple_mode_unclean_stop_xiaomi_autostart">On Xiaomi/Redmi/POCO (MIUI/HyperOS), autostart is often off by default and stops VPN in the background even when battery optimization is disabled. Open autostart below, enable this app, set battery to No restrictions, then tap Connect.</string>
+    <string name="simple_mode_unclean_stop_xiaomi_autostart">On Xiaomi/Redmi/POCO (MIUI/HyperOS), autostart is often off by default and stops КВН in the background even when battery optimization is disabled. Open autostart below, enable this app, set battery to No restrictions, then tap Connect.</string>
     <string name="simple_mode_open_xiaomi_autostart">Autostart settings</string>
     <string name="simple_mode_activity_server_degraded">Server degraded, switching…</string>
     <string name="simple_mode_activity_server_unreachable">Server unreachable, trying next…</string>
     <string name="simple_mode_activity_connection_error">Connection error, trying next…</string>
     <string name="simple_mode_activity_trying_next">Trying next server…</string>
+    <string name="simple_mode_failed">Failed to connect</string>
+    <string name="simple_mode_recovering_reconnect">Reconnecting…</string>
+    <string name="simple_mode_recovering_switching">Switching…</string>
+    <string name="simple_mode_recovering_checking">Checking connection…</string>
+    <string name="simple_mode_attempt_n_of_m">Attempt %1$d of %2$d</string>
+    <string name="simple_mode_trail_network">Network</string>
+    <string name="simple_mode_trail_subs">Subscriptions</string>
+    <string name="simple_mode_trail_server">Server</string>
+    <string name="simple_mode_trail_vpn">КВН</string>
     <string name="simple_mode_activity_ranking">Ranking %1$d servers…</string>
     <string name="simple_mode_activity_testing_tcp">TCP probe %1$d/%2$d</string>
     <string name="simple_mode_activity_testing_url">URL probe %1$d/%2$d</string>
@@ -1049,17 +1058,17 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_switch">Switch to simple mode</string>
     <string name="simple_mode_tab">Simple mode</string>
     <string name="simple_mode_no_profile">No available profile yet. Wait for subscription refresh.</string>
-    <string name="simple_mode_permission_pending">Waiting for Android VPN permission...</string>
-    <string name="simple_mode_permission_unlock">Unlock the screen to allow VPN.</string>
+    <string name="simple_mode_permission_pending">Waiting for Android КВН permission...</string>
+    <string name="simple_mode_permission_unlock">Unlock the screen to allow КВН.</string>
     <string name="simple_mode_wl_banner_title">Whitelist network mode.</string>
     <string name="simple_mode_wl_banner_subtitle">Free servers may be unavailable.</string>
-    <string name="simple_mode_whitelist_warning">This network appears to use a whitelist mode (Google is unreachable while Dzen or known list URLs respond). In simple mode, server selection prefers whitelist-oriented subscriptions; if those fail, open subscriptions are tried. Stability is not guaranteed. Husi will still try to connect.</string>
+    <string name="simple_mode_whitelist_warning">This network appears to use a whitelist mode (Google is unreachable while Dzen or known list URLs respond). In simple mode, server selection prefers whitelist-oriented subscriptions; if those fail, open subscriptions are tried. Stability is not guaranteed. daHusiM will still try to connect.</string>
     <string name="simple_mode_wait_for_google">Auto-connect checks are paused to save battery. They will resume once you have normal internet outside whitelist-only networks.</string>
     <string name="simple_mode_no_internet_pause">No internet access detected. Auto-connect checks are paused until connectivity returns.</string>
     <string name="simple_mode_no_internet_banner_title">No internet</string>
-    <string name="simple_mode_no_internet_banner_subtitle">Husi can't connect — check mobile data or Wi-Fi.</string>
+    <string name="simple_mode_no_internet_banner_subtitle">daHusiM can't connect — check mobile data or Wi-Fi.</string>
     <string name="simple_mode_all_servers_dead_banner_title">No working servers</string>
-    <string name="simple_mode_all_servers_dead_banner_subtitle">All servers are down right now — Husi will wait and retry.</string>
+    <string name="simple_mode_all_servers_dead_banner_subtitle">All servers are down right now — daHusiM will wait and retry.</string>
     <string name="manual_profile_probe_failed">The selected server did not respond. Choose another profile or use auto-connect.</string>
     <string name="simple_mode_all_servers_dead_title">No working servers</string>
     <string name="simple_mode_all_servers_dead_message">Your subscription profiles did not respond to health checks. You can wait for normal internet outside the whitelist (for list updates), or exit the app.</string>

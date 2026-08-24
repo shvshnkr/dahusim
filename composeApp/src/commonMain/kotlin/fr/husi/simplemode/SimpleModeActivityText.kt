@@ -35,6 +35,23 @@ internal fun isSimpleModeVpnProgressActivity(text: String): Boolean {
         text.contains("Connection error", ignoreCase = true)
 }
 
+/**
+ * Problem-recovery subset of [isSimpleModeVpnProgressActivity]: server switching, unstable
+ * sessions, unreachable targets, fallback hops and network changes. Clean bring-up texts
+ * ("Connecting to server…", "Starting VPN…", "Verifying internet access…") stay CONNECTING.
+ */
+internal fun isSimpleModeRecoveringActivity(text: String): Boolean {
+    if (text.isBlank()) return false
+    return text.startsWith("Network changed") ||
+        text.contains("switching", ignoreCase = true) ||
+        text.contains("trying next", ignoreCase = true) ||
+        text.contains("unreachable", ignoreCase = true) ||
+        text.contains("degraded", ignoreCase = true) ||
+        text.contains("unstable", ignoreCase = true) ||
+        text.contains("rechecking", ignoreCase = true) ||
+        text.contains("Connection error", ignoreCase = true)
+}
+
 /** Any non-empty activity line that should keep the connect button flow busy. */
 internal fun isSimpleModeProgressActivity(text: String): Boolean =
     isSimpleModePrepareActivity(text) || isSimpleModeVpnProgressActivity(text)

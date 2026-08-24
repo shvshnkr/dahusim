@@ -148,16 +148,20 @@ class SimpleHomeScreenUiTest : FeatureJourneyTest() {
 
         val wlTitle = SimpleModeUiTestStrings.simpleModeWlBannerTitle()
         val noInternetTitle = SimpleModeUiTestStrings.simpleModeNoInternetBannerTitle()
+        val failed = SimpleModeUiTestStrings.simpleModeFailed()
         val connect = SimpleModeUiTestStrings.simpleModeConnect()
 
         waitUntilAtLeastOneExists(hasText(wlTitle), timeoutMillis = 5_000)
 
         // Dead uplink: the coordinator gates before any prepare and calls onNoInternet —
-        // the persistent banner must render, with priority over the whitelist banner.
+        // the persistent banner must render, with priority over the whitelist banner, and the
+        // screen must show the FAILED tone instead of silently looking idle (mockup v2).
         onNodeWithContentDescription(connect).performClick()
         waitUntilAtLeastOneExists(hasText(noInternetTitle), timeoutMillis = 15_000)
         onNodeWithText(noInternetTitle).assertIsDisplayed()
         onNodeWithText(wlTitle).assertDoesNotExist()
+        waitUntilAtLeastOneExists(hasText(failed), timeoutMillis = 15_000)
+        onNodeWithText(failed).assertIsDisplayed()
 
         // A new attempt on a healthy uplink clears the persistent banner.
         SimpleModeNetworkProbeHooks.scenarioOverride =
@@ -165,5 +169,39 @@ class SimpleHomeScreenUiTest : FeatureJourneyTest() {
         onNodeWithContentDescription(connect).performClick()
 
         waitUntilDoesNotExist(hasText(noInternetTitle), timeoutMillis = 15_000)
+    }
+
+    @Test
+    fun recoveringActivityRendersSwitchingHeadlineAndAttemptPill() = runComposeUiTest {
+        // Fallback in progress: queue from the prepare-time ranking, index advanced by
+        // AutoServerSelector.commitFallbackSelection — the pill must render from DataStore.
+        DataStore.autoSelectFallbackQueue = "11,22,33"
+        DataStore.autoSelectFallbackIndex = 1
+        DataStore.simpleModeActivity = "Server unreachable, trying next..."
+        setSimpleHome(MainViewModel(FakeRepository()))
+
+        val switching = SimpleModeUiTestStrings.simpleModeRecoveringSwitching()
+        val attempt = SimpleModeUiTestStrings.simpleModeAttemptNOfM(2, 3)
+        waitUntilAtLeastOneExists(hasText(switching), timeoutMillis = 5_000)
+        onNodeWithText(switching).assertIsDisplayed()
+        waitUntilAtLeastOneExists(hasText(attempt), timeoutMillis = 5_000)
+        onNodeWithText(attempt).assertIsDisplayed()
+    }
+
+    @Test
+    fun connectedRendersStepTrailWithAllStages() = runComposeUiTest {
+        BackendState.updateState(ServiceState.Connected)
+        setSimpleHome(MainViewModel(FakeRepository()))
+
+        val labels = listOf(
+            SimpleModeUiTestStrings.simpleModeTrailNetwork(),
+            SimpleModeUiTestStrings.simpleModeTrailSubs(),
+            SimpleModeUiTestStrings.simpleModeTrailServer(),
+            SimpleModeUiTestStrings.simpleModeTrailVpn(),
+        )
+        labels.forEach { label ->
+            waitUntilAtLeastOneExists(hasText(label), timeoutMillis = 5_000)
+            onNodeWithText(label).assertIsDisplayed()
+        }
     }
 }

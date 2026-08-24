@@ -1,6 +1,7 @@
 package fr.husi.ui.simple
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,9 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +38,7 @@ import fr.husi.bg.BackendState
 import fr.husi.bg.ServiceState
 import fr.husi.compose.SimpleIconButton
 import fr.husi.compose.rememberVpnServiceLauncher
+import fr.husi.database.AutoServerSelectorSessionFallback
 import fr.husi.database.DataStore
 import fr.husi.database.Probe2kProgress
 import fr.husi.ktx.exitApplication
@@ -50,9 +50,14 @@ import fr.husi.resources.app_name
 import fr.husi.resources.settings
 import fr.husi.resources.simple_mode_all_servers_dead_banner_subtitle
 import fr.husi.resources.simple_mode_all_servers_dead_banner_title
+import fr.husi.resources.simple_mode_attempt_n_of_m
 import fr.husi.resources.simple_mode_connected
 import fr.husi.resources.simple_mode_connecting
+import fr.husi.resources.simple_mode_failed
 import fr.husi.resources.simple_mode_preparing
+import fr.husi.resources.simple_mode_recovering_checking
+import fr.husi.resources.simple_mode_recovering_reconnect
+import fr.husi.resources.simple_mode_recovering_switching
 import fr.husi.resources.simple_mode_full_ui
 import fr.husi.resources.simple_mode_logs
 import fr.husi.resources.simple_mode_no_internet_banner_subtitle
@@ -76,11 +81,13 @@ import fr.husi.simplemode.releaseSimpleModeVpnSession
 import fr.husi.ui.rememberShouldRequestBatteryOptimizations
 import fr.husi.simplemode.isSimpleModePrepareActivity
 import fr.husi.simplemode.isSimpleModeProgressActivity
+import fr.husi.simplemode.isSimpleModeRecoveringActivity
 import fr.husi.simplemode.isSimpleModeVpnProgressActivity
 import fr.husi.utils.shareSimpleModeLogs
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
 
@@ -105,6 +112,14 @@ fun SimpleHomeScreen(
     val scanChecked by DataStore.configurationStore
         .intFlow(Key.PROBE_2K_SCAN_CHECKED, 0)
         .collectAsStateWithLifecycle(0)
+    // Fallback queue position — the source for the "Attempt N of M" pill in RECOVERING
+    // (written by AutoServerSelector.commitFallbackSelection; format: comma-separated ids).
+    val fallbackIndex by DataStore.configurationStore
+        .intFlow(Key.AUTO_SELECT_FALLBACK_INDEX, 0)
+        .collectAsStateWithLifecycle(0)
+    val fallbackQueue by DataStore.configurationStore
+        .stringFlow(Key.AUTO_SELECT_FALLBACK_QUEUE, "")
+        .collectAsStateWithLifecycle("")
     var whitelistOnly by remember { mutableStateOf(DataStore.activeWhitelistRestrictedNetwork) }
     var noInternet by remember { mutableStateOf(false) }
     var allServersDead by remember { mutableStateOf(false) }
@@ -262,11 +277,13 @@ fun SimpleHomeScreen(
         }
     }
 
-    val tone = statusTone(status.state, permissionPending, activityText)
+    val tone = statusTone(status.state, permissionPending, activityText, noInternet, allServersDead)
     val statusLabel = when (tone) {
         StatusTone.CONNECTED -> stringResource(Res.string.simple_mode_connected)
         StatusTone.CONNECTING -> stringResource(Res.string.simple_mode_connecting)
         StatusTone.PREPARING -> stringResource(Res.string.simple_mode_preparing)
+        StatusTone.RECOVERING -> stringResource(recoveringHeadlineRes(activityText))
+        StatusTone.FAILED -> stringResource(Res.string.simple_mode_failed)
         StatusTone.STOPPED -> stringResource(Res.string.simple_mode_stopped)
     }
     // Live scan progress: only while prepare is actually running (checked < total,
@@ -492,17 +509,40 @@ fun SimpleHomeScreen(
                     textAlign = TextAlign.Center,
                 )
             }
-            if (scanning) {
-                Spacer(modifier = Modifier.height(14.dp))
-                LinearProgressIndicator(
-                    progress = { scanChecked.toFloat() / scanTotal },
-                    modifier = Modifier
-                        .width(210.dp)
-                        .height(4.dp),
-                    color = tone.color(),
-                    trackColor = tone.color().copy(alpha = 0.12f),
-                )
+            if (tone == StatusTone.RECOVERING) {
+                val attempt = fallbackAttempt(fallbackIndex, fallbackQueue)
+                if (attempt != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .border(1.dp, tone.color(), CircleShape)
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .background(tone.color(), CircleShape),
+                        )
+                        Text(
+                            text = stringResource(
+                                Res.string.simple_mode_attempt_n_of_m,
+                                attempt.first,
+                                attempt.second,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = tone.color(),
+                        )
+                    }
+                }
             }
+            Spacer(modifier = Modifier.height(14.dp))
+            SimpleStepTrail(
+                steps = simpleTrailSteps(tone, activityText, noInternet, allServersDead),
+                toneColor = tone.color(),
+            )
         }
 
         if (showUncleanStopNotice && !status.state.canStop) {
@@ -536,16 +576,51 @@ internal fun statusTone(
     state: ServiceState,
     permissionPending: Boolean,
     activityText: String,
+    noInternet: Boolean = false,
+    allServersDead: Boolean = false,
 ): StatusTone {
     return when {
         state == ServiceState.Connected && !isSimpleModeProgressActivity(activityText) &&
             !permissionPending && !SimpleModeConnectCoordinator.isInFlight() -> StatusTone.CONNECTED
         permissionPending -> StatusTone.CONNECTING
+        // Terminal failure (network gate or all-probes-dead) while idle: a persistent FAILED
+        // tone instead of a silent reset to Stopped — the user must see why Connect did nothing
+        // (field 2026-08-21; approved mockup v2). No isInFlight guard: the flags are cleared on
+        // every new attempt (onClick) and by any non-blank activity, so they can never be set
+        // while a connect is actually running — and the in-flight read is not observable by
+        // Compose, so gating on it left the screen stuck in PREPARING after the gate failed.
+        (noInternet || allServersDead) &&
+            (state == ServiceState.Stopped || state == ServiceState.Idle) -> StatusTone.FAILED
         isSimpleModePrepareActivity(activityText) ||
             (SimpleModeConnectCoordinator.isInFlight() && !state.canStop) -> StatusTone.PREPARING
+        // Problem recovery (switching / unstable / unreachable / next / network changed) is a
+        // distinct tone — clean bring-up texts stay CONNECTING.
+        isSimpleModeRecoveringActivity(activityText) -> StatusTone.RECOVERING
         isSimpleModeVpnProgressActivity(activityText) ||
             state == ServiceState.Connecting ||
             state.canStop -> StatusTone.CONNECTING
         else -> StatusTone.STOPPED
     }
+}
+
+/**
+ * RECOVERING headline by recovery kind: network change → «Переподключение…»,
+ * unstable-session recheck → «Проверка соединения…», everything else (server
+ * switching / unreachable / trying next) → «Переключение…».
+ */
+internal fun recoveringHeadlineRes(activityText: String): StringResource = when {
+    activityText.startsWith("Network changed") -> Res.string.simple_mode_recovering_reconnect
+    activityText.startsWith("Connection unstable") -> Res.string.simple_mode_recovering_checking
+    else -> Res.string.simple_mode_recovering_switching
+}
+
+/**
+ * 1-based fallback attempt position (N) and queue size (M) for the «Попытка N из M» pill.
+ * Index is the 0-based queue position of the candidate being tried (written by
+ * [AutoServerSelectorSessionFallback]); null when the queue is empty/unparseable.
+ */
+internal fun fallbackAttempt(index: Int, queueRaw: String): Pair<Int, Int>? {
+    val total = AutoServerSelectorSessionFallback.parseQueue(queueRaw).size
+    if (total <= 0) return null
+    return (index + 1).coerceIn(1, total) to total
 }

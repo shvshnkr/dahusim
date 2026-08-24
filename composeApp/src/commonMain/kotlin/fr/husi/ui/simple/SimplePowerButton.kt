@@ -27,10 +27,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import fr.husi.resources.Res
 import fr.husi.resources.check
+import fr.husi.resources.error
 import fr.husi.resources.power
+import fr.husi.resources.replay
 import fr.husi.resources.simple_mode_connect
-import fr.husi.resources.sync
 import fr.husi.resources.simple_mode_disconnect
+import fr.husi.resources.sync
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
 
@@ -38,16 +40,21 @@ internal enum class StatusTone {
     STOPPED,
     PREPARING,
     CONNECTING,
+    RECOVERING,
     CONNECTED,
+    FAILED,
 }
 
 @Composable
 internal fun StatusTone.color(): Color {
     return when (this) {
-        StatusTone.STOPPED -> MaterialTheme.colorScheme.error
+        // Idle is neutral gray — error red is reserved for a real FAILED state.
+        StatusTone.STOPPED -> MaterialTheme.colorScheme.outlineVariant
         StatusTone.PREPARING -> Color(0xFF5C6BC0)
         StatusTone.CONNECTING -> Color(0xFFC58A00)
+        StatusTone.RECOVERING -> Color(0xFFC58A00)
         StatusTone.CONNECTED -> Color(0xFF2E7D32)
+        StatusTone.FAILED -> MaterialTheme.colorScheme.error
     }
 }
 
@@ -56,12 +63,19 @@ private val INNER_BUTTON_SIZE = 184.dp
 private val RING_STROKE_WIDTH = 12.dp
 private const val ARC_START = -90f
 
+// Ring sweep fractions from the approved mockup (mockup-v2-states.html):
+// recovering = pulsing ~0.3 arc, failed = static ~0.75 arc.
+private const val RECOVERING_ARC_FRACTION = 0.3f
+private const val FAILED_ARC_FRACTION = 0.75f
+
 /**
  * Round power button with a status ring (design: simple-screen-redesign mockup).
- * Ring states: stopped = plain outline, preparing = pulsing progress arc (live
- * [scanProgress] when provided), connecting/permission = rotating arc,
- * connected = full ring + breathing glow. Click handler and enabled flag are
- * owned by the caller so connect/disconnect logic stays in SimpleHomeScreen.
+ * Ring states: stopped = plain gray outline, preparing = progress arc (exact
+ * static [scanProgress] when provided, pulsing otherwise), connecting/permission =
+ * rotating arc, recovering = pulsing ~0.3 arc + refresh icon, failed = static
+ * ~0.75 arc + alert icon, connected = full ring + breathing glow. Click handler
+ * and enabled flag are owned by the caller so connect/disconnect logic stays in
+ * SimpleHomeScreen.
  */
 @Composable
 internal fun SimplePowerButton(
@@ -105,12 +119,16 @@ internal fun SimplePowerButton(
     val arcSweep = when {
         tone == StatusTone.CONNECTED -> 360f
         tone == StatusTone.CONNECTING || permissionPending -> 100f
+        tone == StatusTone.RECOVERING -> RECOVERING_ARC_FRACTION * 360f
+        tone == StatusTone.FAILED -> FAILED_ARC_FRACTION * 360f
         scanning -> (scanProgress!!.coerceIn(0f, 1f) * 360f).coerceAtLeast(14f)
         else -> 100f
     }
     val arcAlpha = when {
         tone == StatusTone.CONNECTED -> breatheAlpha
-        tone == StatusTone.PREPARING -> pulseAlpha
+        tone == StatusTone.RECOVERING -> pulseAlpha
+        // The scanning arc is the exact checked/total progress — no pulse.
+        tone == StatusTone.PREPARING && !scanning -> pulseAlpha
         else -> 1f
     }
     val ringColor = when (tone) {
@@ -189,7 +207,9 @@ internal fun SimplePowerButton(
                 StatusTone.STOPPED -> Res.drawable.power
                 StatusTone.PREPARING -> Res.drawable.sync
                 StatusTone.CONNECTING -> Res.drawable.power
+                StatusTone.RECOVERING -> Res.drawable.replay
                 StatusTone.CONNECTED -> Res.drawable.check
+                StatusTone.FAILED -> Res.drawable.error
             }
             Icon(
                 imageVector = vectorResource(iconRes),

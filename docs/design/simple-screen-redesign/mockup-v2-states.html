@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>daHusiM — SimpleScreen v2: последовательные состояния (мокап)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: #0e0c11; color: #e6e0e9;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px 16px 50px; min-height: 100vh;
+  }
+  h1 { font-size: 17px; margin-bottom: 2px; text-align: center; }
+  p.sub { font-size: 12.5px; color: #cac4d0; line-height: 1.5; text-align: center; max-width: 430px; margin-bottom: 12px; }
+
+  /* ---------- phone ---------- */
+  .phone {
+    --bg: #141218; --surface: #211f26; --text: #e6e0e9; --text2: #cac4d0;
+    --chip-bg: #3b2622; --chip-text: #ffb4ab;
+    width: 390px; background: var(--bg); border-radius: 44px; border: 2px solid #3b3940;
+    overflow: hidden; position: relative; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .phone::before {
+    content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 110px; height: 24px; background: #141218; border-radius: 0 0 16px 16px; z-index: 5;
+  }
+  .screen { position: relative; height: 620px; display: flex; flex-direction: column; padding: 0 20px; z-index: 1; }
+  .modebadge {
+    position: absolute; top: 34px; left: 20px; z-index: 6;
+    font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+    color: #938f99; border: 1px solid #3b3940; border-radius: 999px; padding: 3px 9px;
+    background: rgba(20,18,24,.7);
+  }
+  .modebadge.cur { color: #ffb4ab; border-color: #5c2f2a; }
+  .glow {
+    position: absolute; top: 240px; left: 50%; transform: translate(-50%,-50%);
+    width: 320px; height: 320px; border-radius: 50%; z-index: 0;
+    background: radial-gradient(circle, var(--tone-soft) 0%, transparent 65%); transition: background .4s;
+  }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 34px 4px 0; z-index: 1; }
+  .topbar .name { font-size: 17px; font-weight: 600; color: var(--text); letter-spacing: .2px; }
+  .topbar .gear { width: 30px; height: 30px; display: grid; place-items: center; color: var(--text2); font-size: 18px; border-radius: 50%; }
+  .wlchip {
+    margin-top: 12px; align-self: center; display: none; align-items: center; gap: 6px;
+    background: var(--chip-bg); color: var(--chip-text); border-radius: 999px;
+    padding: 5px 12px; font-size: 12px; font-weight: 500; z-index: 1;
+  }
+  .wlchip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .banner {
+    display: none; margin: 10px auto 0; padding: 8px 14px; border-radius: 999px;
+    background: rgba(179,38,30,.16); color: #ffb4ab; font-size: 12px; font-weight: 500;
+    text-align: center; z-index: 1;
+  }
+  .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; z-index: 1; }
+  .btnwrap { position: relative; width: 150px; height: 150px; display: grid; place-items: center; }
+  svg.ring { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .arc { fill: none; stroke-width: 7; stroke-linecap: round; stroke: var(--tone); opacity: 0; transition: opacity .3s, stroke-dashoffset .25s linear; }
+  .arc.visible { opacity: 1; }
+  .arc.spin { animation: spin 1s linear infinite; }
+  .arc.pulse { animation: pulsearc 1.4s ease-in-out infinite; }
+  .basecircle { fill: var(--tone-soft); transition: fill .4s; }
+  .power {
+    width: 88px; height: 88px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--surface); color: var(--tone); display: grid; place-items: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,.18); transition: color .4s, transform .12s, background .4s;
+    position: relative; z-index: 2;
+  }
+  .power:active { transform: scale(.94); }
+  .power.toned { background: var(--tone-soft); }
+  .power.breathe { animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(270deg); } }
+  @keyframes pulsearc { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+  @keyframes breathe { 0%,100% { box-shadow: 0 4px 20px rgba(0,0,0,.18), 0 0 0 0 var(--tone-soft); } 50% { box-shadow: 0 4px 20px rgba(0,0,0,.18), 0 0 0 14px transparent; } }
+  .headline { font-size: 23px; font-weight: 600; color: var(--text); text-align: center; min-height: 31px; transition: color .3s; }
+  .detail { font-size: 12.5px; color: var(--text2); text-align: center; min-height: 34px; max-width: 320px; line-height: 1.45; }
+  .attempt {
+    display: none; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600;
+    color: var(--tone); border: 1px solid var(--tone); border-radius: 999px; padding: 3px 10px;
+  }
+  .attempt .cnt { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .trail { display: flex; align-items: flex-start; margin-top: 2px; }
+  .trail .st { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 62px; position: relative; }
+  .trail .st .dot { width: 10px; height: 10px; border-radius: 50%; background: #3b3940; transition: background .3s; z-index: 1; }
+  .trail .st .lb { font-size: 10px; color: #6f6b76; transition: color .3s; white-space: nowrap; }
+  .trail .st::before { content: ""; position: absolute; top: 4px; left: -31px; width: 62px; height: 2px; background: #2c2a33; }
+  .trail .st:first-child::before { display: none; }
+  .trail .st.done .dot { background: #2e7d32; }
+  .trail .st.done .lb { color: #7fd08a; }
+  .trail .st.current .dot { background: var(--tone); animation: dotpulse 1.4s ease-in-out infinite; }
+  .trail .st.current .lb { color: var(--tone); font-weight: 600; }
+  .trail .st.fail .dot { background: #b3261e; }
+  .trail .st.fail .lb { color: #ffb4ab; font-weight: 600; }
+  @keyframes dotpulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+
+  .bottom { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 0 0 18px; z-index: 1; }
+  .bottom button { background: none; border: none; color: var(--text2); font-size: 13px; cursor: pointer; padding: 6px 8px; border-radius: 8px; }
+  .bottom button:hover { color: var(--text); background: var(--tone-soft); }
+
+  /* ---------- controls (прямо под телефоном) ---------- */
+  .ctl { width: 390px; display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+  .mode { display: flex; gap: 6px; }
+  .mode button { flex: 1; }
+  .btn {
+    border: 1px solid #49454f; background: #211f26; color: #e6e0e9;
+    padding: 7px 12px; border-radius: 999px; font-size: 12.5px; cursor: pointer; transition: .15s;
+    font-family: inherit;
+  }
+  .btn:hover { border-color: #938f99; }
+  .btn.active { background: #e6e0e9; color: #141218; border-color: #e6e0e9; }
+  .btn.small { padding: 5px 10px; font-size: 12px; }
+  .scenRow { display: flex; flex-wrap: wrap; gap: 6px; }
+  .scenRow .btn { flex: 1 1 calc(50% - 6px); white-space: nowrap; padding: 7px 6px; font-size: 12px; }
+  .transport { display: flex; align-items: center; gap: 8px; }
+  #playBtn { font-size: 14px; padding: 5px 14px; }
+  .transport .clock { font-variant-numeric: tabular-nums; color: #cac4d0; font-size: 12.5px; min-width: 74px; text-align: right; }
+  .pbar { height: 3px; border-radius: 2px; background: #2c2a33; overflow: hidden; }
+  .pbar .pfill { height: 100%; width: 0%; background: #5c6bc0; border-radius: 2px; transition: width .1s linear; }
+  .timeline { display: flex; flex-wrap: wrap; gap: 5px; max-height: 92px; overflow-y: auto; }
+  .tchip {
+    border: 1px solid #49454f; background: #211f26; color: #cac4d0;
+    padding: 3px 9px; border-radius: 999px; font-size: 11.5px; cursor: pointer; white-space: nowrap;
+  }
+  .tchip:hover { border-color: #938f99; }
+  .tchip.active { border-color: #e6e0e9; color: #e6e0e9; background: #2c2a33; }
+  .tchip .tm { opacity: .6; margin-right: 4px; }
+
+  details { width: 390px; margin-top: 14px; border: 1px solid #3b3940; border-radius: 12px; padding: 10px 12px; }
+  summary { cursor: pointer; font-size: 12.5px; color: #cac4d0; font-weight: 600; }
+  details .body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+  table.legend { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.legend th { text-align: left; color: #938f99; font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 3px 6px; }
+  table.legend td { padding: 4px 6px; border-top: 1px solid #2c2a33; color: #cac4d0; vertical-align: top; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .err { color: #ffb4ab; }
+  ul.whatsnew { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  ul.whatsnew li { font-size: 12.5px; color: #cac4d0; line-height: 1.5; padding-left: 18px; position: relative; }
+  ul.whatsnew li::before { content: "＋"; position: absolute; left: 0; color: #2e7d32; font-weight: 700; }
+  ul.whatsnew li.warn::before { content: "↻"; color: #c58a00; }
+  kbd { background: #211f26; border: 1px solid #49454f; border-radius: 4px; padding: 0 5px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+  <h1>Мокап v2 — «последовательная» визуализация состояний</h1>
+  <p class="sub">Управление под телефоном. Сценарии запускаются сами; «⏮ / ▶ / ⏭», скорость и
+    таймлайн — здесь же. Кнопка <b>[сейчас]</b> переключает мокап в поведение текущего приложения
+    (провал = сброс в «Отключено»), <b>[v2]</b> — в предложение.</p>
+
+  <div class="phone" id="phone">
+    <div class="modebadge" id="modebadge">v2 — предложение</div>
+    <div class="screen">
+      <div class="glow" id="glow"></div>
+      <div class="topbar"><div class="name">daHusiM</div><div class="gear">⚙</div></div>
+      <div class="wlchip" id="wlchip"><span class="dot"></span>WL-режим: только белые списки</div>
+      <div class="banner" id="banner"></div>
+      <div class="center">
+        <div class="btnwrap">
+          <svg class="ring" viewBox="0 0 168 168">
+            <circle class="basecircle" cx="84" cy="84" r="78"></circle>
+            <circle class="arc" id="arc" cx="84" cy="84" r="78"></circle>
+          </svg>
+          <button class="power" id="power">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <g id="icon"></g>
+            </svg>
+          </button>
+        </div>
+        <div class="headline" id="headline">Отключено</div>
+        <div class="detail" id="detail"></div>
+        <div class="attempt" id="attempt"><span class="cnt"></span><span class="txt"></span></div>
+        <div class="trail" id="trail"></div>
+      </div>
+      <div class="bottom"><button>Поделиться логами</button><button>Полный интерфейс</button></div>
+    </div>
+  </div>
+
+  <div class="ctl">
+    <div class="mode">
+      <button class="btn active" id="modeNew">v2 — предложение</button>
+      <button class="btn" id="modeCur">сейчас — как в приложении</button>
+    </div>
+    <div class="scenRow" id="scenBtns"></div>
+    <div class="transport">
+      <button class="btn small" id="resetBtn" title="В начало">⏮</button>
+      <button class="btn" id="playBtn" title="Играть/пауза (пробел)">▶</button>
+      <button class="btn small" id="stepBtn" title="+1 с (→)">⏭</button>
+      <button class="btn small" id="sp1" data-s="1">1×</button>
+      <button class="btn small" id="sp2" data-s="2">2×</button>
+      <button class="btn small" id="sp4" data-s="4">4×</button>
+      <span class="clock" id="clock">0:00 / 0:15</span>
+    </div>
+    <div class="pbar"><div class="pfill" id="pfill"></div></div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+
+  <details open>
+    <summary>Легенда: тоны и что нового в v2</summary>
+    <div class="body">
+      <table class="legend">
+        <tr><th>Состояние</th><th>Сейчас</th><th>v2</th></tr>
+        <tr><td><span class="sw" style="background:#79747e"></span>Выключено</td><td>иконка/заголовок <span class="err">error-красные</span> (код: STOPPED→error), кольцо серое</td><td>нейтральный серый</td></tr>
+        <tr><td><span class="sw" style="background:#5c6bc0"></span>Подготовка</td><td>индиго, пульс-дуга = доля скана + полоска</td><td>индиго, <b>точная растущая дуга</b> (пульс — только для фаз без цифр), полоска убрана</td></tr>
+        <tr><td><span class="sw" style="background:#c58a00"></span>Подключение</td><td>янтарь, спин</td><td>как сейчас</td></tr>
+        <tr><td><span class="sw" style="background:#c58a00"></span>Переподключение (проблема)</td><td><span class="err">янтарь-спин — неотличимо от подключения</span></td><td>янтарь-<b>пульс</b> + иконка ↻ + «Попытка N из M»</td></tr>
+        <tr><td><span class="sw" style="background:#2e7d32"></span>Подключено</td><td>зелёное кольцо</td><td>как сейчас</td></tr>
+        <tr><td><span class="sw" style="background:#b3261e"></span>Провал</td><td><span class="err">нет — молча сбрасывается в «Отключено»</span></td><td><b>новый тон FAILED</b>: красное кольцо + ⚠ + причина + «нажмите, чтобы повторить»</td></tr>
+      </table>
+      <ul class="whatsnew">
+        <li><b>FAILED</b> — терминальное состояние провала (не «Отключено»): видно, что пошло не так и как повторить.</li>
+        <li><b>RECOVERING</b> — переключение/переподключение/перепроверка: пульс-дуга (не спин), иконка ↻, счётчик «Попытка N из M».</li>
+        <li><b>Степ-трейл</b> Сеть → Подписки → Сервер → VPN: текущий этап пульсирует, пройденные — зелёные, упавший — красный ✕.</li>
+        <li><b>Горизонтальная полоска скана убрана</b> — прогресс целиком в кольце (точная дуга), числа «Проверка URL 12/42…» остаются строкой деталей.</li>
+        <li><b>Idle — серый</b> (красный только у реального провала).</li>
+        <li class="warn">Сканирование/подключение/подключено — без изменений.</li>
+      </ul>
+      <p class="sub" style="text-align:left; margin:0">Горячие клавиши: <kbd>Пробел</kbd> — play/pause,
+        <kbd>→</kbd> — +1 с, <kbd>←</kbd> — −1 с.</p>
+    </div>
+  </details>
+
+<script>
+  "use strict";
+  // ---------- tones ----------
+  const TONES = {
+    idle:       { color: "#79747E", label: "Отключено" },
+    preparing:  { color: "#5C6BC0", label: "Подготовка…" },
+    connecting: { color: "#C58A00", label: "Подключение…" },
+    recovering: { color: "#C58A00", label: "Переподключение…" },
+    connected:  { color: "#2E7D32", label: "Подключено" },
+    failed:     { color: "#B3261E", label: "Не удалось подключиться" },
+  };
+  const ICONS = {
+    idle:       '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+    preparing:  '<path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/>',
+    connecting: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+    recovering: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+    connected:  '<path d="M20 6 9 17l-5-5"/>',
+    failed:     '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+  };
+  const POOL_LINE = "Пул: 12 живых · 3 вне игры";
+
+  // ---------- scenarios ----------
+  function scanTicks(t0, dur, total, label, extra) {
+    const n = Math.round(dur / 0.5), out = [];
+    for (let i = 1; i <= n; i++) {
+      const checked = Math.min(total, Math.round(total * i / n));
+      out.push(Object.assign({ t: t0 + 0.5 * i, s: "preparing", stage: "server",
+        act: `${label} ${checked}/${total}…`, scan: { checked, total } }, extra || {}));
+    }
+    return out;
+  }
+  const SCENARIOS = {
+    happy: { title: "Счастливый путь", dur: 15, events: [
+      { t: 0.0, s: "idle" },
+      { t: 0.6, s: "preparing", act: "Проверка сети…", stage: "network" },
+      { t: 1.8, s: "preparing", act: "Обновление подписок…", stage: "subs" },
+      { t: 2.8, s: "preparing", act: "Поиск лучшего сервера…", stage: "server" },
+      ...scanTicks(3.0, 5.5, 42, "Проверка URL"),
+      { t: 8.8, s: "connecting", act: "Подключение к серверу…", stage: "vpn" },
+      { t: 10.4, s: "connecting", act: "Запуск VPN…", stage: "vpn" },
+      { t: 12.0, s: "connected", act: POOL_LINE },
+    ]},
+    fallback: { title: "Фолбэк → ок", dur: 17, events: [
+      { t: 0.0, s: "idle" },
+      { t: 0.6, s: "preparing", act: "Проверка сети…", stage: "network" },
+      { t: 1.8, s: "preparing", act: "Обновление подписок…", stage: "subs" },
+      { t: 2.8, s: "preparing", act: "Поиск лучшего сервера…", stage: "server" },
+      ...scanTicks(3.0, 5.5, 42, "Проверка URL"),
+      { t: 8.8, s: "connecting", act: "Подключение к серверу…", stage: "vpn" },
+      { t: 10.0, s: "recovering", act: "Сервер недоступен, следующий…", stage: "vpn", attempt: { n: 1, total: 3 } },
+      { t: 12.2, s: "recovering", act: "Сервер ухудшился, переключение…", stage: "vpn", attempt: { n: 2, total: 3 } },
+      { t: 14.2, s: "connecting", act: "Запуск VPN…", stage: "vpn" },
+      { t: 15.5, s: "connected", act: POOL_LINE },
+    ]},
+    allDead: { title: "Все сервера мертвы (BS)", dur: 12, events: [
+      { t: 0.0, s: "idle" },
+      { t: 0.6, s: "preparing", act: "Проверка сети…", stage: "network" },
+      { t: 1.8, s: "preparing", act: "Обновление подписок…", stage: "subs" },
+      { t: 2.8, s: "preparing", act: "Поиск лучшего сервера…", stage: "server" },
+      ...scanTicks(3.0, 3.0, 8, "Проверка URL"),
+      { t: 6.2, s: "preparing", act: "Ожидание серверов…", stage: "server" },
+      { t: 9.0, s: "failed", fail: "server", banner: "allDead",
+        act: "Все сервера сейчас недоступны — daHusiM подождёт и попробует снова. Нажмите, чтобы повторить." },
+    ]},
+    noInternet: { title: "Нет интернета", dur: 5, events: [
+      { t: 0.0, s: "idle" },
+      { t: 0.6, s: "preparing", act: "Проверка сети…", stage: "network" },
+      { t: 2.5, s: "failed", fail: "network", banner: "noInternet",
+        act: "daHusiM не может подключиться — проверьте мобильные данные или Wi‑Fi. Нажмите, чтобы повторить." },
+    ]},
+    degraded: { title: "Деградация → recovery", dur: 13, events: [
+      { t: 0.0, s: "connected", act: POOL_LINE },
+      { t: 3.0, s: "recovering", act: "Соединение нестабильно, проверка…", stage: "vpn", attempt: { n: 1, total: 3 } },
+      { t: 5.6, s: "recovering", act: "Сервер ухудшился, переключение…", stage: "vpn", attempt: { n: 2, total: 3 } },
+      { t: 8.2, s: "connecting", act: "Запуск VPN…", stage: "vpn" },
+      { t: 10.2, s: "connected", act: POOL_LINE },
+    ]},
+    netChange: { title: "Смена сети", dur: 9, events: [
+      { t: 0.0, s: "connected", act: POOL_LINE },
+      { t: 2.0, s: "recovering", act: "Сеть изменилась, переподключение…", stage: "vpn" },
+      { t: 5.0, s: "connecting", act: "Запуск VPN…", stage: "vpn" },
+      { t: 7.0, s: "connected", act: POOL_LINE },
+    ]},
+  };
+  const SCEN_ORDER = ["happy", "fallback", "allDead", "noInternet", "degraded", "netChange"];
+  const BANNERS = {
+    noInternet: "Нет интернета — daHusiM не может подключиться",
+    allDead: "Нет рабочих серверов — daHusiM подождёт и попробует снова",
+  };
+
+  // ---------- state ----------
+  const CUR_MAP = { idle: "idle", preparing: "preparing", connecting: "connecting",
+    recovering: "connecting", connected: "connected", failed: "idle" }; // текущий код: recovering→connecting, failed→stopped(idle)
+  const CUR_IDLE_COLOR = "#B3261E"; // текущий код: StatusTone.STOPPED -> error
+  let scenKey = "happy", t = 0, playing = false, speed = 2, mode = "new";
+  const end = () => SCENARIOS[scenKey].dur;
+  const events = () => SCENARIOS[scenKey].events;
+  const cur = () => { const evs = events(); let c = evs[0]; for (const e of evs) if (e.t <= t) c = e; return c; };
+
+  // ---------- render ----------
+  const el = id => document.getElementById(id);
+  const R = 78, C = 2 * Math.PI * R;
+  const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; };
+  const fmt = s => `${Math.floor(s/60)}:${String(Math.ceil(s%60)).padStart(2,"0")}`;
+
+  function setArc(visible, anim, frac, color) {
+    const arc = el("arc");
+    arc.classList.toggle("visible", visible);
+    arc.classList.remove("spin", "pulse");
+    if (anim) arc.classList.add(anim);
+    arc.style.stroke = color;
+    arc.style.strokeDasharray = C;
+    arc.style.strokeDashoffset = C * (1 - (visible ? Math.max(frac, .02) : 1));
+  }
+
+  function renderTrail(ev, isNew) {
+    const box = el("trail");
+    if (!isNew) { box.innerHTML = ""; return; }
+    const steps = [["network", "Сеть"], ["subs", "Подписки"], ["server", "Сервер"], ["vpn", "VPN"]];
+    let idx = -1;
+    if (ev.fail) idx = steps.findIndex(s => s[0] === ev.fail);
+    else if (ev.stage) idx = steps.findIndex(s => s[0] === ev.stage);
+    else if (ev.s === "connected") idx = steps.length;
+    box.innerHTML = steps.map(([k, lb], i) => {
+      let cls = "pending";
+      if (ev.fail) cls = i < idx ? "done" : (i === idx ? "fail" : "pending");
+      else if (ev.s === "connected") cls = "done";
+      else if (ev.stage) cls = i < idx ? "done" : (i === idx ? "current" : "pending");
+      return `<div class="st ${cls}"><div class="dot"></div><div class="lb">${lb}</div></div>`;
+    }).join("");
+  }
+
+  function render() {
+    const ev = cur(), isNew = mode === "new";
+    const toneId = isNew ? ev.s : CUR_MAP[ev.s];
+    const tone = TONES[toneId];
+    const color = isNew ? tone.color : (toneId === "idle" ? CUR_IDLE_COLOR : tone.color);
+    const phone = el("phone");
+    phone.style.setProperty("--tone", color);
+    phone.style.setProperty("--tone-soft", hexA(color, .13));
+
+    // mode badge
+    const badge = el("modebadge");
+    badge.textContent = isNew ? "v2 — предложение" : "сейчас — как в приложении";
+    badge.classList.toggle("cur", !isNew);
+
+    // icon
+    const iconId = isNew ? ev.s : (CUR_MAP[ev.s] === "idle" ? "idle" : CUR_MAP[ev.s]);
+    el("icon").innerHTML = ICONS[iconId];
+
+    // power button
+    const power = el("power");
+    power.classList.toggle("toned", !(toneId === "idle"));
+    power.classList.toggle("breathe", toneId === "connected");
+    power.style.color = color;
+
+    // headline
+    let headline = isNew ? tone.label : TONES[toneId].label;
+    if (isNew && ev.s === "recovering") {
+      if (ev.act.startsWith("Сервер")) headline = "Переключение…";
+      else if (ev.act.startsWith("Сеть")) headline = "Переподключение…";
+      else if (ev.act.startsWith("Соединение")) headline = "Проверка соединения…";
+    }
+    el("headline").textContent = headline;
+    el("headline").style.color = isNew ? tone.color : color;
+
+    // detail
+    let detail = "";
+    if (ev.act) detail = ev.act;
+    else if (ev.s === "connected") detail = POOL_LINE;
+    if (toneId === "idle" && !isNew) detail = ""; // текущий код: провал очищает activity
+    el("detail").textContent = detail;
+
+    // attempt pill (v2 only)
+    const att = el("attempt");
+    if (isNew && ev.attempt) {
+      att.style.display = "flex";
+      att.querySelector(".txt").textContent = `Попытка ${ev.attempt.n} из ${ev.attempt.total}`;
+    } else att.style.display = "none";
+
+    // trail
+    renderTrail(ev, isNew);
+
+    // scan — прогресс целиком в кольце (полоска убрана); числа остаются в detail
+    const scan = ev.scan;
+
+    // ring
+    if (toneId === "connected") { setArc(true, null, 1, color); }
+    else if (toneId === "idle") { setArc(false, null, 1, color); }
+    else if (ev.s === "recovering" && isNew) { setArc(true, "pulse", .3, color); }
+    else if (ev.s === "failed" && isNew) { setArc(true, null, .75, color); }
+    else if (toneId === "connecting") { setArc(true, "spin", .25, color); }
+    else if (ev.s === "preparing") {
+      if (scan && isNew) { setArc(true, null, scan.checked / scan.total, color); } // v2: точная растущая дуга, без пульса
+      else { setArc(true, "pulse", Math.max((scan ? scan.checked / scan.total : 0) || .08, .05), color); }
+    }
+    else { setArc(true, "pulse", .08, color); }
+
+    // banner / wl chip
+    el("wlchip").style.display = ev.wl ? "flex" : "none";
+    const bn = el("banner");
+    if (ev.banner) { bn.style.display = "block"; bn.textContent = BANNERS[ev.banner]; }
+    else bn.style.display = "none";
+
+    // player chrome
+    el("clock").textContent = `${fmt(t)} / ${fmt(end())}`;
+    el("pfill").style.width = (t / end() * 100) + "%";
+    document.querySelectorAll("#timeline .tchip").forEach(ch => {
+      ch.classList.toggle("active", ch.dataset.key === String(ev.key));
+    });
+  }
+
+  // ---------- timeline chips ----------
+  function rebuildTimeline() {
+    const box = el("timeline"); box.innerHTML = "";
+    events().forEach((e, i) => {
+      if (e.scan) return; // не спамим чипами тики скана
+      e.key = i;
+      const short = e.act ? e.act.replace(/…$/, "").slice(0, 20) : TONES[e.s].label;
+      const ch = document.createElement("div");
+      ch.className = "tchip"; ch.dataset.key = String(i);
+      ch.innerHTML = `<span class="tm">${fmt(e.t)}</span>${short}`;
+      ch.addEventListener("click", () => { t = e.t; playing = false; el("playBtn").textContent = "▶"; render(); });
+      box.appendChild(ch);
+    });
+  }
+
+  // ---------- player ----------
+  function togglePlay() {
+    if (t >= end()) t = 0;
+    playing = !playing;
+    el("playBtn").textContent = playing ? "⏸" : "▶";
+  }
+  const tick = () => {
+    if (!playing) return;
+    t += 0.1 * speed;
+    if (t >= end()) { t = end(); playing = false; el("playBtn").textContent = "▶"; }
+    render();
+  };
+  setInterval(tick, 100);
+
+  function loadScenario(key, autoplay) {
+    scenKey = key; t = 0; playing = autoplay;
+    el("playBtn").textContent = playing ? "⏸" : "▶";
+    rebuildTimeline(); render();
+    document.querySelectorAll("#scenBtns .btn").forEach(b => b.classList.toggle("active", b.dataset.sc === key));
+  }
+
+  // ---------- build UI ----------
+  const scenRow = el("scenBtns");
+  SCEN_ORDER.forEach(k => {
+    const b = document.createElement("button");
+    b.className = "btn" + (k === "happy" ? " active" : "");
+    b.dataset.sc = k;
+    b.textContent = SCENARIOS[k].title;
+    b.addEventListener("click", () => loadScenario(k, true));
+    scenRow.appendChild(b);
+  });
+
+  el("playBtn").addEventListener("click", togglePlay);
+  el("resetBtn").addEventListener("click", () => { t = 0; playing = false; el("playBtn").textContent = "▶"; render(); });
+  el("stepBtn").addEventListener("click", () => { playing = false; el("playBtn").textContent = "▶"; t = Math.min(t + 1, end()); render(); });
+  [el("sp1"), el("sp2"), el("sp4")].forEach(b => b.addEventListener("click", () => {
+    speed = +b.dataset.s;
+    document.querySelectorAll(".transport [data-s]").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+  }));
+  el("sp2").classList.add("active");
+
+  const setMode = m => {
+    mode = m;
+    el("modeNew").classList.toggle("active", m === "new");
+    el("modeCur").classList.toggle("active", m === "cur");
+    render();
+  };
+  el("modeNew").addEventListener("click", () => setMode("new"));
+  el("modeCur").addEventListener("click", () => setMode("cur"));
+
+  el("power").addEventListener("click", () => {
+    const ev = cur();
+    if (ev.s === "connected") { t = 0; playing = false; el("playBtn").textContent = "▶"; render(); return; }
+    if (ev.s === "idle" || ev.s === "failed") { t = 0.6; playing = true; el("playBtn").textContent = "⏸"; render(); }
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+    else if (e.code === "ArrowRight") { playing = false; el("playBtn").textContent = "▶"; t = Math.min(t + 1, end()); render(); }
+    else if (e.code === "ArrowLeft") { playing = false; el("playBtn").textContent = "▶"; t = Math.max(t - 1, 0); render(); }
+  });
+
+  loadScenario("happy", false);
+  render();
+</script>
+</body>
+</html>

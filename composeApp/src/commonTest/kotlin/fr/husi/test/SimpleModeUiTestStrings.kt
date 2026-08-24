@@ -2,13 +2,20 @@ package fr.husi.test
 
 import fr.husi.resources.Res
 import fr.husi.resources.simple_mode_activity_verifying_last
+import fr.husi.resources.simple_mode_attempt_n_of_m
 import fr.husi.resources.simple_mode_connect
 import fr.husi.resources.simple_mode_connected
 import fr.husi.resources.simple_mode_connecting
 import fr.husi.resources.simple_mode_disconnect
+import fr.husi.resources.simple_mode_failed
 import fr.husi.resources.simple_mode_no_internet_banner_title
 import fr.husi.resources.simple_mode_preparing
+import fr.husi.resources.simple_mode_recovering_switching
 import fr.husi.resources.simple_mode_stopped
+import fr.husi.resources.simple_mode_trail_network
+import fr.husi.resources.simple_mode_trail_server
+import fr.husi.resources.simple_mode_trail_subs
+import fr.husi.resources.simple_mode_trail_vpn
 import fr.husi.resources.simple_mode_wl_banner_title
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.StringResource
@@ -41,5 +48,20 @@ object SimpleModeUiTestStrings {
 
     fun simpleModeActivityVerifyingLast(): String = get(Res.string.simple_mode_activity_verifying_last)
 
-    private fun get(resource: StringResource): String = runBlocking { getString(resource) }
+    fun simpleModeFailed(): String = get(Res.string.simple_mode_failed)
+
+    fun simpleModeRecoveringSwitching(): String = get(Res.string.simple_mode_recovering_switching)
+
+    fun simpleModeAttemptNOfM(n: Int, m: Int): String = get(Res.string.simple_mode_attempt_n_of_m, n, m)
+
+    fun simpleModeTrailNetwork(): String = get(Res.string.simple_mode_trail_network)
+
+    fun simpleModeTrailSubs(): String = get(Res.string.simple_mode_trail_subs)
+
+    fun simpleModeTrailServer(): String = get(Res.string.simple_mode_trail_server)
+
+    fun simpleModeTrailVpn(): String = get(Res.string.simple_mode_trail_vpn)
+
+    private fun get(resource: StringResource, vararg args: Any): String =
+        runBlocking { getString(resource, *args) }
 }
