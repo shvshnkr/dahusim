@@ -28,9 +28,10 @@ var (
 )
 
 const (
-	geositeRepo      = "v2fly/domain-list-community"
-	geoipRepo        = "Dreamacro/maxmind-geoip"
-	runetFreedomBase = "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite"
+	geositeRepo           = "v2fly/domain-list-community"
+	geoipRepo             = "Dreamacro/maxmind-geoip"
+	runetFreedomBase      = "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite"
+	runetFreedomGeoIPBase = "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip"
 
 	siteName = "dlc.dat"
 	ipName   = "Country.mmdb"
@@ -62,6 +63,11 @@ const (
 var runetFreedomGeositeFiles = []string{
 	"geosite-ru-blocked.srs",
 	"geosite-ru-blocked-all.srs",
+}
+
+var runetFreedomGeoipFiles = []string{
+	"geoip-ru-blocked.srs",
+	"geoip-ru-blocked-community.srs",
 }
 
 func init() {
@@ -186,6 +192,16 @@ func main() {
 				log.Fatal(err)
 			}
 			_, err = tWriter.Write(buf.Bytes())
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		for _, fileName := range runetFreedomGeoipFiles {
+			runetRuleSet, err := fetchAbsoluteURL(fmt.Sprintf("%s/%s", runetFreedomGeoIPBase, fileName))
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = writeTarEntry(tWriter, fileName, runetRuleSet)
 			if err != nil {
 				log.Fatal(err)
 			}
