@@ -40,7 +40,9 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
         DataStore.autoSelectProxyIdSetHash = 1L
         // Live configs are strictly local (ruleset_always_local): buildConfig without forTest/
         // forExport throws RuleSetUnavailableException when geo/<tag>.srs is missing. Seed the
-        // default tags so live-path tests only trip on the tags they manage themselves.
+        // full default rule-set catalog the app's live config can reference (builtin presets:
+        // RU split/direct, AI proxy split, CN bypass, Play Store helper, custom rule-sets) so
+        // live-path tests only trip on the tags they manage themselves.
         val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
         geoDir.mkdirs()
         for (tag in listOf(
@@ -49,6 +51,15 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
             "geoip-ru",
             "geosite-category-ru",
             "geosite-category-ads-all",
+            "geosite-google-play",
+            "geoip-ru-blocked",
+            "geoip-ru-blocked-community",
+            "geosite-ru-blocked",
+            "geosite-ru-blocked-all",
+            "geosite-openai",
+            "geosite-anthropic",
+            "geosite-google-gemini",
+            "geosite-xai",
             "custom-ip-set",
             "custom-domain-set",
         )) {
