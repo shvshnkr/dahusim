@@ -227,6 +227,7 @@ object DefaultNetworkMonitor {
         if (ifaceChanged && interfaceName != null) {
             lastInterfaceName = interfaceName
             lastInterfaceIndex = interfaceIndex
+            DataStore.networkUplinkIdentity = interfaceName
         }
         UnderlyingCarrierState.onCarrierRestored()
         underlyingCarrierLostWhileConnected = false
@@ -333,6 +334,7 @@ object DefaultNetworkMonitor {
                 lastInterfaceName = interfaceName
                 lastInterfaceIndex = interfaceIndex
                 lastConnectedState = DataStore.serviceState.connected
+                DataStore.networkUplinkIdentity = interfaceName.orEmpty()
                 listener.updateDefaultInterface(interfaceName, interfaceIndex)
                 break
             }
@@ -369,6 +371,7 @@ object DefaultNetworkMonitor {
             lastInterfaceName = null
             lastInterfaceIndex = -1
             lastConnectedState = DataStore.serviceState.connected
+            DataStore.networkUplinkIdentity = ""
             listener.updateDefaultInterface("", -1)
         }
     }

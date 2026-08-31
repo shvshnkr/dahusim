@@ -165,6 +165,7 @@ object AutoServerSelector {
     suspend fun prepareForConnect(
         networkHandoff: Boolean = false,
         owner: PrepareOwner = PrepareOwner.CONNECT,
+        compactWlSweep: Boolean = false,
     ): PrepareForConnectResult {
         val session = newPrepareSession(owner)
         val lockAttemptAt = System.currentTimeMillis()
@@ -200,7 +201,7 @@ object AutoServerSelector {
             probeUiActive = true
             try {
                 ensurePrepareCurrent(session)
-                val result = prepareForConnectLocked(session, networkHandoff)
+                val result = prepareForConnectLocked(session, networkHandoff, compactWlSweep)
                 ensurePrepareCurrent(session)
                 result
             } catch (e: CancellationException) {
@@ -221,6 +222,7 @@ object AutoServerSelector {
     private suspend fun prepareForConnectLocked(
         session: PrepareSession,
         networkHandoff: Boolean,
+        compactWlSweep: Boolean = false,
     ): PrepareForConnectResult {
         DataStore.simpleModePrepareVerifiedProfileId = 0L
         DirectProfileUrlProbe.clearMessengerSecondaryDelays()
@@ -275,7 +277,15 @@ object AutoServerSelector {
             simpleModeLog("SimpleMode", "H39 user_pool_fallback_managed")
         }
 
-        return runManagedPoolPrepare(session, networkHandoff, userTag, allProxies, groups, probeStatesAll)
+        return runManagedPoolPrepare(
+            session,
+            networkHandoff,
+            userTag,
+            allProxies,
+            groups,
+            probeStatesAll,
+            compactWlSweep,
+        )
     }
 
     private suspend fun runUserPoolPrepare(
@@ -286,6 +296,7 @@ object AutoServerSelector {
         allProxies: List<ProxyEntity>? = null,
         groups: List<ProxyGroup>? = null,
         probeStatesAll: Map<Long, ProxyProbeState>? = null,
+        compactWlSweep: Boolean = false,
     ): PrepareForConnectResult {
         val wlNetRequested = DataStore.simpleModeUseWhitelistBuiltinPoolOnly
         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = false
@@ -300,6 +311,7 @@ object AutoServerSelector {
             allProxies = allProxies,
             groups = groups,
             probeStatesAll = probeStatesAll,
+            compactWlSweep = compactWlSweep,
         )
     }
 
@@ -310,6 +322,7 @@ object AutoServerSelector {
         allProxies: List<ProxyEntity>,
         groups: List<ProxyGroup>,
         probeStatesAll: Map<Long, ProxyProbeState>,
+        compactWlSweep: Boolean = false,
     ): PrepareForConnectResult {
         val wlNetRequested = DataStore.simpleModeUseWhitelistBuiltinPoolOnly
         DataStore.simpleModeUseWhitelistBuiltinPoolOnly = false
@@ -330,6 +343,7 @@ object AutoServerSelector {
             allProxies = allProxies,
             groups = groups,
             probeStatesAll = probeStatesAll,
+            compactWlSweep = compactWlSweep,
         )
         if (initialMode == ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION &&
             (result is PrepareForConnectResult.NoProfiles || result is PrepareForConnectResult.AllProbesDead)
@@ -344,6 +358,7 @@ object AutoServerSelector {
                 allProxies = allProxies,
                 groups = groups,
                 probeStatesAll = probeStatesAll,
+                compactWlSweep = compactWlSweep,
             )
             if (result is PrepareForConnectResult.Success) {
                 DataStore.simpleModeAutoselectPoolMerged = true
@@ -389,6 +404,7 @@ object AutoServerSelector {
         allProxies: List<ProxyEntity>? = null,
         groups: List<ProxyGroup>? = null,
         probeStatesAll: Map<Long, ProxyProbeState>? = null,
+        compactWlSweep: Boolean = false,
     ): PrepareForConnectResult {
         val selectedBefore = DataStore.selectedProxy
 
@@ -436,11 +452,27 @@ object AutoServerSelector {
             networkHandoff = networkHandoff,
         )
         val effectiveHandoff = networkHandoff || subscriptionCompactReprobe
-        val forceFullProbeReason = AutoServerSelectorProbePolicy.forceFullProbeReason(
+        val rawForceFullProbeReason = AutoServerSelectorProbePolicy.forceFullProbeReason(
             proxies = proxies,
             whitelistBuiltinOnly = wlUrlProbes,
             networkHandoff = networkHandoff,
         )
+        val wlSweepCacheFingerprint = AutoServerSelectorProbePolicy.wlSweepCacheFingerprint(
+            uplinkIdentity = DataStore.networkUplinkIdentity,
+            poolHash = AutoServerSelectorProbePolicy.computeProxyIdSetHash(proxies),
+        )
+        val wlSweepCacheHit = wlUrlProbes && !effectiveHandoff &&
+            AutoServerSelectorProbePolicy.wlSweepCacheFresh(wlSweepCacheFingerprint)
+        // A fresh WL-sweep cache is stronger evidence than the interval/flag/stale-LKG reasons:
+        // repeat WL entries re-probe the cached alive set instead of forcing a full 4096 sweep.
+        var forceFullProbeReason = if (wlSweepCacheHit) null else rawForceFullProbeReason
+        if (wlSweepCacheHit) {
+            simpleModeLog(
+                "SimpleMode",
+                "H41 wl_sweep_cache_reuse fingerprint=$wlSweepCacheFingerprint " +
+                    "ageMs=${System.currentTimeMillis() - DataStore.wlSweepCacheAtMs}",
+            )
+        }
         if (subscriptionCompactReprobe) {
             simpleModeLog(
                 "SimpleMode",
@@ -453,7 +485,27 @@ object AutoServerSelector {
             emptyMap()
         }
         val beforeSelectable = ProbePoolEligibility.filterSelectable(proxiesAll, probeStatesAllResolved).size
-        val connectPool = ProbePoolEligibility.filterSelectable(proxies, probeStates)
+        var connectPool = ProbePoolEligibility.filterSelectable(proxies, probeStates)
+        val wlCompactPrepare = (session.owner == PrepareOwner.ADAPT || compactWlSweep) &&
+            wlUrlProbes && !effectiveHandoff
+        if (wlCompactPrepare) {
+            val compactIds = buildWlCompactPriorityIds(
+                connectPool = connectPool,
+                priorityFirstIds = priorityFirstIds,
+                subscriptionWhitelistIds = subscriptionWhitelistIds,
+            )
+            if (compactIds.isNotEmpty() && compactIds.size < connectPool.size) {
+                val compactPool = connectPool.filter { it.id in compactIds }
+                if (compactPool.isNotEmpty()) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H41 wl_adapt_compact_pool full=${connectPool.size} compact=${compactPool.size} " +
+                            "reason=${if (session.owner == PrepareOwner.ADAPT) "adapt" else "revival_poll"}",
+                    )
+                    connectPool = compactPool
+                }
+            }
+        }
         if (poolMode == ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION) {
             simpleModeLog(
                 "SimpleMode",
@@ -520,6 +572,26 @@ object AutoServerSelector {
                 "H22 prepare_all_in_jail total=${proxies.size} jailed=$jailedCount",
             )
             return PrepareForConnectResult.AllProbesDead
+        }
+
+        if (wlSweepCacheHit) {
+            val cacheReprobeResult = runWlSweepCacheReprobe(
+                connectPool = connectPool,
+                session = session,
+                poolMode = poolMode,
+                selectedBefore = selectedBefore,
+                fingerprint = wlSweepCacheFingerprint,
+            )
+            if (cacheReprobeResult != null) {
+                return cacheReprobeResult
+            }
+            // 0 url-ok from the cached alive set: fresh negative evidence beats the cache.
+            AutoServerSelectorProbePolicy.invalidateWlSweepCache()
+            forceFullProbeReason = rawForceFullProbeReason
+            simpleModeLog(
+                "SimpleMode",
+                "H41 wl_sweep_cache_miss pool=${connectPool.size} fullReason=${rawForceFullProbeReason ?: "-"}",
+            )
         }
 
         val availableCount = connectPool.count { it.status == ProxyEntity.STATUS_AVAILABLE }
@@ -954,6 +1026,13 @@ object AutoServerSelector {
                 AutoServerSelectorProbePolicy.recordFullProbe(proxies, wlUrlProbes)
             }
             lastPrepareUrlVerifiedIds = urlTestDelays.keys
+            if (wlUrlProbes && !effectiveHandoff) {
+                AutoServerSelectorProbePolicy.recordWlSweepCache(
+                    wlSweepCacheFingerprint,
+                    urlTestDelays.keys,
+                    quickProbePings.keys,
+                )
+            }
             simpleModeLog(
                 "SimpleMode",
                 "H4 early_connect best=$earlyBest urlOk=${urlTestDelays.size} " +
@@ -976,6 +1055,9 @@ object AutoServerSelector {
                 "H22 prepare_all_probes_dead count=${connectPool.size} testedTcp=$tcpTestedCount " +
                     "jailed=$jailedCount wlUrlProbe=$wlUrlProbes poolMode=${poolMode.name}",
             )
+            if (wlUrlProbes) {
+                AutoServerSelectorProbePolicy.invalidateWlSweepCache()
+            }
             simpleModeDebugEvent(
                 runId = "run1",
                 hypothesisId = "H22",
@@ -1243,6 +1325,9 @@ object AutoServerSelector {
                 "H22 prepare_wl_no_url_ok best=$finalBest tcpAlive=$quickProbeAlive pool=${connectPool.size} " +
                     "wlUrlProbe=$wlUrlProbes poolMode=${poolMode.name}",
             )
+            if (wlUrlProbes) {
+                AutoServerSelectorProbePolicy.invalidateWlSweepCache()
+            }
             return PrepareForConnectResult.AllProbesDead
         }
         val openPrepareDecision = AutoServerSelectorProbePolicy.decideOpenPrepare(
@@ -1278,6 +1363,13 @@ object AutoServerSelector {
             AutoServerSelectorProbePolicy.OpenPrepareDecision.OK -> Unit
         }
         lastPrepareUrlVerifiedIds = urlTestDelays.keys
+        if (wlUrlProbes && !effectiveHandoff) {
+            AutoServerSelectorProbePolicy.recordWlSweepCache(
+                wlSweepCacheFingerprint,
+                urlTestDelays.keys,
+                quickProbePings.keys,
+            )
+        }
         val resolvedBest = resolveBestAgainstDb(finalBest, rankedFinal)
         if (resolvedBest != finalBest) {
             simpleModeLog(
@@ -1346,6 +1438,93 @@ object AutoServerSelector {
             .take(12)
             .forEach { ids += it }
         return ids
+    }
+
+    /**
+     * WLZ-S4: priority compact set for WL adapt / revival-poll prepares — cached sweep ids
+     * (fresh) + WL-tagged + LKG + warm-reserve live + fallback queue head. Restricts the
+     * 4096-proxy MERGED sweep to candidates most likely to be alive, instead of re-probing
+     * everything on every session_unhealthy / revival poll.
+     */
+    private fun buildWlCompactPriorityIds(
+        connectPool: List<ProxyEntity>,
+        priorityFirstIds: Set<Long>,
+        subscriptionWhitelistIds: Set<Long>,
+    ): Set<Long> {
+        val poolIds = connectPool.mapTo(HashSet()) { it.id }
+        val ids = LinkedHashSet<Long>()
+        val (cachedUrlVerified, cachedTcpAlive) = AutoServerSelectorProbePolicy.cachedWlSweepIds()
+        ids += cachedUrlVerified
+        ids += cachedTcpAlive
+        ids += priorityFirstIds
+        ids += subscriptionWhitelistIds
+        val lkg = DataStore.autoSelectLastKnownGood
+        if (lkg > 0L) ids += lkg
+        WarmReserveSessionCache.liveVerifiedIdsSnapshot().forEach { ids += it }
+        DataStore.autoSelectFallbackQueue
+            .split(",")
+            .mapNotNull { it.trim().toLongOrNull() }
+            .take(12)
+            .forEach { ids += it }
+        ids.retainAll(poolIds)
+        return ids
+    }
+
+    /**
+     * WLZ-S4: cache-backed WL re-entry — URL-probe only the cached alive set (url-verified
+     * first). A hit re-confirms the connect instantly; a full 0-ok result invalidates the
+     * cache (fresh negative evidence) and falls through to the normal sweep.
+     */
+    private suspend fun runWlSweepCacheReprobe(
+        connectPool: List<ProxyEntity>,
+        session: PrepareSession,
+        poolMode: ConnectPoolPolicy.PoolBuildMode,
+        selectedBefore: Long,
+        fingerprint: String,
+    ): PrepareForConnectResult? {
+        val (cachedUrlVerified, cachedTcpAlive) = AutoServerSelectorProbePolicy.cachedWlSweepIds()
+        val candidates = connectPool
+            .filter { it.id in cachedUrlVerified || it.id in cachedTcpAlive }
+            .sortedWith(
+                compareBy<ProxyEntity> { if (it.id in cachedUrlVerified) 0 else 1 }
+                    .thenBy { it.id },
+            )
+        if (candidates.isEmpty()) return null
+        setSimpleModeActivity("Testing URL 0/${candidates.size}")
+        simpleModeLog(
+            "SimpleMode",
+            "H17 urltest_started candidates=${candidates.size} mode=wl_sweep_cache",
+        )
+        val delays = urlTestTopCandidates(
+            candidates,
+            probeConcurrency(true),
+            session,
+            whitelistBuiltinOnly = true,
+            poolMode = poolMode,
+            forcePerProfile = true,
+        ) { done, total ->
+            setSimpleModeActivity("Testing URL $done/$total")
+            Probe2kProgress.publishScan(done, total)
+        }
+        if (delays.isEmpty()) return null
+        AutoServerSelectorProbePolicy.touchWlSweepCache()
+        val best = delays.minBy { it.value }.key
+        val urlOkRanked = delays.entries.sortedBy { it.value }.map { it.key }
+        val tcpOnlyRanked = cachedTcpAlive.filter { it !in delays }.sorted()
+        DataStore.autoSelectFallbackQueue = (urlOkRanked + tcpOnlyRanked).joinToString(",")
+        DataStore.autoSelectFallbackIndex = 0
+        sessionFallbackSteps.set(0)
+        if (selectedBefore != best) {
+            DataStore.selectedProxy = best
+        }
+        lastPrepareUrlVerifiedIds = delays.keys
+        simpleModeLog(
+            "SimpleMode",
+            "H41 wl_sweep_cache_connect best=$best urlOk=${delays.size} tcpAlive=${tcpOnlyRanked.size} " +
+                "fingerprint=$fingerprint",
+        )
+        ProxyProbeStateStore.logPoolSnapshot("prepare")
+        return PrepareForConnectResult.Success(best)
     }
 
     fun tryMoveToFallback(currentId: Long): Long? {

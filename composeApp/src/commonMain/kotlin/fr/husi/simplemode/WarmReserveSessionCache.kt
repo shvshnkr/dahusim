@@ -42,4 +42,6 @@ object WarmReserveSessionCache {
     fun liveCount(): Int = liveVerifiedIds.size
 
     fun warmFailedIdsSnapshot(): Set<Long> = warmFailedIds.toSet()
+
+    internal fun liveVerifiedIdsSnapshot(): Set<Long> = liveVerifiedIds.toSet()
 }

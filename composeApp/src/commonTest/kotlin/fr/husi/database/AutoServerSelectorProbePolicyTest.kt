@@ -16,6 +16,8 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
         DataStore.autoSelectProxyIdSetHash = 0L
         DataStore.autoSelectLastProbeWhitelistOnly = false
         DataStore.autoSelectLastHandoffPreserveOkAt = 0L
+        DataStore.networkUplinkIdentity = ""
+        AutoServerSelectorProbePolicy.invalidateWlSweepCache()
         AutoServerSelectorProbePolicy.TelegramTargetCircuit.resetForTest()
     }
 
@@ -435,6 +437,79 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
             ),
         ).map { it.id }
         assertEquals(listOf(5L, 3L, 1L, 2L, 4L, 6L), order)
+    }
+
+    @Test
+    fun wlSweepCacheFreshWithinTtlAndMatchingFingerprint() {
+        DataStore.wlSweepCacheAtMs = 0L
+        DataStore.wlSweepCacheFingerprint = ""
+        AutoServerSelectorProbePolicy.recordWlSweepCache(
+            fingerprint = "wl|ccmni1|123",
+            urlVerifiedIds = listOf(11L, 22L),
+            tcpAliveIds = listOf(33L),
+        )
+        val fp = AutoServerSelectorProbePolicy.wlSweepCacheFingerprint("ccmni1", 123L)
+        assertTrue(AutoServerSelectorProbePolicy.wlSweepCacheFresh(fp))
+        assertEquals(11L to 33L, AutoServerSelectorProbePolicy.cachedWlSweepIds().let { it.first.first() to it.second.first() })
+    }
+
+    @Test
+    fun wlSweepCacheFreshRejectsDifferentUplinkIdentity() {
+        AutoServerSelectorProbePolicy.recordWlSweepCache(
+            fingerprint = "wl|ccmni1|123",
+            urlVerifiedIds = listOf(11L),
+            tcpAliveIds = emptyList(),
+        )
+        assertFalse(
+            AutoServerSelectorProbePolicy.wlSweepCacheFresh(
+                AutoServerSelectorProbePolicy.wlSweepCacheFingerprint("wlan0", 123L),
+            ),
+        )
+    }
+
+    @Test
+    fun wlSweepCacheFreshExpiresAfterTtl() {
+        AutoServerSelectorProbePolicy.recordWlSweepCache(
+            fingerprint = "wl|ccmni1|123",
+            urlVerifiedIds = listOf(11L),
+            tcpAliveIds = emptyList(),
+        )
+        val fp = AutoServerSelectorProbePolicy.wlSweepCacheFingerprint("ccmni1", 123L)
+        val past = System.currentTimeMillis() - 11L * 60 * 1000
+        assertTrue(DataStore.wlSweepCacheAtMs > past)
+        DataStore.wlSweepCacheAtMs = past
+        assertFalse(AutoServerSelectorProbePolicy.wlSweepCacheFresh(fp))
+    }
+
+    @Test
+    fun wlSweepCacheFreshRejectsEmptyUrlVerifiedSet() {
+        AutoServerSelectorProbePolicy.recordWlSweepCache(
+            fingerprint = "wl|ccmni1|123",
+            urlVerifiedIds = emptyList(),
+            tcpAliveIds = emptyList(),
+        )
+        // record is a no-op without url-verified ids → no cache.
+        assertFalse(
+            AutoServerSelectorProbePolicy.wlSweepCacheFresh(
+                AutoServerSelectorProbePolicy.wlSweepCacheFingerprint("ccmni1", 123L),
+            ),
+        )
+    }
+
+    @Test
+    fun wlSweepCacheTouchKeepsWindowAliveAndInvalidateClears() {
+        AutoServerSelectorProbePolicy.recordWlSweepCache(
+            fingerprint = "wl|ccmni1|123",
+            urlVerifiedIds = listOf(11L),
+            tcpAliveIds = listOf(22L),
+        )
+        val fp = AutoServerSelectorProbePolicy.wlSweepCacheFingerprint("ccmni1", 123L)
+        AutoServerSelectorProbePolicy.touchWlSweepCache()
+        assertTrue(AutoServerSelectorProbePolicy.wlSweepCacheFresh(fp))
+        AutoServerSelectorProbePolicy.invalidateWlSweepCache()
+        assertFalse(AutoServerSelectorProbePolicy.wlSweepCacheFresh(fp))
+        assertEquals(emptySet<Long>(), AutoServerSelectorProbePolicy.cachedWlSweepIds().first)
+        assertEquals(emptySet<Long>(), AutoServerSelectorProbePolicy.cachedWlSweepIds().second)
     }
 
     private fun plainProxy(id: Long) = ProxyEntity().apply {

@@ -142,7 +142,7 @@ object SimpleModeConnectCoordinator {
         watchMs: Long = WL_SERVER_REVIVAL_WATCH_MS,
         pollIntervalMs: Long = WL_SERVER_REVIVAL_POLL_INTERVAL_MS,
         prepare: suspend () -> PrepareForConnectResult = {
-            prepareWithRefresh(refreshBudgetMs, whitelistOnly)
+            prepareWithRefresh(refreshBudgetMs, whitelistOnly, compactWlSweep = true)
         },
     ): PrepareForConnectResult {
         val deadline = System.currentTimeMillis() + watchMs
@@ -173,6 +173,7 @@ object SimpleModeConnectCoordinator {
     private suspend fun prepareWithRefresh(
         refreshBudgetMs: Long,
         whitelistOnly: Boolean,
+        compactWlSweep: Boolean = false,
     ): PrepareForConnectResult = onDefaultDispatcher {
         coroutineScope {
             val refreshJob = async {
@@ -200,7 +201,10 @@ object SimpleModeConnectCoordinator {
             }
             try {
                 DataStore.simpleModeActivity = "Finding best server…"
-                AutoServerSelector.prepareForConnect(owner = PrepareOwner.CONNECT)
+                AutoServerSelector.prepareForConnect(
+                    owner = PrepareOwner.CONNECT,
+                    compactWlSweep = compactWlSweep,
+                )
             } finally {
                 refreshJob.cancel()
             }

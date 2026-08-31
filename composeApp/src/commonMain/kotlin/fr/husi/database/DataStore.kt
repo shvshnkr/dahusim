@@ -305,6 +305,13 @@ object DataStore {
     var autoSelectLastHandoffPreserveOkAt by configurationStore.long(Key.AUTO_SELECT_LAST_HANDOFF_PRESERVE_OK_AT) { 0L }
     var autoSelectLastDegradedProfileId by configurationStore.long(Key.AUTO_SELECT_LAST_DEGRADED_PROFILE_ID) { 0L }
     var autoSelectLastDegradedAt by configurationStore.long(Key.AUTO_SELECT_LAST_DEGRADED_AT) { 0L }
+
+    /** Current uplink interface name (ccmni/rmnet/wlan…), written by DefaultNetworkMonitor; part of the WL-sweep cache fingerprint. */
+    var networkUplinkIdentity by configurationStore.string(Key.NETWORK_UPLINK_IDENTITY) { "" }
+    var wlSweepCacheFingerprint by configurationStore.string(Key.WL_SWEEP_CACHE_FINGERPRINT) { "" }
+    var wlSweepCacheAtMs by configurationStore.long(Key.WL_SWEEP_CACHE_AT_MS) { 0L }
+    var wlSweepCacheUrlVerifiedIds by configurationStore.stringSet(Key.WL_SWEEP_CACHE_URL_VERIFIED_IDS)
+    var wlSweepCacheTcpAliveIds by configurationStore.stringSet(Key.WL_SWEEP_CACHE_TCP_ALIVE_IDS)
     var probe2kPersistenceEnabled by configurationStore.boolean(Key.PROBE_2K_PERSISTENCE_ENABLED) { true }
     var probe2kWarmRankingEnabled by configurationStore.boolean(Key.PROBE_2K_WARM_RANKING_ENABLED) { true }
     var probe2kBackgroundSchedulerEnabled by configurationStore.boolean(Key.PROBE_2K_BACKGROUND_SCHEDULER_ENABLED) { true }

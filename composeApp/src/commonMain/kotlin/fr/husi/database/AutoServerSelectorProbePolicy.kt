@@ -16,6 +16,8 @@ internal object AutoServerSelectorProbePolicy {
     private const val TELEGRAM_TARGET_MIN_SAMPLES = 8
     private const val TELEGRAM_TARGET_FAIL_RATIO_THRESHOLD = 0.85
     private const val TELEGRAM_TARGET_COOLDOWN_MS = 90_000L
+    private const val WL_SWEEP_CACHE_TTL_MS = 10L * 60 * 1000
+    private const val WL_SWEEP_CACHE_MIN_FRESH_ID_COUNT = 1
 
     enum class OpenPrepareDecision {
         HARD_DEAD,
@@ -228,6 +230,63 @@ internal object AutoServerSelectorProbePolicy {
         val now = System.currentTimeMillis()
         DataStore.autoSelectLastKnownGoodUrlAt = now
         DataStore.autoSelectLastKnownGoodUrlProfileId = profileId
+    }
+
+    /**
+     * WLZ-S4: short-TTL cache of the last full WL sweep keyed by network fingerprint
+     * (WL mode + uplink identity + proxy-set hash). A fresh cache lets a repeated WL entry
+     * (open→WL flip, quick reconnect) run a compact cached-ids reprobe instead of a full
+     * 4096-proxy sweep; a 0-url-ok window (fresh negative evidence) invalidates it.
+     */
+    fun wlSweepCacheFingerprint(
+        uplinkIdentity: String,
+        poolHash: Long,
+    ): String = "wl|$uplinkIdentity|$poolHash"
+
+    fun cachedWlSweepIds(): Pair<Set<Long>, Set<Long>> {
+        val urlVerified = DataStore.wlSweepCacheUrlVerifiedIds.mapNotNull { it.toLongOrNull() }.toSet()
+        val tcpAlive = DataStore.wlSweepCacheTcpAliveIds.mapNotNull { it.toLongOrNull() }.toSet()
+        return urlVerified to tcpAlive
+    }
+
+    fun wlSweepCacheFresh(
+        fingerprint: String,
+        nowMs: Long = System.currentTimeMillis(),
+    ): Boolean {
+        if (fingerprint.isBlank()) return false
+        if (DataStore.wlSweepCacheFingerprint != fingerprint) return false
+        val atMs = DataStore.wlSweepCacheAtMs
+        if (atMs <= 0L) return false
+        if (nowMs - atMs >= WL_SWEEP_CACHE_TTL_MS) return false
+        val (urlVerified, tcpAlive) = cachedWlSweepIds()
+        return urlVerified.size >= WL_SWEEP_CACHE_MIN_FRESH_ID_COUNT ||
+            tcpAlive.size >= WL_SWEEP_CACHE_MIN_FRESH_ID_COUNT
+    }
+
+    fun recordWlSweepCache(
+        fingerprint: String,
+        urlVerifiedIds: Collection<Long>,
+        tcpAliveIds: Collection<Long>,
+    ) {
+        if (fingerprint.isBlank() || urlVerifiedIds.isEmpty()) return
+        DataStore.wlSweepCacheFingerprint = fingerprint
+        DataStore.wlSweepCacheAtMs = System.currentTimeMillis()
+        DataStore.wlSweepCacheUrlVerifiedIds = urlVerifiedIds.map { it.toString() }.toSet()
+        DataStore.wlSweepCacheTcpAliveIds = tcpAliveIds.map { it.toString() }.toSet()
+    }
+
+    /** A cache-backed prepare re-confirmed at least one cached id: keep the window alive. */
+    fun touchWlSweepCache(nowMs: Long = System.currentTimeMillis()) {
+        if (DataStore.wlSweepCacheAtMs > 0L) {
+            DataStore.wlSweepCacheAtMs = nowMs
+        }
+    }
+
+    fun invalidateWlSweepCache() {
+        DataStore.wlSweepCacheFingerprint = ""
+        DataStore.wlSweepCacheAtMs = 0L
+        DataStore.wlSweepCacheUrlVerifiedIds = emptySet()
+        DataStore.wlSweepCacheTcpAliveIds = emptySet()
     }
 
     internal object TelegramTargetCircuit {
