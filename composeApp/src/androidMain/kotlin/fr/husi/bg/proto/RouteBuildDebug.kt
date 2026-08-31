@@ -6,6 +6,7 @@ import fr.husi.fmt.ConfigBuildResult
 import fr.husi.routing.WhitelistRuRouting
 import fr.husi.utils.simpleModeDebugEvent
 import fr.husi.utils.simpleModeLog
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -84,26 +85,11 @@ internal fun emitRouteBuildDebug(profile: ProxyEntity, result: ConfigBuildResult
 
         val hasRuRs = ruleSummaries.contains("geosite-category-ru") ||
             ruleSummaries.contains("geosite-ru")
-        val ruGeoViaProxy = WhitelistRuRouting.shouldRouteRuGeoViaProxy(profile)
-        val ruGeoRuleIdx = run {
-            if (rules == null) return@run -1
-            for (i in 0 until rules.length()) {
-                val r = rules.optJSONObject(i) ?: continue
-                val rs = r.optJSONArray("rule_set") ?: continue
-                for (j in 0 until rs.length()) {
-                    val tag = rs.optString(j)
-                    if (tag == "geosite-category-ru" || tag == "geosite-ru") {
-                        return@run i
-                    }
-                }
-            }
-            -1
-        }
-        val ruGeoRuleOut = if (ruGeoRuleIdx >= 0 && rules != null) {
-            rules.optJSONObject(ruGeoRuleIdx)?.optString("outbound", "") ?: ""
-        } else {
-            ""
-        }
+        val ruGeoViaProxy = WhitelistRuRouting.shouldRouteRuGeoViaProxy()
+        val ruGeoRuleIdx = firstRouteRuleIndexWithRuleSet(rules, "geosite-category-ru", "geosite-ru")
+        val ruGeoRuleOut = routeRuleOutbound(rules, ruGeoRuleIdx)
+        val ruGeoIpRuleIdx = firstRouteRuleIndexWithRuleSet(rules, "geoip-ru")
+        val ruGeoIpRuleOut = routeRuleOutbound(rules, ruGeoIpRuleIdx)
 
         val perAppCatchAllRuleIndex = run {
             if (rules == null) return@run -1
@@ -132,6 +118,8 @@ internal fun emitRouteBuildDebug(profile: ProxyEntity, result: ConfigBuildResult
                 "wlNet" to DataStore.activeWhitelistRestrictedNetwork.toString(),
                 "firstRuGeoRuleIndex" to ruGeoRuleIdx.toString(),
                 "ruGeoRuleOutbound" to ruGeoRuleOut,
+                "firstRuGeoIpRuleIndex" to ruGeoIpRuleIdx.toString(),
+                "ruGeoIpRuleOutbound" to ruGeoIpRuleOut,
                 "perAppCatchAllRuleIndex" to perAppCatchAllRuleIndex.toString(),
                 "ruleSetTop" to rsTopSummary.toString().take(1200),
             ),
@@ -153,9 +141,10 @@ internal fun emitRouteBuildDebug(profile: ProxyEntity, result: ConfigBuildResult
         simpleModeLog(
             "RouteDbg",
             "final=$finalOut ruGeoViaProxy=$ruGeoViaProxy ruGeoOut=$ruGeoRuleOut " +
-                "wlNet=${DataStore.activeWhitelistRestrictedNetwork} exitRu=${DataStore.vpnExitIsRussia} " +
+                "ruGeoIpOut=$ruGeoIpRuleOut" +
+                " wlNet=${DataStore.activeWhitelistRestrictedNetwork} exitRu=${DataStore.vpnExitIsRussia} " +
                 "exitProbePid=${DataStore.vpnExitProbeProfileId} " +
-                "firstRuGeoIdx=$ruGeoRuleIdx hasRuRs=$hasRuRs " +
+                "firstRuGeoIdx=$ruGeoRuleIdx firstRuGeoIpIdx=$ruGeoIpRuleIdx hasRuRs=$hasRuRs " +
                 "pkgCatchIdx=$perAppCatchAllRuleIndex tunInc=$includePkg proxyApps=${DataStore.proxyApps} " +
                 "rulesHead=${ruleSummaries.take(900)}",
         )
@@ -170,4 +159,22 @@ internal fun emitRouteBuildDebug(profile: ProxyEntity, result: ConfigBuildResult
         simpleModeLog("RouteDbg", "parse_failed err=${ex.message ?: ex.javaClass.simpleName}")
     }
     // #endregion
+}
+
+private fun firstRouteRuleIndexWithRuleSet(rules: JSONArray?, vararg tags: String): Int {
+    if (rules == null) return -1
+    for (i in 0 until rules.length()) {
+        val r = rules.optJSONObject(i) ?: continue
+        val rs = r.optJSONArray("rule_set") ?: continue
+        for (j in 0 until rs.length()) {
+            val tag = rs.optString(j)
+            if (tags.any { it == tag }) return i
+        }
+    }
+    return -1
+}
+
+private fun routeRuleOutbound(rules: JSONArray?, idx: Int): String {
+    if (idx < 0 || rules == null) return ""
+    return rules.optJSONObject(idx)?.optString("outbound", "") ?: ""
 }

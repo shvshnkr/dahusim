@@ -59,7 +59,12 @@ func extractGeo(name, targetDir string) error {
 	localVersion, err := os.ReadFile(versionPath)
 	if err == nil {
 		if bytes.Compare(assetsVersion, localVersion) <= 0 {
-			return nil
+			// Version marker alone is not proof of data: a partial clean (or cache clear)
+			// may have removed the unpacked .srs while keeping geoip/geosite.version.txt.
+			// Re-extract instead of trusting the marker so the seed self-heals.
+			if hasExtractedRuleSets(targetDir, name) {
+				return nil
+			}
 		}
 	}
 
@@ -86,6 +91,15 @@ func extractGeo(name, targetDir string) error {
 	}
 
 	return nil
+}
+
+// hasExtractedRuleSets reports whether any unpacked geo-*.srs exists for name.
+func hasExtractedRuleSets(targetDir, name string) bool {
+	matches, err := filepath.Glob(filepath.Join(targetDir, name+"-*.srs"))
+	if err != nil {
+		return false
+	}
+	return len(matches) > 0
 }
 
 // readAssetsVersion read the version from file in assets.

@@ -6,6 +6,7 @@ import fr.husi.database.ConnectPoolPolicy
 import fr.husi.database.DataStore
 import fr.husi.database.ProfileManager
 import fr.husi.database.RuleEntity
+import fr.husi.fmt.ConfigBuildResult
 import fr.husi.fmt.RuleSetUnavailableException
 import fr.husi.fmt.buildConfig
 import fr.husi.fmt.trojan.TrojanBean
@@ -22,6 +23,10 @@ import fr.husi.simplemode.SimpleModeTunnelSoftRecoveryPolicy
 import fr.husi.simplemode.probeSimpleModeNetwork
 import fr.husi.test.HusiKoinTest
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -323,6 +328,54 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
     }
 
     @Test
+    fun wlGeoipRouteMatrix() = runBlocking {
+        // 772: on WL the geoip-ru (IP) rule goes through the tunnel (provider whitelist drops RU
+        // IPs that are not listed — RU media dead-ends direct); geosite-category-ru (domains)
+        // stays direct; on open networks geoip-ru stays direct. Exit-probe flags are not a gate.
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = ProxyEntity(groupId = group.id, userOrder = 1).apply {
+            type = ProxyEntity.TYPE_TROJAN
+            trojanBean = TrojanBean().apply {
+                name = "matrix-ru"
+                serverAddress = "example.com"
+                serverPort = 443
+            }.applyDefaultValues()
+        }
+        proxy.id = SagerDatabase.proxyDao.addProxy(proxy)
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU bypass ip",
+                ip = "set+dns:geoip-ru",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU bypass domains",
+                domains = "set+dns:geosite-category-ru",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        DataStore.vpnExitIsRussia = null
+        DataStore.vpnExitProbeProfileId = 0L
+        DataStore.activeWhitelistRestrictedNetwork = true
+        buildConfig(proxy).let { result ->
+            assertEquals(result.mainTag, routeRuleSetOutbound(result, "geoip-ru"), "wl_geoip_proxy")
+            assertEquals("direct", routeRuleSetOutbound(result, "geosite-category-ru"), "wl_geosite_direct")
+        }
+
+        DataStore.activeWhitelistRestrictedNetwork = false
+        buildConfig(proxy).let { result ->
+            assertEquals("direct", routeRuleSetOutbound(result, "geoip-ru"), "open_geoip_direct")
+            assertEquals("direct", routeRuleSetOutbound(result, "geosite-category-ru"), "open_geosite_direct")
+        }
+    }
+
+    @Test
     fun wlZombieDialTimeoutPhaseMatrix() {
         // Log 29.08: WL LTE, server unreachable from the uplink (field zombie session).
         val err = "dial ccmni2 (16): dial tcp 45.154.96.35:443: i/o timeout"
@@ -383,6 +436,19 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
             ),
             "WL post_connect bootstrap keeps confirm-tier escalation",
         )
+    }
+
+    private fun routeRuleSetOutbound(result: ConfigBuildResult, tag: String): String? {
+        val routes = Json.parseToJsonElement(result.config).jsonObject["route"]
+            ?.jsonObject?.get("rules")?.jsonArray ?: return null
+        for (element in routes) {
+            val rule = element.jsonObject
+            val rs = rule["rule_set"]?.jsonArray ?: continue
+            if (rs.any { it.jsonPrimitive.content == tag }) {
+                return rule["outbound"]?.jsonPrimitive?.content
+            }
+        }
+        return null
     }
 
     private fun assertOpenHealthRoute() {

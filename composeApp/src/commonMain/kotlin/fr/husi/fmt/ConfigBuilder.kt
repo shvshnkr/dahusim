@@ -11,7 +11,7 @@ import fr.husi.database.ProxyEntity
 import fr.husi.database.ProxyEntity.Companion.TYPE_CONFIG
 import fr.husi.database.RuleEntity
 import fr.husi.routing.WhitelistRuRouting
-import fr.husi.routing.isRuGeoDirectBypassRule
+import fr.husi.routing.isRuGeoIpDirectBypassRule
 import fr.husi.routing.hasRuGeoDirectBypass
 import fr.husi.database.SagerDatabase
 import fr.husi.fmt.ConfigBuildResult.IndexEntity
@@ -831,7 +831,7 @@ fun buildConfig(
             tagMap[key] = buildChain(key, p)
         }
 
-        val routeRuGeoViaProxy = !forTest && WhitelistRuRouting.shouldRouteRuGeoViaProxy(proxy)
+        val routeRuGeoViaProxy = !forTest && WhitelistRuRouting.shouldRouteRuGeoViaProxy()
         // Empty enabled-rules: never insert catch-all at index 0 — it jumps ahead of chain /
         // mapping route rules built above and breaks post-connect checks; append after chain like RU defer.
         val deferPerAppCatchAllAfterBypass =
@@ -1028,8 +1028,10 @@ fun buildConfig(
 
                         when (val outID = rule.outbound) {
                             RuleEntity.OUTBOUND_DIRECT -> {
-                                val ruViaProxy = routeRuGeoViaProxy && rule.isRuGeoDirectBypassRule()
-                                if (ruViaProxy) {
+                                // WL: geoip-ru IPs are dropped by the uplink whitelist — route them
+                                // through the tunnel (RU media); geosite-category-ru domains stay direct.
+                                val ruGeoIpViaProxy = routeRuGeoViaProxy && rule.isRuGeoIpDirectBypassRule()
+                                if (ruGeoIpViaProxy) {
                                     if (dnsRuleList == null) {
                                         dnsRuleList = buildDnsRules(
                                             action = SingBoxOptions.ACTION_ROUTE,

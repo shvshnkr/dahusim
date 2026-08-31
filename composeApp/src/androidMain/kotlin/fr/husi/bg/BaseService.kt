@@ -1031,22 +1031,13 @@ class BaseService {
                     }
 
                     if (reachability.whitelistOnly && outboundTag.isNotBlank()) {
-                        val routingBefore = fr.husi.routing.WhitelistRuRouting
-                            .shouldRouteRuGeoViaProxy(profile)
-                        val probed = fr.husi.routing.VpnExitProbe.probeAndStore(
+                        // Informational only (H27 log / UI): WL ru-geo routing is decided per
+                        // network in ConfigBuilder — exit country is not a gate, no reload here.
+                        fr.husi.routing.VpnExitProbe.probeAndStore(
                             profile.id,
                             outboundTag,
                             postConnectTimeoutMs,
                         )
-                        if (probed != null) {
-                            val routingAfter = fr.husi.routing.WhitelistRuRouting
-                                .shouldRouteRuGeoViaProxy(profile)
-                            if (routingBefore != routingAfter) {
-                                WhitelistNetworkRoutingState.requestReloadIfConnected(
-                                    "exit_country_ru_routing",
-                                )
-                            }
-                        }
                     }
 
                     lateInit()

@@ -657,7 +657,7 @@ class ConfigBuilderTest : HusiKoinTest() {
     }
 
     @Test
-    fun `buildConfig routes ru geosite via proxy on whitelist network with russian exit`() = runBlocking {
+    fun `buildConfig routes ru geoip via proxy on whitelist network`() = runBlocking {
         DataStore.activeWhitelistRestrictedNetwork = true
         val group = ProxyGroup(name = "group").applyDefaultValues()
         group.id = SagerDatabase.groupDao.createGroup(group)
@@ -668,19 +668,19 @@ class ConfigBuilderTest : HusiKoinTest() {
             host = "1.1.1.1",
             port = 1080,
         )
-        DataStore.vpnExitIsRussia = true
-        DataStore.vpnExitProbeProfileId = proxy.id
+        // Exit-probe (H27) flags are intentionally NOT set: WL geoip routing must not depend
+        // on the late exit probe — the first connect builds the same route as the Nth.
         ProfileManager.createRule(
             RuleEntity(
                 enabled = true,
-                name = "RU bypass",
-                domains = "set+dns:geosite-category-ru",
+                name = "RU bypass ip",
+                ip = "set+dns:geoip-ru",
                 outbound = RuleEntity.OUTBOUND_DIRECT,
             ),
         )
 
         val result = buildConfig(proxy)
-        assertEquals(result.mainTag, routeRuGeositeOutbound(result))
+        assertEquals(result.mainTag, routeRuGeoipOutbound(result))
     }
 
     @Test
@@ -711,8 +711,39 @@ class ConfigBuilderTest : HusiKoinTest() {
     }
 
     @Test
-    fun `buildConfig keeps ru geosite direct on whitelist network with non-russian exit`() = runBlocking {
+    fun `buildConfig keeps ru geoip direct on normal network`() = runBlocking {
+        DataStore.activeWhitelistRestrictedNetwork = false
+        DataStore.vpnExitIsRussia = null
+        DataStore.vpnExitProbeProfileId = 0L
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU bypass ip",
+                ip = "set+dns:geoip-ru",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "Georgia",
+            host = "2.2.2.2",
+            port = 1080,
+        )
+
+        val result = buildConfig(proxy)
+        assertEquals("direct", routeRuGeoipOutbound(result))
+    }
+
+    @Test
+    fun `buildConfig keeps ru geosite direct on whitelist network`() = runBlocking {
         DataStore.activeWhitelistRestrictedNetwork = true
+        // Former exit-country gate flags: informational only — domain rules stay direct
+        // even when the exit probe reports RU.
+        DataStore.vpnExitIsRussia = true
+        DataStore.vpnExitProbeProfileId = 1L
         val group = ProxyGroup(name = "group").applyDefaultValues()
         group.id = SagerDatabase.groupDao.createGroup(group)
         val proxy = createSocksProxy(
@@ -722,8 +753,6 @@ class ConfigBuilderTest : HusiKoinTest() {
             host = "2.2.2.2",
             port = 1080,
         )
-        DataStore.vpnExitIsRussia = false
-        DataStore.vpnExitProbeProfileId = proxy.id
         ProfileManager.createRule(
             RuleEntity(
                 enabled = true,
@@ -945,6 +974,14 @@ class ConfigBuilderTest : HusiKoinTest() {
     }
 
     private fun routeRuGeositeOutbound(result: ConfigBuildResult): String? {
+        return routeRuleSetOutbound(result, "geosite-category-ru", "geosite-ru")
+    }
+
+    private fun routeRuGeoipOutbound(result: ConfigBuildResult): String? {
+        return routeRuleSetOutbound(result, "geoip-ru")
+    }
+
+    private fun routeRuleSetOutbound(result: ConfigBuildResult, vararg tags: String): String? {
         val routes = Json.parseToJsonElement(result.config).jsonObject["route"]
             ?.jsonObject?.get("rules")?.jsonArray ?: return null
         for (element in routes) {
@@ -952,7 +989,7 @@ class ConfigBuilderTest : HusiKoinTest() {
             val rs = rule["rule_set"]?.jsonArray ?: continue
             if (rs.any {
                 val tag = it.jsonPrimitive.content
-                tag == "geosite-category-ru" || tag == "geosite-ru"
+                tags.any { t -> tag == t }
             }) {
                 return rule["outbound"]?.jsonPrimitive?.content
             }
