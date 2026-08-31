@@ -3,10 +3,12 @@ package fr.husi.scenario.network
 import fr.husi.bg.RuleSetBootstrapCallbacks
 import fr.husi.bg.connectWithRuleSetBootstrap
 import fr.husi.bg.isRuleSetBootstrapFailure
+import fr.husi.bg.shouldRetryRuleSetBootstrapLocal
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class RuleSetBootstrapScenarioTest {
@@ -92,5 +94,51 @@ class RuleSetBootstrapScenarioTest {
             loaded = true
         }
         assertTrue(loaded)
+    }
+
+    @Test
+    fun rulesetStartsWithInitialPreferLocalOnWl() = runBlocking {
+        val preferLocalFlags = mutableListOf<Boolean>()
+        connectWithRuleSetBootstrap(
+            callbacks = RuleSetBootstrapCallbacks(hasLocalRuleSetFiles = { true }),
+            initialPreferLocal = true,
+        ) { preferLocal ->
+            preferLocalFlags += preferLocal
+        }
+        // WL uplink: first attempt is already local-first, github-raw is never touched.
+        assertEquals(listOf(true), preferLocalFlags)
+    }
+
+    @Test
+    fun isRuleSetBootstrapFailureDetects503WithRuleSetContext() {
+        val error = IllegalStateException(
+            "failed to load rule-set [geoip-ru-blocked]: Get " +
+                "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru-blocked.srs: " +
+                "unexpected HTTP response status: 503",
+        )
+        assertTrue(isRuleSetBootstrapFailure(error))
+    }
+
+    @Test
+    fun isRuleSetBootstrapFailureIgnoresHttpStatusWithoutRuleSetContext() {
+        val error = IllegalStateException(
+            "connection to proxy: dial tcp 1.2.3.4:443: unexpected HTTP response status: 503",
+        )
+        assertFalse(isRuleSetBootstrapFailure(error))
+    }
+
+    @Test
+    fun retryPolicyFirstFailWithLocalFilesRetries() {
+        assertTrue(shouldRetryRuleSetBootstrapLocal(alreadyForcedPreferLocal = false, hasLocalRuleSetFiles = true))
+    }
+
+    @Test
+    fun retryPolicySecondFailIsFinal() {
+        assertFalse(shouldRetryRuleSetBootstrapLocal(alreadyForcedPreferLocal = true, hasLocalRuleSetFiles = true))
+    }
+
+    @Test
+    fun retryPolicyNoLocalFilesIsFinal() {
+        assertFalse(shouldRetryRuleSetBootstrapLocal(alreadyForcedPreferLocal = false, hasLocalRuleSetFiles = false))
     }
 }

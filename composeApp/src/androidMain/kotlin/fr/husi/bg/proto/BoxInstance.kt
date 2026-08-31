@@ -6,6 +6,7 @@ import fr.husi.bg.RuleSetBootstrapCallbacks
 import fr.husi.bg.connectWithRuleSetBootstrap
 import fr.husi.bg.initPlugins
 import fr.husi.bg.launchPlugins
+import fr.husi.bg.ruleSetBootstrapForcePreferLocal
 import fr.husi.RuleProvider
 import fr.husi.database.ProxyEntity
 import fr.husi.fmt.ConfigBuildResult
@@ -53,6 +54,8 @@ abstract class BoxInstance(
         connectWithRuleSetBootstrap(
             callbacks = ruleSetBootstrapCallbacks(platform = "android"),
             onBeforeRetry = { cleanupRetryArtifacts() },
+            initialPreferLocal = ruleSetBootstrapForcePreferLocal ||
+                DataStore.activeWhitelistRestrictedNetwork,
         ) { preferLocal ->
             buildConfig(preferLocalRuleSet = preferLocal)
             pluginConfigs.clear()
@@ -68,6 +71,7 @@ abstract class BoxInstance(
                 "SimpleMode",
                 "H36 ${platform}_ruleset_bootstrap profileId=${profile.id} rulesProvider=${DataStore.rulesProvider} " +
                     "preferLocal=$preferLocal localGeo=${hasLocalRuleSetFiles()} " +
+                    "forcedByWl=${DataStore.activeWhitelistRestrictedNetwork} " +
                     "route=singbox_remote_http provider=${rulesProviderLabel(DataStore.rulesProvider)}",
             )
         },
@@ -87,7 +91,7 @@ abstract class BoxInstance(
         },
     )
 
-    private fun hasLocalRuleSetFiles(): Boolean {
+    internal fun hasLocalRuleSetFiles(): Boolean {
         val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
         return geoDir.exists() &&
             geoDir.isDirectory &&

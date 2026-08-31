@@ -495,6 +495,7 @@ class BaseService {
                     }
                     // stop the service if nothing has bound to it
                     if (restart) startRunner() else {
+                        ruleSetBootstrapForcePreferLocal = false
                         afterStop?.invoke()
                         stopSelf()
                     }
@@ -767,6 +768,7 @@ class BaseService {
 
                     startProcesses()
                     data.changeState(ServiceState.Connected)
+                    ruleSetBootstrapForcePreferLocal = false
                     VpnTunnelHandoffSuppress.markVpnSessionAnchor()
                     SimpleModeCarrierReconnect.clearPending("connected")
                     UnderlyingCarrierState.clear()
@@ -1135,6 +1137,38 @@ class BaseService {
                         "SimpleMode",
                         "H5 throwable profileId=${profile.id} class=${exc.javaClass.simpleName} error=${exc.readableMessage}",
                     )
+                    if (isRuleSetBootstrapFailure(exc)) {
+                        // Rule-sets are shared across profiles — profile fallback-walk would be
+                        // misleading, and pausing "until Google" is wrong on WL (github-raw is
+                        // L3-blocked, Google never comes back). Retry once local-first; then fail
+                        // honestly without touching the fallback queue.
+                        if (shouldRetryRuleSetBootstrapLocal(
+                                alreadyForcedPreferLocal = ruleSetBootstrapForcePreferLocal,
+                                hasLocalRuleSetFiles = data.proxy?.hasLocalRuleSetFiles() == true,
+                            )
+                        ) {
+                            ruleSetBootstrapForcePreferLocal = true
+                            simpleModeLog(
+                                "SimpleMode",
+                                "H36 android_ruleset_bootstrap_retry_local profileId=${profile.id} " +
+                                    "forcedByWl=${DataStore.activeWhitelistRestrictedNetwork} " +
+                                    "error=${exc.readableMessage}",
+                            )
+                            stopRunner(restart = true)
+                        } else {
+                            simpleModeLog(
+                                "SimpleMode",
+                                "H36 android_ruleset_bootstrap_failed_final profileId=${profile.id} " +
+                                    "forcedByWl=${DataStore.activeWhitelistRestrictedNetwork} " +
+                                    "error=${exc.readableMessage}",
+                            )
+                            if (DataStore.simpleMode) {
+                                SimpleModeVpnSessionMarker.markGracefulStop("ruleset_bootstrap_failed")
+                            }
+                            stopRunner(false, resolveRepository().getString(Res.string.ruleset_load_failed))
+                        }
+                        return@runOnDefaultDispatcher
+                    }
                     runCatching {
                         val fallbackRefreshBudgetMs =
                             DataStore.subscriptionFallbackRefreshBudgetMs.coerceIn(200L, 5000L)
