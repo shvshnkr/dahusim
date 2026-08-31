@@ -1000,6 +1000,9 @@ class BaseService {
                     ) {
                         SimpleModeVpnSessionMarker.markActive()
                         SimpleModeSessionHealth.schedule(profile.id, outboundTag)
+                        if (!postConnectRecordUrlVerified) {
+                            SimpleModeSessionHealth.notePostConnectSynthetic()
+                        }
                         if (DataStore.simpleMode) {
                             WarmReserveMaintainer.schedule(profile.id)
                         }

@@ -78,20 +78,43 @@ internal object SimpleModeSessionHealth {
                 delay(SimpleModeSessionHealthPolicy.STALL_TICK_MS)
                 maybeRecoverFromStalledProbe()
             }
+            logLoopExit(
+                loop = "watchdog",
+                reason = when {
+                    !healthRecoverEnabled() -> "recover_off"
+                    !DataStore.serviceState.connected -> "state_not_connected"
+                    else -> "cancelled"
+                },
+            )
         }
         job = scope.launch {
             delay(firstCheckDelayMs.coerceAtLeast(0L))
+            var exitReason: String? = null
             while (isActive && healthRecoverEnabled() && DataStore.serviceState.connected) {
                 val activeProfileId = DataStore.selectedProxy
-                if (activeProfileId <= 0L) break
+                if (activeProfileId <= 0L) {
+                    exitReason = "selected_proxy_empty"
+                    break
+                }
                 if (activeProfileId != monitoredProfileId) {
                     ensureMonitoring("profile_drift")
+                    exitReason = "profile_drift"
                     break
                 }
                 val activeOutboundTag = resolveMonitoredOutboundTag(activeProfileId)
-                if (activeOutboundTag.isBlank()) break
+                if (activeOutboundTag.isBlank()) {
+                    exitReason = "outbound_tag_blank"
+                    break
+                }
                 val keepRunning = runHealthCheck(activeProfileId, activeOutboundTag)
-                if (!keepRunning) break
+                if (!keepRunning) {
+                    exitReason = when {
+                        !healthRecoverEnabled() -> "recover_off"
+                        !DataStore.serviceState.connected -> "state_not_connected"
+                        else -> "health_recovery"
+                    }
+                    break
+                }
                 delay(
                     SimpleModeSessionHealthPolicy.nextCheckDelayMs(
                         consecutiveFails,
@@ -99,6 +122,14 @@ internal object SimpleModeSessionHealth {
                     ),
                 )
             }
+            logLoopExit(
+                loop = "periodic",
+                reason = exitReason ?: when {
+                    !healthRecoverEnabled() -> "recover_off"
+                    !DataStore.serviceState.connected -> "state_not_connected"
+                    else -> "cancelled"
+                },
+            )
         }
     }
 
@@ -107,6 +138,25 @@ internal object SimpleModeSessionHealth {
             profileId = profileId,
             outboundTag = outboundTag,
             firstCheckDelayMs = SimpleModeSessionHealthPolicy.CONNECT_FIRST_CHECK_DELAY_MS,
+        )
+    }
+
+    /**
+     * Post-connect finished with a synthetic (inconclusive) pass: the tunnel is up but not
+     * url-verified. Seed the synthetic-pass counter so residual synthetic types (405/429)
+     * cannot keep the session "Connected" forever — the bounded budget starts at 1 instead
+     * of 0 (must be called AFTER schedule(), which resets the counter).
+     */
+    fun notePostConnectSynthetic() {
+        if (consecutiveSyntheticPasses < 1) {
+            consecutiveSyntheticPasses = 1
+        }
+    }
+
+    private fun logLoopExit(loop: String, reason: String) {
+        simpleModeLog(
+            "SimpleMode",
+            "H34 session_health_loop_exit loop=$loop reason=$reason",
         )
     }
 
@@ -272,10 +322,11 @@ internal object SimpleModeSessionHealth {
         if (profileId <= 0L || profileId != monitoredProfileId) return
         val completedAt = lastCheckCompletedAt.get()
         if (completedAt <= 0L) return
+        val monitoringDead = job?.isActive != true
         val stalledMs = System.currentTimeMillis() - completedAt
-        if (stalledMs < SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS) return
-        if (!stallRecoveryInFlight.compareAndSet(false, true)) return
         try {
+            if (stalledMs < SimpleModeSessionHealthPolicy.STALL_RECOVERY_MS) return
+            if (!stallRecoveryInFlight.compareAndSet(false, true)) return
             val nowMs = System.currentTimeMillis()
             val wlOnly = DataStore.activeWhitelistRestrictedNetwork
             val deferRecovery = SimpleModeSessionHealthPolicy.shouldDeferStallRecovery(
@@ -332,6 +383,13 @@ internal object SimpleModeSessionHealth {
             handleUnhealthySession(profileId, SessionRecoverContext.StallWatchdog)
         } finally {
             stallRecoveryInFlight.set(false)
+            if (monitoringDead) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H34 monitoring_dead_rearm profileId=$profileId stalledMs=$stalledMs",
+                )
+                ensureMonitoring("stall_watchdog_rearm")
+            }
         }
     }
 

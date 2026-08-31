@@ -589,4 +589,59 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
             ),
         )
     }
+
+    @Test
+    fun underlyingProxyDialSyntheticGateIsPostConnectOnly() {
+        assertTrue(SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(true, "post_connect"))
+        assertFalse(SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(true, "session_periodic"))
+        assertFalse(
+            SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(
+                true,
+                SimpleModeTunnelSoftRecoveryPolicy.SOFT_REPROBE_PHASE,
+            ),
+        )
+        assertFalse(SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(true, ""))
+        assertFalse(SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(false, "post_connect"))
+    }
+
+    @Test
+    fun wlSessionPeriodicInconclusiveDoesNotEscalateToConfirm() {
+        val err = "dial ccmni2 (16): dial tcp 45.154.96.35:443: i/o timeout"
+        assertFalse(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "session_periodic",
+                    whitelistOnly = true,
+                    primaryProbeFailed = true,
+                    lastProbeError = err,
+                ),
+            ),
+            "WL periodic dial-timeout is honest — skip confirm-tier probes for quick recovery",
+        )
+        assertFalse(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "session_soft_reprobe",
+                    whitelistOnly = true,
+                    primaryProbeFailed = true,
+                    lastProbeError = err,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun wlPostConnectInconclusiveStillEscalatesToConfirm() {
+        val err = "dial ccmni1 (15): dial tcp 94.125.102.179:443: i/o timeout"
+        assertTrue(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "post_connect",
+                    whitelistOnly = true,
+                    primaryProbeFailed = true,
+                    lastProbeError = err,
+                ),
+            ),
+        )
+    }
 }

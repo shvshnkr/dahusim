@@ -296,7 +296,9 @@ internal object SimpleModeTunnelHealthCheck {
                     tier = tier,
                 )
             }
-            val allowInconclusive = whitelistOnly && !sawRealFailure
+            val allowInconclusive =
+                SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(whitelistOnly, phase) &&
+                    !sawRealFailure
             if (allowInconclusive) {
                 SimpleModeHealthRoute.logInconclusivePass(
                     phase = phase,

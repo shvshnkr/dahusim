@@ -17,6 +17,7 @@ import fr.husi.database.SagerDatabase
 import fr.husi.repository.resolveRepository
 import fr.husi.simplemode.SimpleModeHealthRoute
 import fr.husi.simplemode.SimpleModeNetworkState
+import fr.husi.simplemode.SimpleModeTunnelSoftRecoveryPolicy
 import fr.husi.simplemode.probeSimpleModeNetwork
 import fr.husi.test.HusiKoinTest
 import kotlinx.coroutines.runBlocking
@@ -309,6 +310,69 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
         } finally {
             localGeosite.delete()
         }
+    }
+
+    @Test
+    fun wlZombieDialTimeoutPhaseMatrix() {
+        // Log 29.08: WL LTE, server unreachable from the uplink (field zombie session).
+        val err = "dial ccmni2 (16): dial tcp 45.154.96.35:443: i/o timeout"
+        // post_connect: bootstrap grace — classification inconclusive AND synthetic pass allowed.
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(err, whitelistOnly = true, phase = "post_connect"),
+            "post_connect dial-timeout stays inconclusive (H10 post_connect_inconclusive_connected)",
+        )
+        assertTrue(
+            SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(true, "post_connect"),
+            "post_connect may convert the wave to a synthetic pass",
+        )
+        // session_periodic: classification stays inconclusive (soft-recovery eligibility), but the
+        // wave must NOT go synthetic — honest HardFail → fail-streak → recovery.
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(err, whitelistOnly = true, phase = "session_periodic"),
+            "classification unchanged on session_periodic",
+        )
+        assertFalse(
+            SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(true, "session_periodic"),
+            "session_periodic dial-timeout must be a HardFail, not synthetic-ok",
+        )
+        assertFalse(
+            SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(true, SimpleModeTunnelSoftRecoveryPolicy.SOFT_REPROBE_PHASE),
+            "soft reprobe keeps no synthetic grace",
+        )
+        // open network untouched: never synthetic, never inconclusive for this error.
+        assertFalse(SimpleModeHealthRoute.allowsUnderlyingProxyDialSynthetic(false, "post_connect"))
+        assertFalse(
+            SimpleModeHealthRoute.isProbeFailureInconclusive(err, whitelistOnly = false, phase = "session_periodic"),
+        )
+        // network changed stays inconclusive on session_periodic (transitional classifier).
+        assertTrue(
+            SimpleModeHealthRoute.isProbeFailureInconclusive("network changed", whitelistOnly = true, phase = "session_periodic"),
+            "network changed remains inconclusive on session_periodic",
+        )
+        // No confirm-tier escalation on WL session_periodic: the uplink dial failure is honest and
+        // quick — the first probe already proves the tunnel is dead from this uplink.
+        assertFalse(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "session_periodic",
+                    whitelistOnly = true,
+                    primaryProbeFailed = true,
+                    lastProbeError = err,
+                ),
+            ),
+            "WL session_periodic inconclusive must not escalate to confirm",
+        )
+        assertTrue(
+            SimpleModeHealthRoute.shouldEscalateToConfirm(
+                SimpleModeHealthRoute.ProbeEscalationContext(
+                    phase = "post_connect",
+                    whitelistOnly = true,
+                    primaryProbeFailed = true,
+                    lastProbeError = err,
+                ),
+            ),
+            "WL post_connect bootstrap keeps confirm-tier escalation",
+        )
     }
 
     private fun assertOpenHealthRoute() {

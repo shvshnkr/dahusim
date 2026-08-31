@@ -387,7 +387,24 @@ internal object SimpleModeVpnCoordinator {
                     "H30 wl_adapt_prepare_timeout reason=$reason gen=$adaptGen ms=$prepareTimeoutMs",
                 )
                 if (requiresTunnelRebuild(reason)) {
-                    val reloadProfileId = resolveProfileAfterPrepareTimeout(previousProfileId, networkHandoff)
+                    val reloadProfileId = resolveProfileAfterPrepareTimeout(
+                        reason,
+                        previousProfileId,
+                        networkHandoff,
+                    )
+                    if (reloadProfileId == SimpleModeAdaptTimeoutPolicy.NO_RELOAD) {
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H30 wl_adapt_timeout_no_new_profile reason=$reason gen=$adaptGen " +
+                                "prev=$previousProfileId",
+                        )
+                        return handleAllDeadRecovery(
+                            reason = reason,
+                            whitelistOnly = whitelistOnly,
+                            previousProfileId = previousProfileId,
+                            networkHandoff = networkHandoff,
+                        )
+                    }
                     simpleModeLog(
                         "SimpleMode",
                         "H30 wl_adapt_timeout_reload reason=$reason prev=$previousProfileId reload=$reloadProfileId",
@@ -486,21 +503,25 @@ internal object SimpleModeVpnCoordinator {
     }
 
     private fun resolveProfileAfterPrepareTimeout(
+        reason: String,
         previousProfileId: Long,
         networkHandoff: Boolean,
     ): Long {
-        val selected = DataStore.selectedProxy
-        if (selected > 0L && selected != previousProfileId) return selected
-        if (networkHandoff) {
-            val queueHead = DataStore.autoSelectFallbackQueue
+        val queueHead = if (networkHandoff) {
+            DataStore.autoSelectFallbackQueue
                 .split(',')
                 .firstOrNull { it.isNotBlank() }
                 ?.toLongOrNull()
-            if (queueHead != null && queueHead > 0L && queueHead != previousProfileId) {
-                return queueHead
-            }
+        } else {
+            null
         }
-        return previousProfileId
+        return SimpleModeAdaptTimeoutPolicy.resolvePrepareTimeoutReloadId(
+            reason = reason,
+            previousProfileId = previousProfileId,
+            selectedProxy = DataStore.selectedProxy,
+            fallbackQueueHead = queueHead,
+            networkHandoff = networkHandoff,
+        )
     }
 
     private fun requestTunnelReload(whitelistOnly: Boolean, reason: String, profileId: Long) {
@@ -570,7 +591,23 @@ internal object SimpleModeVpnCoordinator {
             return true
         }
         val fallback = AutoServerSelector.tryMoveToFallback(previousProfileId)
-        val reloadProfileId = fallback ?: resolveProfileAfterPrepareTimeout(previousProfileId, networkHandoff)
+        val reloadProfileId = fallback ?: resolveProfileAfterPrepareTimeout(
+            reason,
+            previousProfileId,
+            networkHandoff,
+        )
+        if (fallback == null &&
+            (reloadProfileId == previousProfileId ||
+                reloadProfileId == SimpleModeAdaptTimeoutPolicy.NO_RELOAD)
+        ) {
+            simpleModeLog(
+                "SimpleMode",
+                "H30 wl_adapt_all_dead_same_profile_skip reason=$reason step=$step " +
+                    "prev=$previousProfileId",
+            )
+            scheduleAllDeadRetry(reason, step)
+            return true
+        }
         DataStore.simpleModeActivity = "Network unstable, retrying server…"
         simpleModeLog(
             "SimpleMode",

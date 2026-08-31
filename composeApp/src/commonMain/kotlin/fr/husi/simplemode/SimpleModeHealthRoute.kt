@@ -106,6 +106,25 @@ internal object SimpleModeHealthRoute {
     fun prepareProbeUrls(whitelistOnly: Boolean): List<String> =
         probeUrlPlan(phase = "prepare", whitelistOnly = whitelistOnly, tier = ProbeTier.PRIMARY)
 
+    /**
+     * Underlying-proxy-dial-only wave failures (WL uplink dial i/o timeout etc.) may be
+     * converted to a synthetic pass only during post-connect bootstrap grace. During
+     * periodic/soft-reprobe checks the failure is honest: a tunnel whose server is
+     * unreachable from the WL uplink must stop masquerading as Connected and reach the
+     * fail-streak → recovery path.
+     */
+    fun allowsUnderlyingProxyDialSynthetic(whitelistOnly: Boolean, phase: String): Boolean =
+        whitelistOnly && phase == "post_connect"
+
+    /**
+     * Confirm-tier escalation on an inconclusive primary failure is bootstrap-only too:
+     * on WL the failure is at the uplink dial (before the exit), so extra hosts add no
+     * information during periodic checks — escalate only at post_connect. Open paths are
+     * unaffected (open post_connect already escalates; open periodic never reaches here).
+     */
+    fun allowsInconclusiveEscalation(whitelistOnly: Boolean, phase: String): Boolean =
+        !whitelistOnly || phase == "post_connect"
+
     fun shouldEscalateToConfirm(ctx: ProbeEscalationContext): Boolean {
         if (ctx.phase == SimpleModeTunnelSoftRecoveryPolicy.SOFT_REPROBE_PHASE) return false
         if (!ctx.whitelistOnly && ctx.phase != "prepare" && ctx.phase != "post_connect") return false
@@ -128,6 +147,7 @@ internal object SimpleModeHealthRoute {
         }
         if (ctx.phase == "lkg_fast_path") return true
         if (ctx.primaryProbeFailed &&
+            allowsInconclusiveEscalation(ctx.whitelistOnly, ctx.phase) &&
             isProbeFailureInconclusive(ctx.lastProbeError, ctx.whitelistOnly, ctx.phase)
         ) {
             return true
