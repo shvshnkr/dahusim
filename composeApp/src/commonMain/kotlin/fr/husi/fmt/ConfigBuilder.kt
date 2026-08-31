@@ -125,7 +125,6 @@ fun buildConfig(
     proxy: ProxyEntity,
     forTest: Boolean = false,
     forExport: Boolean = false,
-    preferLocalRuleSet: Boolean = false,
 ): ConfigBuildResult {
     fun extractHostCandidate(address: String): String? {
         val trimmed = address.trim()
@@ -368,6 +367,8 @@ fun buildConfig(
     // This structure may reduce rules when multiple rules share the same server+port.
     val mappingOverride: LinkedHashMap<Pair<String, Int>, MutableList<String>> =
         LinkedHashMap()
+
+    val liveConfig = !forExport && !forTest
 
     return MyOptions().apply {
         if (!forTest) experimental = ExperimentalOptions().apply {
@@ -1472,19 +1473,15 @@ fun buildConfig(
         var geositeLink: String? = null
         var geoipLink: String? = null
         val localGeoDir = repository.externalAssetsDir.resolve("geo")
-        val hasLocalRuleSets = localGeoDir.exists() &&
-            localGeoDir.isDirectory &&
-            localGeoDir.listFiles()?.any { it.extension.equals("srs", ignoreCase = true) } == true
-        val useLocalRuleSets = (!forExport && !forTest && hasLocalRuleSets) ||
-            (preferLocalRuleSet && !forExport && !forTest && hasLocalRuleSets)
-        if (useLocalRuleSets) {
-            // Local-first for live configs: avoid bootstrapping through raw.githubusercontent on
-            // restricted networks and treat remote as a refresh/update channel.
+        if (liveConfig) {
+            // Live configs are strictly local: rule-sets ship in the APK and are seeded into
+            // geo/ without network. No remote rule-set URL ever reaches a live config — connect
+            // must not depend on github. A tag without a local geo/<tag>.srs fails
+            // buildRuleSets with RuleSetUnavailableException instead of a remote fetch.
             ruleSetResource = localGeoDir.invariantPathString()
         }
-        // Remote rule-set bases for export and as live fallback when local geo/*.srs is unavailable.
-        // RU presets should still work on first start before geo/ is materialized.
-        // Profile URL tests (forTest) keep local geo/ to avoid GitHub fetches per probe.
+        // Remote rule-set bases for export; profile URL tests (forTest) keep local geo/ to avoid
+        // GitHub fetches per probe. Per-tag remote fallback exists only for export/test configs.
         if (ruleSetResource == null && (forExport || !forTest)) {
             // "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"
             val pathPrefix = "https://raw.githubusercontent.com"
@@ -1539,7 +1536,7 @@ fun buildConfig(
         ruleSetMergeGeoIp = geoipLink
         ruleSetMergeGeoSite = geositeLink
         ruleSetMergeLocalPath = ruleSetResource
-        buildRuleSets(geoipLink, geositeLink, ruleSetResource)
+        buildRuleSets(geoipLink, geositeLink, ruleSetResource, localOnly = liveConfig)
         partitionEndpoints()
     }.let {
         val optionsMap = it.toKxs().asKxsMap().apply {
@@ -1551,6 +1548,7 @@ fun buildConfig(
                 ipURL = ruleSetMergeGeoIp,
                 domainURL = ruleSetMergeGeoSite,
                 localPath = ruleSetMergeLocalPath,
+                localOnly = liveConfig,
             )
         }
         ConfigBuildResult(

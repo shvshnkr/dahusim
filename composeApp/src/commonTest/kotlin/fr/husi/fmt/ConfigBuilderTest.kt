@@ -21,6 +21,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -36,6 +37,22 @@ class ConfigBuilderTest : HusiKoinTest() {
         DataStore.activeWhitelistRestrictedNetwork = false
         DataStore.vpnExitIsRussia = null
         DataStore.vpnExitProbeProfileId = 0L
+        // Live configs are strictly local (ruleset_always_local): buildConfig without forTest/
+        // forExport throws RuleSetUnavailableException when geo/<tag>.srs is missing. Seed the
+        // tags used by the live-path tests below; ru-blocked tags are managed by their own tests.
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        geoDir.mkdirs()
+        for (tag in listOf(
+            "geoip-cn",
+            "geosite-cn",
+            "geoip-ru",
+            "geosite-category-ru",
+            "geosite-category-ads-all",
+            "custom-ip-set",
+            "custom-domain-set",
+        )) {
+            geoDir.resolve("$tag.srs").writeText("test")
+        }
     }
 
     @Test
@@ -710,7 +727,7 @@ class ConfigBuilderTest : HusiKoinTest() {
     }
 
     @Test
-    fun `buildConfig prefers local rule set paths when requested`() = runBlocking {
+    fun `buildConfig uses local rule set path for live config`() = runBlocking {
         val group = ProxyGroup(name = "group").applyDefaultValues()
         group.id = SagerDatabase.groupDao.createGroup(group)
         val proxy = createSocksProxy(
@@ -733,20 +750,18 @@ class ConfigBuilderTest : HusiKoinTest() {
         geoDir.mkdirs()
         val localRuleSetFile = geoDir.resolve("geosite-category-ru.srs")
         localRuleSetFile.writeText("test")
-        try {
-            val result = buildConfig(proxy, preferLocalRuleSet = true)
-            val routeRuleSets = parseRouteRuleSets(result)
-            val localRuleSet = routeRuleSets.firstOrNull {
-                it["tag"]?.jsonPrimitive?.content == "geosite-category-ru"
-            }
-            assertNotNull(localRuleSet)
-            val path = localRuleSet["path"]?.jsonPrimitive?.content
-            assertNotNull(path)
-            assertTrue(path.endsWith("/geo/geosite-category-ru.srs"))
-            assertEquals(null, localRuleSet["url"])
-        } finally {
-            localRuleSetFile.delete()
+        // geosite-category-ru is part of the postStartKoin seed — leave it in place (deleting
+        // here would break sibling live-path tests regardless of JUnit method order).
+        val result = buildConfig(proxy)
+        val routeRuleSets = parseRouteRuleSets(result)
+        val localRuleSet = routeRuleSets.firstOrNull {
+            it["tag"]?.jsonPrimitive?.content == "geosite-category-ru"
         }
+        assertNotNull(localRuleSet)
+        val path = localRuleSet["path"]?.jsonPrimitive?.content
+        assertNotNull(path)
+        assertTrue(path.endsWith("/geo/geosite-category-ru.srs"))
+        assertEquals(null, localRuleSet["url"])
     }
 
     @Test
@@ -790,7 +805,7 @@ class ConfigBuilderTest : HusiKoinTest() {
     }
 
     @Test
-    fun `buildConfig uses mixed local and remote rule sets when local geo is partial`() = runBlocking {
+    fun `buildConfig fails when local geo is partial - live configs are local-only`() = runBlocking {
         val group = ProxyGroup(name = "group").applyDefaultValues()
         group.id = SagerDatabase.groupDao.createGroup(group)
         val proxy = createSocksProxy(
@@ -817,23 +832,98 @@ class ConfigBuilderTest : HusiKoinTest() {
         localGeosite.writeText("test")
         missingGeoip.delete()
         try {
+            val error = assertFailsWith<RuleSetUnavailableException> {
+                buildConfig(proxy)
+            }
+            // Live configs never fall back to remote rule-set URLs (connect must not depend on
+            // github); a missing local file is an honest failure naming the missing rule-set.
+            assertEquals(listOf("geoip-ru-blocked"), error.missingRuleSets)
+        } finally {
+            localGeosite.delete()
+        }
+    }
+
+    @Test
+    fun `buildConfig live config never contains remote rule set urls when local geo is complete`() = runBlocking {
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "main",
+            host = "1.1.1.1",
+            port = 1080,
+        )
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU blocked split",
+                domains = "set+dns:geosite-ru-blocked",
+                ip = "set+dns:geoip-ru-blocked",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        geoDir.mkdirs()
+        val localGeosite = geoDir.resolve("geosite-ru-blocked.srs")
+        val localGeoip = geoDir.resolve("geoip-ru-blocked.srs")
+        localGeosite.writeText("test")
+        localGeoip.writeText("test")
+        try {
             val result = buildConfig(proxy)
+            val routeRuleSets = parseRouteRuleSets(result)
+            assertEquals(2, routeRuleSets.size)
+            for (ruleSet in routeRuleSets) {
+                assertEquals(null, ruleSet["url"], "live config must not contain remote rule-set urls")
+                assertNotNull(ruleSet["path"])
+                assertTrue(ruleSet["path"]!!.jsonPrimitive.content.endsWith(".srs"))
+            }
+        } finally {
+            localGeosite.delete()
+            localGeoip.delete()
+        }
+    }
+
+    @Test
+    fun `export config keeps remote rule set urls when local geo is partial`() = runBlocking {
+        val group = ProxyGroup(name = "group").applyDefaultValues()
+        group.id = SagerDatabase.groupDao.createGroup(group)
+        val proxy = createSocksProxy(
+            groupId = group.id,
+            order = 1,
+            name = "main",
+            host = "1.1.1.1",
+            port = 1080,
+        )
+        ProfileManager.createRule(
+            RuleEntity(
+                enabled = true,
+                name = "RU blocked split",
+                domains = "set+dns:geosite-ru-blocked",
+                ip = "set+dns:geoip-ru-blocked",
+                outbound = RuleEntity.OUTBOUND_DIRECT,
+            ),
+        )
+
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        geoDir.mkdirs()
+        val localGeosite = geoDir.resolve("geosite-ru-blocked.srs")
+        localGeosite.writeText("test")
+        try {
+            val result = buildConfig(proxy, forExport = true)
             val routeRuleSets = parseRouteRuleSets(result)
 
             val geositeRuleSet = routeRuleSets.firstOrNull {
                 it["tag"]?.jsonPrimitive?.content == "geosite-ru-blocked"
             }
             assertNotNull(geositeRuleSet)
-            assertTrue(
-                geositeRuleSet["path"]?.jsonPrimitive?.content?.endsWith("/geo/geosite-ru-blocked.srs") == true,
-            )
-            assertEquals(null, geositeRuleSet["url"])
+            assertEquals(null, geositeRuleSet["path"])
 
             val geoipRuleSet = routeRuleSets.firstOrNull {
                 it["tag"]?.jsonPrimitive?.content == "geoip-ru-blocked"
             }
             assertNotNull(geoipRuleSet)
-            assertEquals(null, geoipRuleSet["path"])
             assertEquals(
                 "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru-blocked.srs",
                 geoipRuleSet["url"]?.jsonPrimitive?.content,

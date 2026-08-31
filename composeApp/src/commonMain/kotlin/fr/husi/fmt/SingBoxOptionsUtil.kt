@@ -335,11 +335,16 @@ fun DNSRule_Default.makeProcessRule(list: List<RuleItem>) {
  * Builds all rule-set.
  * This will crate route if route is null,
  * and will refreshes route.rule_set.
+ *
+ * [localOnly] (live configs): a tag without a local geo/<tag>.srs file is an error — never emit
+ * a remote rule-set URL that sing-box would fetch on connect. Export/test configs keep the
+ * remote fallback (portable exports, probe configs on dev machines).
  * */
 fun MyOptions.buildRuleSets(
     ipURL: String?,
     domainURL: String?,
     localPath: String?,
+    localOnly: Boolean = false,
 ) {
     val names = hashSetOf<String>()
     if (dns != null) collectSet(names, dns!!.rules)
@@ -353,6 +358,7 @@ fun MyOptions.buildRuleSets(
     val list = ArrayList<RuleSet>(names.size)
 
     val localDir = localPath?.let(::File)
+    val missingLocal = ArrayList<String>(0)
     for (name in names.sorted()) {
         val localRuleSetFile = localDir?.resolve("$name.srs")
         if (localRuleSetFile?.isFile == true) {
@@ -364,6 +370,8 @@ fun MyOptions.buildRuleSets(
                     path = localRuleSetFile.invariantPathString()
                 },
             )
+        } else if (localOnly) {
+            missingLocal.add(name)
         } else {
             val fileName = mapRuleSetFileName(name)
             val base = ruleSetRemoteBaseForTag(name, ipURL, domainURL)
@@ -378,6 +386,8 @@ fun MyOptions.buildRuleSets(
         }
     }
 
+    if (missingLocal.isNotEmpty()) throw RuleSetUnavailableException(missingLocal)
+
     route!!.rule_set = list
 }
 
@@ -391,12 +401,14 @@ private fun mapRuleSetFileName(tag: String): String = when (tag) {
  * Subscription/clash `customConfigJson` is merged after [buildRuleSets]; [mergeJson] replaces
  * whole `route.rule_set` lists, so broken remote URLs (e.g. rule-set-unstable) win.
  * Rebuild `route.rule_set` from tags referenced in the merged dns/route rules.
+ * [localOnly] mirrors [MyOptions.buildRuleSets]: missing local file → error (live configs).
  */
 fun JSONMap.refreshRuleSetsAfterCustomMerge(
     forTest: Boolean,
     ipURL: String?,
     domainURL: String?,
     localPath: String?,
+    localOnly: Boolean = false,
 ) {
     if (forTest) return
     if (localPath == null && ipURL.isNullOrBlank() && domainURL.isNullOrBlank()) return
@@ -424,6 +436,7 @@ fun JSONMap.refreshRuleSetsAfterCustomMerge(
 
     val localDir = localPath?.let(::File)
     val list = ArrayList<Map<String, Any?>>(names.size)
+    val missingLocal = ArrayList<String>(0)
     for (name in names.sorted()) {
         val localRuleSetFile = localDir?.resolve("$name.srs")
         if (localRuleSetFile?.isFile == true) {
@@ -435,6 +448,8 @@ fun JSONMap.refreshRuleSetsAfterCustomMerge(
                     "path" to localRuleSetFile.invariantPathString(),
                 ),
             )
+        } else if (localOnly) {
+            missingLocal.add(name)
         } else {
             val fileName = mapRuleSetFileName(name)
             val base = ruleSetRemoteBaseForTag(name, ipURL, domainURL)
@@ -448,6 +463,7 @@ fun JSONMap.refreshRuleSetsAfterCustomMerge(
             )
         }
     }
+    if (missingLocal.isNotEmpty()) throw RuleSetUnavailableException(missingLocal)
     routeMutable["rule_set"] = list
 }
 

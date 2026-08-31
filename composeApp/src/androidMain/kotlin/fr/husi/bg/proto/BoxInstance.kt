@@ -16,7 +16,9 @@ import fr.husi.ktx.Logs
 import fr.husi.ktx.ensureMixedPortAvailable
 import fr.husi.ktx.readableMessage
 import fr.husi.ktx.runOnDefaultDispatcher
+import fr.husi.libcore.Libcore
 import fr.husi.repository.resolveRepository
+import fr.husi.utils.copyBundledRuleSetAssetsIfNeeded
 import fr.husi.utils.simpleModeLog
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -40,8 +42,8 @@ abstract class BoxInstance(
         return ::config.isInitialized && resolveRepository().boxService?.hasInstance() == true
     }
 
-    protected open fun buildConfig(preferLocalRuleSet: Boolean = false) {
-        config = buildConfig(profile, preferLocalRuleSet = preferLocalRuleSet)
+    protected open fun buildConfig() {
+        config = buildConfig(profile)
         emitRouteBuildDebug(profile, config)
     }
 
@@ -51,17 +53,82 @@ abstract class BoxInstance(
 
     open suspend fun init(isVPN: Boolean) {
         ensureMixedPortAvailable()
+        ensureLocalRuleSetsSeeded()
         connectWithRuleSetBootstrap(
             callbacks = ruleSetBootstrapCallbacks(platform = "android"),
             onBeforeRetry = { cleanupRetryArtifacts() },
             initialPreferLocal = ruleSetBootstrapForcePreferLocal ||
                 DataStore.activeWhitelistRestrictedNetwork,
-        ) { preferLocal ->
-            buildConfig(preferLocalRuleSet = preferLocal)
+        ) { _ ->
+            buildConfig()
             pluginConfigs.clear()
             pluginConfigs.putAll(initPlugins(config, isVPN, cacheFiles))
             loadConfig()
         }
+    }
+
+    /**
+     * Belt-and-braces seed before the first config build: the bg process copies bundled archives
+     * on startup and Go extracts them async — a connect can race that. This step is idempotent
+     * (version-compared, cheap) and keeps connect free of any github dependency: with local
+     * geo/<tag>.srs present, [fr.husi.fmt.buildConfig] never emits remote rule-set URLs.
+     */
+    private suspend fun ensureLocalRuleSetsSeeded() {
+        val provider = DataStore.rulesProvider
+        if (provider != RuleProvider.OFFICIAL) {
+            // Bundled rule-sets are OFFICIAL content; other providers populate geo/ via the
+            // asset update flow (manual or background through a live tunnel).
+            simpleModeLog(
+                "SimpleMode",
+                "H36 android_ruleset_local source=none provider=${rulesProviderLabel(provider)} " +
+                    "note=non_official_provider",
+            )
+            return
+        }
+        if (hasLocalRuleSetFiles()) {
+            simpleModeLog(
+                "SimpleMode",
+                "H36 android_ruleset_local source=${ruleSetLocalSource()} " +
+                    "provider=${rulesProviderLabel(provider)}",
+            )
+            return
+        }
+        simpleModeLog(
+            "SimpleMode",
+            "H36 android_ruleset_seed start source=none provider=${rulesProviderLabel(provider)}",
+        )
+        copyBundledRuleSetAssetsIfNeeded()
+        Libcore.extractAssets()
+        simpleModeLog(
+            "SimpleMode",
+            "H36 android_ruleset_seed done source=${ruleSetLocalSource()} files=${geoRuleSetFileCount()}",
+        )
+    }
+
+    private fun ruleSetLocalSource(): String {
+        val repository = resolveRepository()
+        val bundledVersions = listOf(
+            repository.filesDir.resolve("sing-box/geoip.version.txt"),
+            repository.filesDir.resolve("sing-box/geosite.version.txt"),
+        ).filter { it.isFile }
+        val externalVersions = listOf(
+            repository.externalAssetsDir.resolve("geoip.version.txt"),
+            repository.externalAssetsDir.resolve("geosite.version.txt"),
+        ).filter { it.isFile }
+        if (bundledVersions.isNotEmpty() && externalVersions.isNotEmpty()) {
+            val matchesBundled = bundledVersions.any { bundled ->
+                externalVersions.firstOrNull { it.name == bundled.name }?.let { external ->
+                    external.readBytes().contentEquals(bundled.readBytes())
+                } == true
+            }
+            if (matchesBundled) return "bundled"
+        }
+        return if (externalVersions.isNotEmpty()) "existing" else "legacy"
+    }
+
+    private fun geoRuleSetFileCount(): Int {
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        return geoDir.listFiles()?.count { it.extension.equals("srs", ignoreCase = true) } ?: 0
     }
 
     private fun ruleSetBootstrapCallbacks(platform: String) = RuleSetBootstrapCallbacks(

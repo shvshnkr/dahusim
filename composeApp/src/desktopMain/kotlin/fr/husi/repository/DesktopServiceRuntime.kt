@@ -108,10 +108,9 @@ internal class DesktopServiceRuntime(
                 connectWithRuleSetBootstrap(
                     callbacks = desktopRuleSetBootstrapCallbacks(profile),
                     onBeforeRetry = { cleanupLocked() },
-                ) { preferLocal ->
+                ) { _ ->
                     val config = fr.husi.fmt.buildConfig(
                         profile,
-                        preferLocalRuleSet = preferLocal,
                     )
                     cacheFiles.clear()
                     val pluginConfigs = initPlugins(

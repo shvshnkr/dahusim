@@ -28,6 +28,7 @@ import fr.husi.database.ProxyProbeStateStore
 import fr.husi.database.SagerDatabase
 import fr.husi.database.UserPoolPolicy
 import fr.husi.database.UserSubscriptionTag
+import fr.husi.fmt.RuleSetUnavailableException
 import fr.husi.database.WarmReservePool
 import fr.husi.ktx.Logs
 import fr.husi.ktx.broadcastReceiver
@@ -1137,6 +1138,25 @@ class BaseService {
                         "SimpleMode",
                         "H5 throwable profileId=${profile.id} class=${exc.javaClass.simpleName} error=${exc.readableMessage}",
                     )
+                    if (exc is RuleSetUnavailableException) {
+                        // Live configs are local-only; a missing geo/<tag>.srs means rules were
+                        // never seeded (non-official provider, cleared/partial geo/) or the APK
+                        // was built without bundled assets. Retrying cannot help (config is
+                        // already local-only) — fail honestly: no fallback-walk (rules are shared
+                        // across profiles) and no pause_until_google (WL never regains github).
+                        simpleModeLog(
+                            "SimpleMode",
+                            "H36 android_ruleset_missing_local profileId=${profile.id} " +
+                                "missing=${exc.missingRuleSets.joinToString(",")} " +
+                                "provider=${DataStore.rulesProvider} " +
+                                "error=${exc.readableMessage}",
+                        )
+                        if (DataStore.simpleMode) {
+                            SimpleModeVpnSessionMarker.markGracefulStop("ruleset_missing_local")
+                        }
+                        stopRunner(false, resolveRepository().getString(Res.string.ruleset_no_local))
+                        return@runOnDefaultDispatcher
+                    }
                     if (isRuleSetBootstrapFailure(exc)) {
                         // Rule-sets are shared across profiles — profile fallback-walk would be
                         // misleading, and pausing "until Google" is wrong on WL (github-raw is

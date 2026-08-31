@@ -4,6 +4,7 @@ import fr.husi.bg.RuleSetBootstrapCallbacks
 import fr.husi.bg.connectWithRuleSetBootstrap
 import fr.husi.bg.isRuleSetBootstrapFailure
 import fr.husi.bg.shouldRetryRuleSetBootstrapLocal
+import fr.husi.fmt.RuleSetUnavailableException
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -64,6 +65,31 @@ class RuleSetBootstrapScenarioTest {
                 throw IllegalStateException("mixed port bind failed")
             }
         }
+    }
+
+    @Test
+    fun ruleSetUnavailableErrorDoesNotRetryWithLocal() = runBlocking {
+        // Live configs are local-only: RuleSetUnavailableException means the missing local file
+        // cannot be fixed by re-running the bootstrap loop — the error must propagate as-is.
+        var buildCalls = 0
+        val error = assertFailsWith<RuleSetUnavailableException> {
+            connectWithRuleSetBootstrap(
+                callbacks = RuleSetBootstrapCallbacks(hasLocalRuleSetFiles = { true }),
+            ) {
+                buildCalls++
+                throw RuleSetUnavailableException(listOf("geoip-ru-blocked"))
+            }
+        }
+        assertEquals(listOf("geoip-ru-blocked"), error.missingRuleSets)
+        assertEquals(1, buildCalls)
+    }
+
+    @Test
+    fun ruleSetUnavailableIsNotARemoteBootstrapFailure() {
+        val error = RuleSetUnavailableException(listOf("geoip-ru-blocked"))
+        // BaseService classifies it separately (H36 missing-local); it must never enter the
+        // remote-bootstrap retry/fallback-walk branch.
+        assertFalse(isRuleSetBootstrapFailure(error))
     }
 
     @Test

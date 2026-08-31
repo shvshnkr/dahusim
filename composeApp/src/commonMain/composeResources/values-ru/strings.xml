@@ -971,6 +971,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_all_servers_dead_title">Нет рабочих серверов</string>
     <string name="simple_mode_all_servers_dead_message">Профили из подписок не ответили на проверки. Можно ждать интернета без БС (для обычных обновлений списков) или выйти из приложения.</string>
     <string name="ruleset_load_failed">Не удалось загрузить правила маршрутизации. Проверьте подключение к интернету и попробуйте ещё раз.</string>
+    <string name="ruleset_no_local">Нет локальных правил маршрутизации. Обновите правила в разделе «Правила» или вернитесь к официальному источнику.</string>
     <string name="simple_mode_wait_for_google_action">Ждать интернета без БС</string>
     <string name="simple_mode_exit_app_action">Выйти из приложения</string>
     <string name="simple_mode_telegram_probe">Проверка Telegram</string>
