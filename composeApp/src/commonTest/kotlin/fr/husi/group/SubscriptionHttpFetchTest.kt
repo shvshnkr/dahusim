@@ -193,6 +193,153 @@ class SubscriptionHttpFetchTest {
     }
 
     @Test
+    fun `open github canonical fail falls back to yandex mirror`() = runBlocking {
+        val canonical =
+            "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(canonical to body),
+            failForFetchLinks = setOf(canonical),
+        )
+        try {
+            val response = SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = canonical,
+                    userAgent = "test",
+                    whitelistRestricted = false,
+                    vpnConnected = false,
+                ),
+            )
+            assertTrue(response.viaYandexMirror)
+            assertTrue(response.fetchLink.contains("translate.yandex"))
+            assertEquals(body, response.body)
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `open github canonical ok does not hit mirror`() = runBlocking {
+        val canonical =
+            "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        val mirror = WhitelistSubscriptionFetch.yandexTranslateUrl(canonical)
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(canonical to body),
+            failForFetchLinks = setOf(mirror),
+        )
+        try {
+            // mirror is in the fail set: success proves the mirror was never attempted
+            val response = SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = canonical,
+                    userAgent = "test",
+                    whitelistRestricted = false,
+                    vpnConnected = false,
+                ),
+            )
+            assertFalse(response.viaYandexMirror)
+            assertEquals(canonical, response.fetchLink)
+            assertEquals(body, response.body)
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `vpn connected fetches canonical only without mirror`() = runBlocking {
+        val canonical =
+            "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        val mirror = WhitelistSubscriptionFetch.yandexTranslateUrl(canonical)
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(canonical to body),
+            failForFetchLinks = setOf(mirror),
+        )
+        try {
+            // mirror in the fail set: success through the tunnel proves SOCKS-only path
+            val response = SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = canonical,
+                    userAgent = "test",
+                    whitelistRestricted = false,
+                    vpnConnected = true,
+                ),
+            )
+            assertFalse(response.viaYandexMirror)
+            assertEquals(canonical, response.fetchLink)
+            assertEquals(body, response.body)
+            assertEquals(
+                SubscriptionHttpFetch.DEFAULT_FETCH_TIMEOUT_MS,
+                SubscriptionFetchTestHooks.lastTimeoutMs,
+            )
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `open github canonical attempt timeout clamped when mirror fallback exists`() = runBlocking {
+        val canonical =
+            "https://raw.githubusercontent.com/shvshnkr/dahusim/main/docs/subscription-catalog.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        val mirror = WhitelistSubscriptionFetch.yandexTranslateUrl(canonical)
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(canonical to body),
+            failForFetchLinks = setOf(canonical),
+        )
+        try {
+            SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = canonical,
+                    userAgent = "test",
+                    whitelistRestricted = false,
+                    vpnConnected = false,
+                ),
+            )
+            assertEquals(
+                SubscriptionHttpFetch.CANONICAL_FIRST_ATTEMPT_TIMEOUT_MS,
+                SubscriptionFetchTestHooks.lastTimeoutMsByLink[canonical],
+            )
+            assertEquals(
+                SubscriptionHttpFetch.DEFAULT_FETCH_TIMEOUT_MS,
+                SubscriptionFetchTestHooks.lastTimeoutMsByLink[mirror],
+            )
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `open non-mirrorable host stays single attempt with full timeout`() = runBlocking {
+        val canonical = "https://gitverse.ru/example/feed.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(canonical to body),
+            failForFetchLinks = setOf(canonical),
+        )
+        try {
+            val failure = assertFailsWith<IllegalStateException> {
+                SubscriptionHttpFetch.fetchText(
+                    SubscriptionHttpFetch.Request(
+                        canonicalLink = canonical,
+                        userAgent = "test",
+                        whitelistRestricted = false,
+                        vpnConnected = false,
+                    ),
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("test hook"))
+            assertEquals(
+                SubscriptionHttpFetch.DEFAULT_FETCH_TIMEOUT_MS,
+                SubscriptionFetchTestHooks.lastTimeoutMs,
+            )
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
     fun `fetch applies explicit request timeout`() = runBlocking {
         val canonical = "https://etoneya.su/whitelist"
         SubscriptionFetchTestHooks.install(

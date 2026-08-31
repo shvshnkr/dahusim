@@ -39,6 +39,12 @@ object WhitelistSubscriptionFetch {
     fun yandexTranslateUrl(originalLink: String): String =
         "https://translate.yandex.ru/translate?url=${originalLink.urlSafe()}&lang=en-ru"
 
+    /** True when [link] is hosted on a GitHub host the Yandex mirror can serve ([yandexTranslateUrl]). */
+    internal fun supportsYandexMirror(link: String): Boolean {
+        val host = linkHost(link) ?: return false
+        return host.needsYandexMirror()
+    }
+
     fun resolveFetchLink(
         link: String,
         whitelistRestricted: Boolean,

@@ -85,16 +85,42 @@ object SubscriptionHttpFetch {
         // Bounded fallback chain: on BS uplink (mirror path) the canonical GitHub host is
         // L3-blocked, so the mirror is the only reachable path — a second attempt would burn
         // the full per-attempt timeout (audit A.2; field 2026-08-18 02:46/02:55: 8 mirror
-        // fetches killed mid-flight by budget). Off BS the fetch link is the canonical itself.
-        val attempts = if (whitelistRestricted && !vpnConnected) {
-            linkedSetOf(fetchLink)
-        } else {
-            linkedSetOf(fetchLink, request.canonicalLink)
+        // fetches killed mid-flight by budget). On open RU networks GitHub hosts are
+        // DPI-blocked but the mirror is reachable — canonical → mirror fallback (WLZ-S3,
+        // field 2026-08-30 11:29-12:02: dozens of group_update_failure on github hosts).
+        // Via VPN the canonical works through SOCKS — no mirror. Off BS the fetch link is
+        // the canonical itself.
+        val mirrorFallback = !whitelistRestricted && !vpnConnected &&
+            WhitelistSubscriptionFetch.supportsYandexMirror(request.canonicalLink)
+        val attempts = when {
+            whitelistRestricted && !vpnConnected -> linkedSetOf(fetchLink)
+            mirrorFallback -> linkedSetOf(
+                fetchLink,
+                WhitelistSubscriptionFetch.yandexTranslateUrl(request.canonicalLink),
+            )
+            else -> linkedSetOf(fetchLink)
         }
         var lastFailure: Throwable? = null
+        val defaultTimeoutMs = request.timeoutMs ?: DEFAULT_FETCH_TIMEOUT_MS
         for (link in attempts) {
+            // With a mirror fallback, cap the canonical attempt so the mirror still fits the
+            // background budget (canonical ≤8s + mirror ≤15s ≤ 25s open refresh budget);
+            // explicit preconnect timeouts are already below the cap (no-op).
+            val timeoutMs = if (mirrorFallback && link == request.canonicalLink) {
+                minOf(defaultTimeoutMs, CANONICAL_FIRST_ATTEMPT_TIMEOUT_MS)
+            } else {
+                defaultTimeoutMs
+            }
+            if (link != request.canonicalLink && !viaMirror) {
+                val ctx = request.logContext?.let { " $it" }.orEmpty()
+                simpleModeLog(
+                    "SimpleMode",
+                    "H29 subscription_fetch_mirror yandex purpose=${request.purpose.name.lowercase()}$ctx " +
+                        "host=${request.canonicalLink.substringBefore('?')} fallback=true",
+                )
+            }
             try {
-                val raw = rawFetch(request, link, vpnConnected)
+                val raw = rawFetch(request, link, vpnConnected, timeoutMs)
                 return buildTextFeedResponse(
                     raw = raw.content,
                     canonicalLink = request.canonicalLink,
@@ -124,10 +150,11 @@ object SubscriptionHttpFetch {
         request: Request,
         link: String,
         vpnConnected: Boolean,
+        timeoutMs: Int,
     ): RawFetch {
-        val timeoutMs = request.timeoutMs ?: DEFAULT_FETCH_TIMEOUT_MS
         if (SubscriptionFetchTestHooks.enabled) {
             SubscriptionFetchTestHooks.lastTimeoutMs = timeoutMs
+            SubscriptionFetchTestHooks.lastTimeoutMsByLink[link] = timeoutMs
         }
         if (SubscriptionFetchTestHooks.shouldFailFetch(link)) {
             throw IllegalStateException("test hook: fetch failed for $link")
@@ -158,6 +185,12 @@ object SubscriptionHttpFetch {
 
     /** Mirrors libcore C.TCPTimeout (libcore/deps/sing-box/constant/timeout.go). */
     internal const val DEFAULT_FETCH_TIMEOUT_MS = 15_000
+
+    /**
+     * Cap for the canonical attempt when a Yandex mirror fallback exists (WLZ-S3): keeps
+     * canonical(≤8s) + mirror(≤15s) inside the open-network background refresh budget (25s).
+     */
+    internal const val CANONICAL_FIRST_ATTEMPT_TIMEOUT_MS = 8_000
 
     internal fun buildTextFeedResponse(
         raw: String,
