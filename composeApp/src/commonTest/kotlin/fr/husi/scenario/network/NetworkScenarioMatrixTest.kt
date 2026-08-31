@@ -6,6 +6,7 @@ import fr.husi.database.ConnectPoolPolicy
 import fr.husi.database.DataStore
 import fr.husi.database.ProfileManager
 import fr.husi.database.RuleEntity
+import fr.husi.fmt.RuleSetUnavailableException
 import fr.husi.fmt.buildConfig
 import fr.husi.fmt.trojan.TrojanBean
 import fr.husi.group.SubscriptionHttpFetch
@@ -21,13 +22,10 @@ import fr.husi.simplemode.SimpleModeTunnelSoftRecoveryPolicy
 import fr.husi.simplemode.probeSimpleModeNetwork
 import fr.husi.test.HusiKoinTest
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -40,6 +38,22 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
         DataStore.autoSelectLastFullProbeAt = System.currentTimeMillis() - 30_000L
         DataStore.autoSelectLastProbeWhitelistOnly = false
         DataStore.autoSelectProxyIdSetHash = 1L
+        // Live configs are strictly local (ruleset_always_local): buildConfig without forTest/
+        // forExport throws RuleSetUnavailableException when geo/<tag>.srs is missing. Seed the
+        // default tags so live-path tests only trip on the tags they manage themselves.
+        val geoDir = resolveRepository().externalAssetsDir.resolve("geo")
+        geoDir.mkdirs()
+        for (tag in listOf(
+            "geoip-cn",
+            "geosite-cn",
+            "geoip-ru",
+            "geosite-category-ru",
+            "geosite-category-ads-all",
+            "custom-ip-set",
+            "custom-domain-set",
+        )) {
+            geoDir.resolve("$tag.srs").writeText("test")
+        }
     }
 
     @AfterTest
@@ -251,7 +265,10 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
     }
 
     @Test
-    fun rulesetPartialLocalFallbackMatrix() = runBlocking {
+    fun rulesetPartialLocalMatrix() = runBlocking {
+        // ruleset_always_local (771): live configs are strictly local; a missing local file is an
+        // honest failure naming the missing rule-set, never a remote-url fallback (connect must not
+        // depend on github). Mirrors ConfigBuilderTest `buildConfig fails when local geo is partial`.
         val group = ProxyGroup(name = "group").applyDefaultValues()
         group.id = SagerDatabase.groupDao.createGroup(group)
         val proxy = ProxyEntity(groupId = group.id, userOrder = 1).apply {
@@ -281,31 +298,13 @@ class NetworkScenarioMatrixTest : HusiKoinTest() {
         missingGeoip.delete()
 
         try {
-            val routeRuleSets = Json.parseToJsonElement(buildConfig(proxy).config)
-                .jsonObject["route"]!!
-                .jsonObject["rule_set"]!!
-                .jsonArray
-                .map { it.jsonObject }
-
-            val geositeRuleSet = routeRuleSets.firstOrNull {
-                it["tag"]?.jsonPrimitive?.content == "geosite-ru-blocked"
+            val error = assertFailsWith<RuleSetUnavailableException> {
+                buildConfig(proxy)
             }
-            assertNotNull(geositeRuleSet, "ruleset_partial_local_fallback geosite")
-            assertTrue(
-                geositeRuleSet["path"]?.jsonPrimitive?.content?.endsWith("/geo/geosite-ru-blocked.srs") == true,
-                "ruleset_partial_local_fallback geosite local path",
-            )
-            assertNull(geositeRuleSet["url"], "ruleset_partial_local_fallback geosite no remote url")
-
-            val geoipRuleSet = routeRuleSets.firstOrNull {
-                it["tag"]?.jsonPrimitive?.content == "geoip-ru-blocked"
-            }
-            assertNotNull(geoipRuleSet, "ruleset_partial_local_fallback geoip")
-            assertNull(geoipRuleSet["path"], "ruleset_partial_local_fallback geoip no local path")
             assertEquals(
-                "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru-blocked.srs",
-                geoipRuleSet["url"]?.jsonPrimitive?.content,
-                "ruleset_partial_local_fallback geoip remote fallback",
+                listOf("geoip-ru-blocked"),
+                error.missingRuleSets,
+                "ruleset_partial_local missing geoip named",
             )
         } finally {
             localGeosite.delete()
