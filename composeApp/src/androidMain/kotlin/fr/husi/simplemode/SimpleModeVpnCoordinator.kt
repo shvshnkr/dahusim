@@ -1,5 +1,6 @@
 package fr.husi.simplemode
 
+import fr.husi.AlertType
 import fr.husi.bg.BackendState
 import fr.husi.bg.NetworkReachabilityProbe
 import fr.husi.bg.ServiceRegistry
@@ -55,6 +56,7 @@ internal object SimpleModeVpnCoordinator {
     private val adaptScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val adaptMutex = Mutex()
     private val adaptGeneration = AtomicInteger(0)
+    private val fruitlessAdaptCount = AtomicInteger(0)
     private var adaptJob: Job? = null
     private var lastAdaptAt = 0L
     private var allDeadRecoveryCount = 0
@@ -445,6 +447,7 @@ internal object SimpleModeVpnCoordinator {
             }
             is PrepareForConnectResult.Success -> {
                 resetAllDeadRecovery()
+                fruitlessAdaptCount.set(0)
                 if (!currentCoroutineContext().isActive || !isAdaptCurrent(adaptGen)) {
                     simpleModeLog("SimpleMode", "H30 wl_adapt_superseded before_reload gen=$adaptGen reason=$reason")
                     return false
@@ -550,6 +553,18 @@ internal object SimpleModeVpnCoordinator {
         lastAllDeadRecoveryAt = 0L
     }
 
+    private fun noteFruitlessAdapt(reason: String, whitelistOnly: Boolean) {
+        val count = fruitlessAdaptCount.incrementAndGet()
+        if (!SimpleModeAdaptExhaustPolicy.shouldEmitNoServersAlert(count, whitelistOnly)) {
+            return
+        }
+        simpleModeLog(
+            "SimpleMode",
+            "H30 wl_adapt_fruitless_exhausted count=$count reason=$reason",
+        )
+        BackendState.emitAlert(AlertType.SIMPLE_MODE_ALL_SERVERS_DEAD, "")
+    }
+
     private fun nextAllDeadRecoveryStep(): Int {
         val now = System.currentTimeMillis()
         if (now - lastAllDeadRecoveryAt > ALL_DEAD_RECOVERY_WINDOW_MS) {
@@ -589,6 +604,7 @@ internal object SimpleModeVpnCoordinator {
                 "SimpleMode",
                 "H30 wl_adapt_all_dead_stop reason=$reason step=$step profileId=$previousProfileId",
             )
+            noteFruitlessAdapt(reason, whitelistOnly)
             resolveRepository().stopService()
             resetAllDeadRecovery()
             return true
@@ -608,6 +624,7 @@ internal object SimpleModeVpnCoordinator {
                 "H30 wl_adapt_all_dead_same_profile_skip reason=$reason step=$step " +
                     "prev=$previousProfileId",
             )
+            noteFruitlessAdapt(reason, whitelistOnly)
             scheduleAllDeadRetry(reason, step)
             return true
         }

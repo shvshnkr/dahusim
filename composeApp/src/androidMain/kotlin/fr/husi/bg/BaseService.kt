@@ -723,9 +723,18 @@ class BaseService {
                             if (trySimpleModeManualProbeFallback(profile.id, reachability.whitelistOnly)) {
                                 return@runOnDefaultDispatcher
                             }
+                            // BS-S7 (field 2026-09-01 22:13:26): with autoselect active there is
+                            // no "another profile" to pick — the misleading advice replaced by
+                            // an honest no-working-servers message.
                             stopRunner(
                                 false,
-                                resolveRepository().getString(Res.string.manual_profile_probe_failed),
+                                resolveRepository().getString(
+                                    if (DataStore.simpleMode) {
+                                        Res.string.simple_mode_no_working_server_found
+                                    } else {
+                                        Res.string.manual_profile_probe_failed
+                                    },
+                                ),
                             )
                             return@runOnDefaultDispatcher
                         }

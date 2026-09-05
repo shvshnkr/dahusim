@@ -1070,6 +1070,7 @@ https://community.antifilter.download/list/domains.lst</string>
     <string name="simple_mode_all_servers_dead_banner_title">No working servers</string>
     <string name="simple_mode_all_servers_dead_banner_subtitle">All servers are down right now — daHusiM will wait and retry.</string>
     <string name="manual_profile_probe_failed">The selected server did not respond. Choose another profile or use auto-connect.</string>
+    <string name="simple_mode_no_working_server_found">Couldn\'t find a working server — check back later.</string>
     <string name="simple_mode_all_servers_dead_title">No working servers</string>
     <string name="simple_mode_all_servers_dead_message">Your subscription profiles did not respond to health checks. You can wait for normal internet outside the whitelist (for list updates), or exit the app.</string>
     <string name="ruleset_load_failed">Failed to load routing rules. Check your internet connection and try again.</string>
