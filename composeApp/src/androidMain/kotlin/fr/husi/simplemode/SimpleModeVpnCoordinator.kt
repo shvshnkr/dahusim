@@ -494,6 +494,11 @@ internal object SimpleModeVpnCoordinator {
                     return true
                 }
                 handoffState = HandoffState.RELOAD
+                // BS-S6 (field 2026-09-01 22:13): the adapt path prepared and (often) URL-verified
+                // this profile moments ago — mark it so the reload does not repeat the manual
+                // pre-connect probe and die on a marginal candidate (same pattern as
+                // session_recover_fallback).
+                SimpleModeConnectCoordinator.markPrepareVerifiedForConnect(newId)
                 requestTunnelReload(whitelistOnly, reason, newId)
                 return true
             }
