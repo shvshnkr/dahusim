@@ -191,6 +191,37 @@ internal object AutoServerSelectorProbePolicy {
     ): Boolean = urlOk <= 0 && !urlConfirmed &&
         (wlUrlProbes || activeWhitelistRestrictedNetwork)
 
+    /**
+     * BS-S5: an url-ok close to the WL probe timeout is a flap candidate (field 2026-09-01
+     * 22:13:16 best=35531:5589 at a 6s cap; 8s later the same probe web=fail -> Stopped).
+     * A single reverify before early-connect filters it out (one reverify, not a loop).
+     */
+    fun isMarginalUrlLatency(
+        delayMs: Int,
+        timeoutMs: Int,
+        factor: Double = 0.75,
+    ): Boolean = delayMs > (timeoutMs * factor)
+
+    /**
+     * The per-profile WL url probe timeout used by [DirectProfileUrlProbe]
+     * ((connectionTestTimeout * 2).coerceIn(5_000, 8_000)). Mirrors the formula — no value
+     * change — so the reverify threshold matches the probe that produced the latency (BS-S5).
+     */
+    fun wlUrlProbeTimeoutMs(connectionTestTimeoutMs: Int = DataStore.connectionTestTimeout): Int =
+        (connectionTestTimeoutMs * 2).coerceIn(5_000, 8_000)
+
+    data class MarginalUrlReverifyDecision(
+        val keep: Boolean,
+        val delayMs: Int?,
+    )
+
+    fun decideMarginalUrlReverify(reverifyDelayMs: Int?): MarginalUrlReverifyDecision =
+        if (reverifyDelayMs != null) {
+            MarginalUrlReverifyDecision(keep = true, delayMs = reverifyDelayMs)
+        } else {
+            MarginalUrlReverifyDecision(keep = false, delayMs = null)
+        }
+
     fun forceFullProbeReason(
         proxies: List<ProxyEntity>,
         whitelistBuiltinOnly: Boolean,

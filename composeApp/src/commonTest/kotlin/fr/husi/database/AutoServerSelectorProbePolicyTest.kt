@@ -568,6 +568,66 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
         assertEquals(emptySet<Long>(), AutoServerSelectorProbePolicy.cachedWlSweepIds().second)
     }
 
+    @Test
+    fun marginalUrlLatencyBelowThresholdIsNotMarginal() {
+        assertFalse(
+            AutoServerSelectorProbePolicy.isMarginalUrlLatency(
+                delayMs = 4440, timeoutMs = 6000, factor = 0.74,
+            ),
+        )
+        assertFalse(
+            AutoServerSelectorProbePolicy.isMarginalUrlLatency(
+                delayMs = 4000, timeoutMs = 6000,
+            ),
+        )
+    }
+
+    @Test
+    fun marginalUrlLatencyAboveThresholdIsMarginal() {
+        assertTrue(
+            AutoServerSelectorProbePolicy.isMarginalUrlLatency(
+                delayMs = 4570, timeoutMs = 6000, factor = 0.76,
+            ),
+        )
+        assertTrue(
+            AutoServerSelectorProbePolicy.isMarginalUrlLatency(
+                delayMs = 5589, timeoutMs = 6000,
+            ),
+        )
+    }
+
+    @Test
+    fun marginalUrlLatencyAtBoundaryIsNotMarginal() {
+        // Strict >: exactly factor*timeout is not marginal.
+        assertFalse(
+            AutoServerSelectorProbePolicy.isMarginalUrlLatency(
+                delayMs = 4500, timeoutMs = 6000,
+            ),
+        )
+    }
+
+    @Test
+    fun wlUrlProbeTimeoutMirrorsPerProfileFormula() {
+        assertEquals(6000, AutoServerSelectorProbePolicy.wlUrlProbeTimeoutMs(3000))
+        assertEquals(5000, AutoServerSelectorProbePolicy.wlUrlProbeTimeoutMs(2000))
+        assertEquals(8000, AutoServerSelectorProbePolicy.wlUrlProbeTimeoutMs(5000))
+        assertEquals(6000, AutoServerSelectorProbePolicy.wlUrlProbeTimeoutMs())
+    }
+
+    @Test
+    fun marginalUrlReverifyKeepsProfileOnSecondProbeOk() {
+        val decision = AutoServerSelectorProbePolicy.decideMarginalUrlReverify(reverifyDelayMs = 5700)
+        assertTrue(decision.keep)
+        assertEquals(5700, decision.delayMs)
+    }
+
+    @Test
+    fun marginalUrlReverifyDropsProfileOnSecondProbeFail() {
+        val decision = AutoServerSelectorProbePolicy.decideMarginalUrlReverify(reverifyDelayMs = null)
+        assertFalse(decision.keep)
+        assertEquals(null, decision.delayMs)
+    }
+
     private fun plainProxy(id: Long) = ProxyEntity().apply {
         this.id = id
         status = ProxyEntity.STATUS_INITIAL

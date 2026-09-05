@@ -1009,45 +1009,75 @@ object AutoServerSelector {
         // demoteUrlOnlyBestIfNeeded (URL-only url-ok can be a false positive — smoke 754 best
         // fell post_connect); the ranking path below still applies demoteUrlOnlyBestIfNeeded.
         if (shouldQuickProbe && urlTestDelays.isNotEmpty()) {
-            val earlyBest = if (wlUrlProbes) {
+            var earlyBest = if (wlUrlProbes) {
                 urlTestDelays.minBy { it.value }.key
             } else {
                 PrepareConnectSelection.openEarlyConnectBest(urlTestDelays, quickProbePings)
             }
-            val urlOkRanked = urlTestDelays.entries
-                .sortedBy { it.value }
-                .map { it.key }
-            val tcpOnlyRanked = quickProbePings.entries
-                .filter { it.key !in urlTestDelays }
-                .sortedBy { it.value }
-                .map { it.key }
-            val earlyFallbackQueue = (urlOkRanked + tcpOnlyRanked).joinToString(",")
-            DataStore.autoSelectFallbackQueue = earlyFallbackQueue
-            DataStore.autoSelectFallbackIndex = 0
-            sessionFallbackSteps.set(0)
-            if (selectedBefore != earlyBest) {
-                DataStore.selectedProxy = earlyBest
+            var urlDelays = urlTestDelays
+            if (wlUrlProbes) {
+                // BS-S5: a marginal url-ok (near the 6s WL probe cap) is a flap candidate —
+                // one reverify before early-connect; a failed reverify drops the profile and
+                // re-picks; if nothing is left, fall through to the 0-url-ok dead-end path.
+                val wlTimeoutMs = AutoServerSelectorProbePolicy.wlUrlProbeTimeoutMs()
+                val firstDelayMs = urlDelays.getValue(earlyBest)
+                if (AutoServerSelectorProbePolicy.isMarginalUrlLatency(firstDelayMs, wlTimeoutMs)) {
+                    val reverifyMs = DirectProfileUrlProbe.urlTestDelay(
+                        connectPool.first { it.id == earlyBest },
+                        whitelistOnly = true,
+                    )
+                    val decision = AutoServerSelectorProbePolicy.decideMarginalUrlReverify(reverifyMs)
+                    urlDelays = if (decision.keep) {
+                        urlDelays + (earlyBest to decision.delayMs!!)
+                    } else {
+                        urlDelays - earlyBest
+                    }
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H17 url_ok_reverify profile=$earlyBest first=$firstDelayMs " +
+                            "second=${reverifyMs ?: "fail"} decision=${if (decision.keep) "keep" else "drop"}",
+                    )
+                    if (!decision.keep) {
+                        earlyBest = urlDelays.minByOrNull { it.value }?.key ?: 0L
+                    }
+                }
             }
-            if (!effectiveHandoff) {
-                AutoServerSelectorProbePolicy.recordFullProbe(proxies, wlUrlProbes)
-            }
-            lastPrepareUrlVerifiedIds = urlTestDelays.keys
-            if (wlUrlProbes && !effectiveHandoff) {
-                AutoServerSelectorProbePolicy.recordWlSweepCache(
-                    wlSweepCacheFingerprint,
-                    urlTestDelays.keys,
-                    quickProbePings.keys,
+            if (earlyBest > 0L) {
+                val urlOkRanked = urlDelays.entries
+                    .sortedBy { it.value }
+                    .map { it.key }
+                val tcpOnlyRanked = quickProbePings.entries
+                    .filter { it.key !in urlDelays }
+                    .sortedBy { it.value }
+                    .map { it.key }
+                val earlyFallbackQueue = (urlOkRanked + tcpOnlyRanked).joinToString(",")
+                DataStore.autoSelectFallbackQueue = earlyFallbackQueue
+                DataStore.autoSelectFallbackIndex = 0
+                sessionFallbackSteps.set(0)
+                if (selectedBefore != earlyBest) {
+                    DataStore.selectedProxy = earlyBest
+                }
+                if (!effectiveHandoff) {
+                    AutoServerSelectorProbePolicy.recordFullProbe(proxies, wlUrlProbes)
+                }
+                lastPrepareUrlVerifiedIds = urlDelays.keys
+                if (wlUrlProbes && !effectiveHandoff) {
+                    AutoServerSelectorProbePolicy.recordWlSweepCache(
+                        wlSweepCacheFingerprint,
+                        urlDelays.keys,
+                        quickProbePings.keys,
+                    )
+                }
+                simpleModeLog(
+                    "SimpleMode",
+                    "H4 early_connect best=$earlyBest urlOk=${urlDelays.size} " +
+                        "tcpAlive=${quickProbePings.size} queueSize=${urlOkRanked.size + tcpOnlyRanked.size} " +
+                        "path=${if (wlUrlProbes) "wl" else "open"}",
                 )
+                ProxyProbeStateStore.logPoolSnapshot("prepare")
+                fullSweepInProgress = false
+                return PrepareForConnectResult.Success(earlyBest)
             }
-            simpleModeLog(
-                "SimpleMode",
-                "H4 early_connect best=$earlyBest urlOk=${urlTestDelays.size} " +
-                    "tcpAlive=${quickProbePings.size} queueSize=${urlOkRanked.size + tcpOnlyRanked.size} " +
-                    "path=${if (wlUrlProbes) "wl" else "open"}",
-            )
-            ProxyProbeStateStore.logPoolSnapshot("prepare")
-            fullSweepInProgress = false
-            return PrepareForConnectResult.Success(earlyBest)
         }
 
         val tcpPoolFullyTested = !compactTcpProbe ||
