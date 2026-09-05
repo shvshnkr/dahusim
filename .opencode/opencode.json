@@ -18,6 +18,16 @@
       "git ls-files*": "allow",
       "sed*": "allow",
       "*gradlew.bat :composeApp:desktopTest*": "allow",
+      // YELLOW — confirm (правило юзера: коммит/пуш/PR/релиз/CI-диспатч — только по явной просьбе)
+      "git add*": "ask",
+      "git commit*": "ask",
+      "git revert*": "ask",
+      "git push*": "ask",
+      "gh pr create*": "ask",
+      "gh pr merge*": "ask",
+      "gh release create*": "ask",
+      "gh workflow run*": "ask",
+      "*gh-workflow.sh build*": "ask",
       // RED — deny (деструктив)
       "git push --force*": "deny",
       "git push -f*": "deny",

@@ -12,10 +12,11 @@ description: Запуск автономного слайса DaiHusim — из 
 3. Читай код точечно: `symptoms-index.toml` (если симптом) → L1-hot TOML → `.kt` из entry. Не repo-wide explore.
 4. Реализуй **только** выбранный слайс; не выходи за его scope.
 5. **Verify (гейты):**
-   - Локально: unit-тесты `ANDROID_HOME=C:/Android/sdk ABOUT_LIBRARIES_OFFLINE=true ./gradlew :composeApp:desktopTest --tests "<ClassName>"` (из Git Bash/WSL; в PowerShell — `\gradlew.bat`).
+   - Локально: unit-тесты `bash buildScript/run-gradle.sh <имя> -- :composeApp:desktopTest --tests "<ClassName>"` (long-run + лог + env; PowerShell-вариант: `ANDROID_HOME=C:/Android/sdk ABOUT_LIBRARIES_OFFLINE=true .\gradlew.bat ...`).
    - CI-гейты (`featureJourneyTest`, `fieldLogScenarioTest`, android-сборки) — только `bash buildScript/ci/gh-workflow.sh build`; не просить manual smoke.
-6. После правок источников — `VERSION_CODE++` в `husi.properties`.
-7. Закрой слайс: append `AI/cursorworklog.md` (скилл `worklog`), обнови план если нужно.
+6. После правок источников — `VERSION_CODE++` в `husi.properties`: `bash buildScript/bump-version.sh`
+   (при живом gradle daemon — сначала `.\gradlew.bat --stop`, файл бывает залочен).
+7. Закрой слайс: append `AI/cursorworklog.md` (скилл `worklog`), обнови план (`AI/plans/*.md`: статус done) если нужно.
 
 ## Правила
 

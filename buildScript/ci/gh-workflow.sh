@@ -38,7 +38,8 @@ usage() {
 Usage: gh-workflow.sh <command> [options]
 
 Commands:
-  build [--android|--linux|--windows] [--ref BRANCH] [--wait]   # manual pre-release (default ref: main; redesign → Android-only in CI)
+  build [--android|--linux|--windows] [--ref BRANCH] [--wait] [--skip-version-gate]
+                                                        # manual pre-release (default ref: main; redesign → Android-only in CI)
   status [--run-id ID] [--branch BRANCH]                        # default branch: main
   promote [--ref BRANCH] [--run-id ID] [--dry-run] [--mandatory] [--min-version-code N]
           [--notes TEXT | --notes-file PATH | --from-changelog]
@@ -66,7 +67,7 @@ cmd_prune_prereleases() {
 }
 
 cmd_build() {
-  local android=true linux=true windows=true wait=false ref=main
+  local android=true linux=true windows=true wait=false ref=main skip_gate=false
   while [ $# -gt 0 ]; do
     case "$1" in
       --android) android=true; linux=false; windows=false ;;
@@ -74,10 +75,15 @@ cmd_build() {
       --windows) android=false; linux=false; windows=true ;;
       --ref) ref="$2"; shift 2; continue ;;
       --wait) wait=true ;;
+      --skip-version-gate) skip_gate=true ;;
       *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
     shift
   done
+  # Preflight: bump-гейт — dispatch без VERSION_CODE на shippable-изменениях запрещён (AGENTS.md).
+  local gate_args=(--ref "$ref")
+  if [ "$skip_gate" = true ]; then gate_args+=(--skip); fi
+  "$SCRIPT_DIR/../check-version-bump.sh" "${gate_args[@]}"
   local repo
   repo="$(resolve_gh_repo)"
   gh workflow run all-platforms-build.yml --repo "$repo" --ref "$ref" \

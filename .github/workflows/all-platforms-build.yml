@@ -134,6 +134,27 @@ jobs:
             windows:
               - "release/windows/**"
 
+      - name: VERSION_CODE bump gate (push)
+        if: github.event_name == 'push' && steps.filter.outputs.shippable == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            echo "VERSION_GATE: нет before-sha — пропускаю"; exit 0
+          fi
+          git fetch --quiet origin "$before" 2>/dev/null || true
+          if ! git cat-file -e "$before^{commit}" 2>/dev/null; then
+            echo "VERSION_GATE: before-sha недоступен (force-push/новая ветка?) — пропускаю"; exit 0
+          fi
+          vc_base="$(git show "$before:husi.properties" | sed -n 's/^VERSION_CODE=//p' | tr -d '[:space:]')"
+          vc_now="$(sed -n 's/^VERSION_CODE=//p' husi.properties | tr -d '[:space:]')"
+          echo "VERSION_GATE: $vc_base -> $vc_now"
+          if [ -z "$vc_now" ] || [ "${vc_now:-0}" -le "${vc_base:-0}" ]; then
+            echo "::error::Shippable sources changed but VERSION_CODE was not bumped (husi.properties: ${vc_base:-?} -> ${vc_now:-?}). Run bash buildScript/bump-version.sh and commit the bump."
+            exit 1
+          fi
+
       - name: Resolve platform selection
         id: resolve
         shell: bash
