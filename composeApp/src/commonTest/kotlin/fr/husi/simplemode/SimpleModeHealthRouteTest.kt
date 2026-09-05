@@ -525,6 +525,28 @@ class SimpleModeHealthRouteTest : HusiKoinTest() {
     }
 
     @Test
+    fun http5xxResponseRecognizedAsTransportHealthy() {
+        assertTrue(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel("unexpected HTTP response status: 503"))
+        assertTrue(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel("unexpected HTTP response status: 502"))
+        assertTrue(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel("unexpected HTTP response status: 504"))
+        assertTrue(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel("unexpected http response status: 503"))
+    }
+
+    @Test
+    fun http4xxResponseIsNotTransportHealthy() {
+        assertFalse(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel("unexpected HTTP response status: 429"))
+        assertFalse(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel("unexpected HTTP response status: 403"))
+    }
+
+    @Test
+    fun nonHttpErrorsAreNotTransportHealthy() {
+        assertFalse(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel("connection refused"))
+        assertFalse(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel("timeout: no recent network activity"))
+        assertFalse(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel(null))
+        assertFalse(SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel(""))
+    }
+
+    @Test
     fun softRecoveryEligibleMatrix() {
         assertTrue(
             SimpleModeHealthRoute.isSoftRecoveryEligible(

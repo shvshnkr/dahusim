@@ -16,6 +16,7 @@ internal object SimpleModePostConnectHealth {
         val lastError: String?,
         val recordUrlVerified: Boolean = false,
         val dcOkOnWebFail: Boolean = false,
+        val tunnelTransportHealthy: Boolean = false,
     )
 
     suspend fun verify(
@@ -98,8 +99,16 @@ internal object SimpleModePostConnectHealth {
                         latencyMs = 0,
                         lastError = lastError,
                         dcOkOnWebFail = true,
+                        tunnelTransportHealthy = SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel(lastError),
                     )
                 }
+            }
+            if (SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel(lastError)) {
+                simpleModeLog(
+                    "SimpleMode",
+                    "H3 post_connect_single_attempt_reason=http_5xx profileId=${profile.id}",
+                )
+                break
             }
             if (SimpleModeHealthRoute.isPostConnectHardFail(lastError)) {
                 break
@@ -109,6 +118,11 @@ internal object SimpleModePostConnectHealth {
                 break
             }
         }
-        return Result(ok = false, latencyMs = 0, lastError = lastError)
+        return Result(
+            ok = false,
+            latencyMs = 0,
+            lastError = lastError,
+            tunnelTransportHealthy = SimpleModeHealthRoute.isHttpResponseReceivedThroughTunnel(lastError),
+        )
     }
 }

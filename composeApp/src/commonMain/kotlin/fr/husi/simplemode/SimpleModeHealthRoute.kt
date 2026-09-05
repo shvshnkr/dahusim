@@ -196,6 +196,14 @@ internal object SimpleModeHealthRoute {
             e.contains("not a valid tls")
     }
 
+    /** 5xx HTTP body came back through the tunnel — transport path itself responded. */
+    internal fun isHttpResponseReceivedThroughTunnel(error: String?): Boolean {
+        if (error.isNullOrBlank()) return false
+        val m = Regex("unexpected http response status:\\s*(\\d{3})", RegexOption.IGNORE_CASE)
+            .find(error) ?: return false
+        return m.groupValues[1].toIntOrNull()?.let { it in 500..599 } == true
+    }
+
     fun isRecentFullProbeForPostConnect(): Boolean {
         val lastProbeAt = DataStore.autoSelectLastFullProbeAt
         return lastProbeAt > 0L &&

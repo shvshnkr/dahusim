@@ -881,6 +881,7 @@ class BaseService {
                             simpleModeLog(
                                 "SimpleMode",
                                 "H3 post_connect_url_test_failed profileId=${profile.id} " +
+                                    "tunnelTransportHealthy=${postConnectProbe.tunnelTransportHealthy} " +
                                     "error=${postConnectProbe.lastError.orEmpty()}",
                             )
                             postConnectLastError = postConnectProbe.lastError
