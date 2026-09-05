@@ -40,6 +40,21 @@
 
 При сомнении: на WL **не добавляй** в tunnel health домены, которые и так открыты с телефона без VPN.
 
+## Полевой разбор 01.09.2026 — расхождения код/доки (R1–R4)
+
+Подробно: [`docs/BS_SMOKE_20260901.md`](./BS_SMOKE_20260901.md); спеки фиксов (на согласование):
+`AI/plans/bs-fix-specs-2026-09-01.md` (слайсы BS-S1..BS-S7).
+
+| # | Док | Код (APK 772) |
+|---|-----|---------------|
+| R1 | Post-connect/session WL = composite messenger (web + 91.105) | Только `web.telegram.org`; DC при web-fail не пробивается (`primaryBsProbeUrls`, `probeMessengerWave` web-first short-circuit) |
+| R2 | Prepare WL = composite (web И DC) | Есть, но web-first: при web-fail DC не пробивается — гейт эквивалентен «web must pass» |
+| R3 | Не использовать gstatic/cloudflare для WL-верификации | `wl_to_open` fallback верифицирует OPEN-пул open-URL-сетом (`wlUrlProbes` зависит от poolMode, не от uplink) |
+| R4 | Post-connect CONFIRM «при inconclusive» | `postConnectProbeUrls` жёстко PRIMARY; при 503 на messenger-URL inconclusive недостижим |
+
+Статус: исправляется слайсами BS-S1 (R3) и BS-S3 (R1/R2); после релиза фиксов таблицы фаз выше
+обновляются под фактическое поведение.
+
 ## Полевой BS-тест (чеклист для агентов)
 
 BS-режим доступен не всегда: на мобильном интернете Google может быть жив (`H37 google=true wlOnly=false`) —
