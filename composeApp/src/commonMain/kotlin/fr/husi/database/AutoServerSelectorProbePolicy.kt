@@ -138,6 +138,21 @@ internal object AutoServerSelectorProbePolicy {
         )
     }
 
+    /**
+     * Whether a pool build must verify candidates with BS targets (whitelist-only URL
+     * probes). WL subscription pools always do; MERGED and OPEN pools do while the active
+     * uplink is whitelist-restricted — an open-fallback sweep on a BS uplink must not
+     * prove itself with gstatic/cloudflare, only with Telegram (BS-S1).
+     */
+    fun wlUrlProbeForPool(
+        mode: ConnectPoolPolicy.PoolBuildMode,
+        activeWhitelistRestrictedNetwork: Boolean,
+    ): Boolean = when (mode) {
+        ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION -> true
+        ConnectPoolPolicy.PoolBuildMode.MERGED -> activeWhitelistRestrictedNetwork
+        ConnectPoolPolicy.PoolBuildMode.OPEN -> activeWhitelistRestrictedNetwork
+    }
+
     fun wlPrepareHasUrlConfirmation(
         profileId: Long,
         urlTestDelays: Map<Long, Int>,

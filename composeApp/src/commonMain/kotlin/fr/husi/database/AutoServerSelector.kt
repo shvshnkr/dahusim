@@ -377,8 +377,7 @@ object AutoServerSelector {
     }
 
     private fun poolUsesWlUrlProbes(mode: ConnectPoolPolicy.PoolBuildMode): Boolean =
-        mode == ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION ||
-            (mode == ConnectPoolPolicy.PoolBuildMode.MERGED && DataStore.activeWhitelistRestrictedNetwork)
+        AutoServerSelectorProbePolicy.wlUrlProbeForPool(mode, DataStore.activeWhitelistRestrictedNetwork)
 
     private fun resolveWlUrlProbes(
         poolMode: ConnectPoolPolicy.PoolBuildMode,

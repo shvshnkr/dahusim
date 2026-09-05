@@ -257,6 +257,62 @@ class AutoServerSelectorProbePolicyTest : HusiKoinTest() {
     }
 
     @Test
+    fun wlUrlProbeOpenPoolOnBsUplink() {
+        assertTrue(
+            AutoServerSelectorProbePolicy.wlUrlProbeForPool(
+                ConnectPoolPolicy.PoolBuildMode.OPEN,
+                activeWhitelistRestrictedNetwork = true,
+            ),
+        )
+    }
+
+    @Test
+    fun wlUrlProbeOpenPoolOnOpenNetwork() {
+        assertFalse(
+            AutoServerSelectorProbePolicy.wlUrlProbeForPool(
+                ConnectPoolPolicy.PoolBuildMode.OPEN,
+                activeWhitelistRestrictedNetwork = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wlUrlProbeMergedPoolOnBsUplink() {
+        assertTrue(
+            AutoServerSelectorProbePolicy.wlUrlProbeForPool(
+                ConnectPoolPolicy.PoolBuildMode.MERGED,
+                activeWhitelistRestrictedNetwork = true,
+            ),
+        )
+    }
+
+    @Test
+    fun wlUrlProbeMergedPoolOnOpenNetwork() {
+        assertFalse(
+            AutoServerSelectorProbePolicy.wlUrlProbeForPool(
+                ConnectPoolPolicy.PoolBuildMode.MERGED,
+                activeWhitelistRestrictedNetwork = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wlUrlProbeSubscriptionPoolAlwaysUsesBsTargets() {
+        assertTrue(
+            AutoServerSelectorProbePolicy.wlUrlProbeForPool(
+                ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION,
+                activeWhitelistRestrictedNetwork = true,
+            ),
+        )
+        assertTrue(
+            AutoServerSelectorProbePolicy.wlUrlProbeForPool(
+                ConnectPoolPolicy.PoolBuildMode.WL_SUBSCRIPTION,
+                activeWhitelistRestrictedNetwork = false,
+            ),
+        )
+    }
+
+    @Test
     fun useCompactReprobeWhenHashChangedWithinGraceAndWlModeStable() {
         val proxies = listOf(trojanProxy(1L), trojanProxy(2L))
         val hash = AutoServerSelectorProbePolicy.computeProxyIdSetHash(proxies)
