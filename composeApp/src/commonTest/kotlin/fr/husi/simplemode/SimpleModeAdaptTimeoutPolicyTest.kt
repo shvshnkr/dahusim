@@ -95,4 +95,56 @@ class SimpleModeAdaptTimeoutPolicyTest {
         assertTrue(!SimpleModeAdaptTimeoutPolicy.isZombieLoopReason("reachability_flip"))
         assertTrue(!SimpleModeAdaptTimeoutPolicy.isZombieLoopReason("session_recover_fallback"))
     }
+
+    @Test
+    fun handoffAlwaysKeeps45sEvenDuringFullSweep() {
+        assertEquals(
+            45_000L,
+            SimpleModeAdaptTimeoutPolicy.adaptPrepareTimeoutMs(
+                reason = "network_handoff",
+                networkHandoff = true,
+                fullSweepInProgress = true,
+            ),
+        )
+        assertEquals(
+            45_000L,
+            SimpleModeAdaptTimeoutPolicy.adaptPrepareTimeoutMs(
+                reason = "reachability_flip",
+                networkHandoff = true,
+                fullSweepInProgress = false,
+            ),
+        )
+    }
+
+    @Test
+    fun fullSweepWidensTimeoutTo180s() {
+        assertEquals(
+            180_000L,
+            SimpleModeAdaptTimeoutPolicy.adaptPrepareTimeoutMs(
+                reason = "session_unhealthy",
+                networkHandoff = false,
+                fullSweepInProgress = true,
+            ),
+        )
+        assertEquals(
+            180_000L,
+            SimpleModeAdaptTimeoutPolicy.adaptPrepareTimeoutMs(
+                reason = "sub_transport_recover",
+                networkHandoff = false,
+                fullSweepInProgress = true,
+            ),
+        )
+    }
+
+    @Test
+    fun regularAdaptKeeps30s() {
+        assertEquals(
+            30_000L,
+            SimpleModeAdaptTimeoutPolicy.adaptPrepareTimeoutMs(
+                reason = "session_unhealthy",
+                networkHandoff = false,
+                fullSweepInProgress = false,
+            ),
+        )
+    }
 }

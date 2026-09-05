@@ -71,6 +71,11 @@ object AutoServerSelector {
     private var probeUiActive = false
     @Volatile
     private var lastPrepareUrlVerifiedIds: Set<Long> = emptySet()
+
+    /** True while a forced full-sweep quick probe is running; ADAPT timeout widens to 180s. */
+    @Volatile
+    internal var fullSweepInProgress = false
+
     private val sessionFallbackSteps = AtomicInteger(0)
 
     fun peekLastPrepareUrlVerifiedIds(): Set<Long> = lastPrepareUrlVerifiedIds
@@ -405,6 +410,7 @@ object AutoServerSelector {
         probeStatesAll: Map<Long, ProxyProbeState>? = null,
         compactWlSweep: Boolean = false,
     ): PrepareForConnectResult {
+        fullSweepInProgress = false
         val selectedBefore = DataStore.selectedProxy
 
         val proxiesAll = allProxies ?: SagerDatabase.proxyDao.getAll()
@@ -605,6 +611,7 @@ object AutoServerSelector {
             availableCount == 0 ||
             forceFullProbeReason != null
         if (forceFullProbeReason != null) {
+            fullSweepInProgress = true
             simpleModeLog(
                 "SimpleMode",
                 "H25 full_probe_forced reason=$forceFullProbeReason handoff=$effectiveHandoff " +
@@ -1039,6 +1046,7 @@ object AutoServerSelector {
                     "path=${if (wlUrlProbes) "wl" else "open"}",
             )
             ProxyProbeStateStore.logPoolSnapshot("prepare")
+            fullSweepInProgress = false
             return PrepareForConnectResult.Success(earlyBest)
         }
 
@@ -1064,6 +1072,7 @@ object AutoServerSelector {
                 message = "all tcp and url probes failed",
                 data = mapOf("count" to connectPool.size.toString()),
             )
+            fullSweepInProgress = false
             return PrepareForConnectResult.AllProbesDead
         }
 
@@ -1327,6 +1336,7 @@ object AutoServerSelector {
             if (wlUrlProbes) {
                 AutoServerSelectorProbePolicy.invalidateWlSweepCache()
             }
+            fullSweepInProgress = false
             return PrepareForConnectResult.AllProbesDead
         }
         val openPrepareDecision = AutoServerSelectorProbePolicy.decideOpenPrepare(
@@ -1351,6 +1361,7 @@ object AutoServerSelector {
                     "SimpleMode",
                     "H22 prepare_open_hard_dead best=$finalBest tcpAlive=$quickProbeAlive pool=${connectPool.size}",
                 )
+                fullSweepInProgress = false
                 return PrepareForConnectResult.AllProbesDead
             }
             AutoServerSelectorProbePolicy.OpenPrepareDecision.DEGRADED -> {
@@ -1377,6 +1388,7 @@ object AutoServerSelector {
             )
             DataStore.selectedProxy = resolvedBest
         }
+        fullSweepInProgress = false
         return PrepareForConnectResult.Success(resolvedBest)
     }
 

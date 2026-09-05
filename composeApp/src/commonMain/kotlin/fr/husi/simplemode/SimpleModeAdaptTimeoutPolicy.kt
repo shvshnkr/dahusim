@@ -10,6 +10,16 @@ internal object SimpleModeAdaptTimeoutPolicy {
     /** Sentinel: no reloadable profile — escalate to the all-dead recovery path. */
     const val NO_RELOAD = -1L
 
+    /** A forced full-sweep quick probe takes ~2 min in 0-url-ok conditions; 30s kills it mid-sweep. */
+    const val FULL_SWEEP_ADAPT_TIMEOUT_MS = 180_000L
+
+    fun adaptPrepareTimeoutMs(reason: String, networkHandoff: Boolean, fullSweepInProgress: Boolean): Long =
+        when {
+            networkHandoff -> 45_000L
+            fullSweepInProgress -> FULL_SWEEP_ADAPT_TIMEOUT_MS
+            else -> 30_000L
+        }
+
     fun isZombieLoopReason(reason: String): Boolean =
         reason == "session_unhealthy" || reason == "session_health_exhausted"
 

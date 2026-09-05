@@ -35,8 +35,6 @@ import java.util.concurrent.atomic.AtomicInteger
 internal object SimpleModeVpnCoordinator {
 
     private const val ADAPT_DEBOUNCE_MS = 2_500L
-    private const val ADAPT_PREPARE_TIMEOUT_MS = 30_000L
-    private const val HANDOFF_PREPARE_TIMEOUT_MS = 45_000L
     private const val HANDOFF_STABILIZE_MS = 700L
     private const val HANDOFF_PRESERVE_TIMEOUT_MS = 3_200L
     private const val HANDOFF_RECHECK_TIMEOUT_MS = 4_200L
@@ -370,11 +368,11 @@ internal object SimpleModeVpnCoordinator {
         if (networkHandoff && handoffPreserveFailed) {
             delay(HANDOFF_RECHECK_BACKOFF_MS)
         }
-        val prepareTimeoutMs = if (networkHandoff) {
-            HANDOFF_PREPARE_TIMEOUT_MS
-        } else {
-            ADAPT_PREPARE_TIMEOUT_MS
-        }
+        val prepareTimeoutMs = SimpleModeAdaptTimeoutPolicy.adaptPrepareTimeoutMs(
+            reason = reason,
+            networkHandoff = networkHandoff,
+            fullSweepInProgress = AutoServerSelector.fullSweepInProgress,
+        )
         val prep = try {
             withTimeoutOrNull(prepareTimeoutMs) {
                 SimpleModeNetworkAdaptation.reselectForNetwork(
