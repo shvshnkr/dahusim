@@ -48,6 +48,7 @@ internal object SimpleModeMessengerProbe {
         val lastProbeUrl: String?,
         val dcSecondaryOk: Boolean = false,
         val wasSynthetic: Boolean = false,
+        val dcOkOnWebFail: Boolean = false,
     )
 
     fun evaluateTunnelWave(
@@ -87,6 +88,18 @@ internal object SimpleModeMessengerProbe {
         )
     }
 
+    fun evaluateWebFailWithDcRescue(
+        webError: String?,
+        dcLatencyMs: Int,
+        dcError: String?,
+    ): TunnelWaveEvaluation = TunnelWaveEvaluation(
+        ok = false,
+        latencyMs = 0,
+        lastError = webError ?: "messenger_web_failed",
+        lastProbeUrl = WEB_URL,
+        dcOkOnWebFail = dcLatencyMs > 0,
+    )
+
     fun logPrepareProbe(
         profileId: Long,
         webOk: Boolean,
@@ -113,6 +126,20 @@ internal object SimpleModeMessengerProbe {
                 "outboundTag=${outboundTag.ifBlank { "-" }} ok=${evaluation.ok} " +
                 "delayMs=${evaluation.latencyMs} dc_149_154=${if (evaluation.dcSecondaryOk) "ok" else "fail"} " +
                 "synthetic=${evaluation.wasSynthetic}",
+        )
+    }
+
+    fun logWebFailDcRescue(
+        phase: String,
+        whitelistOnly: Boolean,
+        outboundTag: String,
+        dcOk: Boolean,
+    ) {
+        simpleModeLog(
+            "SimpleMode",
+            "H37 messenger_wave phase=$phase wlOnly=$whitelistOnly " +
+                "outboundTag=${outboundTag.ifBlank { "-" }} ok=false web=fail " +
+                "dc=${if (dcOk) "ok" else "fail"} dc_rescue=1",
         )
     }
 }

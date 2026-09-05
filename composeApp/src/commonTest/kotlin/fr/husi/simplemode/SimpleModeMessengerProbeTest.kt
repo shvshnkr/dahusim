@@ -48,6 +48,7 @@ class SimpleModeMessengerProbeTest {
         )
         assertFalse(evaluation.ok)
         assertEquals(SimpleModeMessengerProbe.WEB_URL, evaluation.lastProbeUrl)
+        assertFalse(evaluation.dcOkOnWebFail)
     }
 
     @Test
@@ -134,6 +135,33 @@ class SimpleModeMessengerProbeTest {
         )
         assertTrue(evaluation.ok)
         assertFalse(evaluation.wasSynthetic)
+    }
+
+    @Test
+    fun evaluateWebFailWithDcRescueMarksDcOkWhenDcLatencyPositive() {
+        val evaluation = SimpleModeMessengerProbe.evaluateWebFailWithDcRescue(
+            webError = "unexpected HTTP response status: 503",
+            dcLatencyMs = 100,
+            dcError = null,
+        )
+        assertFalse(evaluation.ok)
+        assertEquals(0, evaluation.latencyMs)
+        assertEquals("unexpected HTTP response status: 503", evaluation.lastError)
+        assertEquals(SimpleModeMessengerProbe.WEB_URL, evaluation.lastProbeUrl)
+        assertTrue(evaluation.dcOkOnWebFail)
+        assertFalse(evaluation.dcSecondaryOk)
+    }
+
+    @Test
+    fun evaluateWebFailWithDcRescueDcFailKeepsDefaultError() {
+        val evaluation = SimpleModeMessengerProbe.evaluateWebFailWithDcRescue(
+            webError = null,
+            dcLatencyMs = 0,
+            dcError = "dial tcp 91.105.192.100: i/o timeout",
+        )
+        assertFalse(evaluation.ok)
+        assertEquals("messenger_web_failed", evaluation.lastError)
+        assertFalse(evaluation.dcOkOnWebFail)
     }
 
     @Test

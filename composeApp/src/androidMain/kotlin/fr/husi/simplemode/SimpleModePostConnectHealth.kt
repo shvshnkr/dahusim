@@ -15,6 +15,7 @@ internal object SimpleModePostConnectHealth {
         val latencyMs: Int,
         val lastError: String?,
         val recordUrlVerified: Boolean = false,
+        val dcOkOnWebFail: Boolean = false,
     )
 
     suspend fun verify(
@@ -87,6 +88,18 @@ internal object SimpleModePostConnectHealth {
                     )
                 }
                 lastError = tunnel.lastError ?: "post-connect tunnel url test failed"
+                if (tunnel.dcOkOnWebFail) {
+                    simpleModeLog(
+                        "SimpleMode",
+                        "H3 post_connect_web_fail_dc_ok profileId=${profile.id}",
+                    )
+                    return Result(
+                        ok = false,
+                        latencyMs = 0,
+                        lastError = lastError,
+                        dcOkOnWebFail = true,
+                    )
+                }
             }
             if (SimpleModeHealthRoute.isPostConnectHardFail(lastError)) {
                 break

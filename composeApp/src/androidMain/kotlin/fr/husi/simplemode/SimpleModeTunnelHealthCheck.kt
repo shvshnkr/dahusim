@@ -32,6 +32,7 @@ internal object SimpleModeTunnelHealthCheck {
         val hadConclusiveFailure: Boolean = false,
         val wasSyntheticSuccess: Boolean = false,
         val dcSecondaryOk: Boolean = false,
+        val dcOkOnWebFail: Boolean = false,
     )
 
     /** First successful URL latency; 1 on inconclusive WL pass; 0 if failed. */
@@ -118,11 +119,41 @@ internal object SimpleModeTunnelHealthCheck {
             tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
         )
         if (web.latencyMs <= 0) {
+            val dcRequired = probeSingleUrl(
+                phase = phase,
+                whitelistOnly = whitelistOnly,
+                outboundTag = outboundTag,
+                url = SimpleModeMessengerProbe.DC_REQUIRED_URL,
+                timeoutMs = timeoutMs,
+                tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+            )
+            if (dcRequired.latencyMs > 0) {
+                probeSingleUrl(
+                    phase = phase,
+                    whitelistOnly = whitelistOnly,
+                    outboundTag = outboundTag,
+                    url = SimpleModeMessengerProbe.DC_SECONDARY_URL,
+                    timeoutMs = timeoutMs,
+                    tier = SimpleModeHealthRoute.ProbeTier.PRIMARY,
+                )
+            }
+            val evaluation = SimpleModeMessengerProbe.evaluateWebFailWithDcRescue(
+                webError = web.lastError,
+                dcLatencyMs = dcRequired.latencyMs,
+                dcError = dcRequired.lastError,
+            )
+            SimpleModeMessengerProbe.logWebFailDcRescue(
+                phase,
+                whitelistOnly,
+                outboundTag,
+                evaluation.dcOkOnWebFail,
+            )
             return TunnelProbeOutcome(
                 latencyMs = 0,
-                lastError = web.lastError,
-                lastProbeUrl = SimpleModeMessengerProbe.WEB_URL,
+                lastError = evaluation.lastError,
+                lastProbeUrl = evaluation.lastProbeUrl,
                 hadConclusiveFailure = web.hadConclusiveFailure,
+                dcOkOnWebFail = evaluation.dcOkOnWebFail,
             )
         }
         val dcRequired = probeSingleUrl(
