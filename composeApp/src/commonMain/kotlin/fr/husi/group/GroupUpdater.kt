@@ -355,7 +355,7 @@ abstract class GroupUpdater {
                 val connected = DataStore.serviceState.connected
                 if (
                     byUser &&
-                    subscription.link.startsWith("http://") &&
+                    SubscriptionLinks.firstLink(subscription.link).startsWith("http://") &&
                     subscription.updateWhenConnectedOnly &&
                     !connected &&
                     !allowDisconnectedUpdate

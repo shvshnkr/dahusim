@@ -381,4 +381,106 @@ class SubscriptionHttpFetchTest {
             SubscriptionFetchTestHooks.clear()
         }
     }
+
+    @Test
+    fun `mirror race returns first successful candidate when canonical fails`() = runBlocking {
+        val canonical = "https://a.example/feed.txt"
+        val mirror = "https://b.example/feed.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(mirror to body),
+            failForFetchLinks = setOf(canonical),
+        )
+        try {
+            val response = SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = canonical,
+                    mirrorLinks = listOf(mirror),
+                    userAgent = "test",
+                    whitelistRestricted = false,
+                    vpnConnected = false,
+                ),
+            )
+            assertEquals(body, response.body)
+            assertEquals(mirror, response.fetchLink)
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `mirror race canonical success does not fail the fetch even if mirrors fail`() = runBlocking {
+        val canonical = "https://a.example/feed.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(canonical to body),
+            failForFetchLinks = setOf("https://b.example/feed.txt", "https://c.example/feed.txt"),
+        )
+        try {
+            val response = SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = canonical,
+                    mirrorLinks = listOf("https://b.example/feed.txt", "https://c.example/feed.txt"),
+                    userAgent = "test",
+                    whitelistRestricted = false,
+                    vpnConnected = false,
+                ),
+            )
+            assertEquals(body, response.body)
+            assertEquals(canonical, response.fetchLink)
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `mirror race propagates failure when every candidate fails`() = runBlocking {
+        val canonical = "https://a.example/feed.txt"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = emptyMap(),
+            failForFetchLinks = setOf(canonical, "https://b.example/feed.txt"),
+        )
+        try {
+            val failure = assertFailsWith<IllegalStateException> {
+                SubscriptionHttpFetch.fetchText(
+                    SubscriptionHttpFetch.Request(
+                        canonicalLink = canonical,
+                        mirrorLinks = listOf("https://b.example/feed.txt"),
+                        userAgent = "test",
+                        whitelistRestricted = false,
+                        vpnConnected = false,
+                    ),
+                )
+            }
+            assertTrue(failure.message.orEmpty().contains("test hook"))
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
+
+    @Test
+    fun `mirror race request mirrors are split and deduped`() = runBlocking {
+        val canonical = "https://a.example/feed.txt https://b.example/feed.txt"
+        val body = "${FmtTestConstant.VLESS_GRPC_URL}"
+        SubscriptionFetchTestHooks.install(
+            bodyByLink = mapOf(
+                "https://a.example/feed.txt" to body,
+                "https://b.example/feed.txt" to body,
+            ),
+        )
+        try {
+            val response = SubscriptionHttpFetch.fetchText(
+                SubscriptionHttpFetch.Request(
+                    canonicalLink = canonical,
+                    mirrorLinks = listOf("https://b.example/feed.txt"),
+                    userAgent = "test",
+                    whitelistRestricted = true,
+                    vpnConnected = false,
+                ),
+            )
+            assertEquals(body, response.body)
+        } finally {
+            SubscriptionFetchTestHooks.clear()
+        }
+    }
 }

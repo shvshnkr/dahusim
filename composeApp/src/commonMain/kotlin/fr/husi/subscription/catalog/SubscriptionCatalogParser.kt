@@ -51,7 +51,11 @@ object SubscriptionCatalogParser {
                             require(link.startsWith("https://")) {
                                 "only https links are allowed for UPSERT: $sourceId"
                             }
-                            require(upsertLinks.add(normalizeLink(link))) {
+                            val mirrorTokens = link.split(Regex("\\s+")).map { it.trim() }
+                            require(mirrorTokens.all { it.startsWith("https://") }) {
+                                "every mirror of a UPSERT link must be https: $sourceId"
+                            }
+                            require(upsertLinks.add(normalizeLinkField(link))) {
                                 "duplicate UPSERT link: $link"
                             }
                             val subscriptionType = parseSubscriptionType(parts[4].trim())
@@ -146,4 +150,11 @@ object SubscriptionCatalogParser {
             trimmed
         }
     }
+
+    /**
+     * Normalizes each whitespace-separated mirror of a link field so mirror lists
+     * dedupe (and compare against stored beans) regardless of host-case or default ports.
+     */
+    internal fun normalizeLinkField(link: String): String =
+        link.split(Regex("\\s+")).map { normalizeLink(it) }.joinToString(" ")
 }

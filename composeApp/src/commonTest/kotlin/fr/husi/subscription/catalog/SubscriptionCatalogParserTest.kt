@@ -6,6 +6,7 @@ import fr.husi.group.SubscriptionFetchProfile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class SubscriptionCatalogParserTest {
 
@@ -186,5 +187,54 @@ class SubscriptionCatalogParserTest {
         val document = SubscriptionCatalogParser.parse(raw)
         assertEquals(true, document.allowEmpty)
         assertEquals(0, document.entries.size)
+    }
+
+    @Test
+    fun `parse upsert link with whitespace separated mirrors`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=7
+            UPSERT|mirrored|Mirrored|https://a.example/sub.txt https://b.example/sub.txt|RAW|default|wl
+        """.trimIndent()
+        val upsert = SubscriptionCatalogParser.parse(raw).entries.single() as SubscriptionCatalogEntry.Upsert
+        assertEquals("https://a.example/sub.txt https://b.example/sub.txt", upsert.link)
+    }
+
+    @Test
+    fun `reject upsert link whose mirror token is not https`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=7
+            UPSERT|bad-mirror|Bad|https://a.example/sub.txt http://b.example/sub.txt|RAW|default
+        """.trimIndent()
+        assertFailsWith<IllegalArgumentException> {
+            SubscriptionCatalogParser.parse(raw)
+        }
+    }
+
+    @Test
+    fun `mirror lists dedupe by normalized field`() {
+        val raw = """
+            HUSI_SUBSCRIPTION_CATALOG_V1
+            generation=8
+            UPSERT|a-id|A|https://Example.com/sub.txt https://mirror.example/sub.txt|RAW|default
+            UPSERT|b-id|B|https://example.com/sub.txt https://mirror.example/sub.txt|RAW|default
+        """.trimIndent()
+        assertFailsWith<IllegalArgumentException> {
+            SubscriptionCatalogParser.parse(raw)
+        }
+    }
+
+    @Test
+    fun `defaults starter seeds all parse with mirrors`() {
+        val fromDefaults = SubscriptionCatalogParser.parse(SubscriptionCatalogDefaults.joinToCatalogLines(5L))
+        val kizyak = fromDefaults.entries
+            .filterIsInstance<SubscriptionCatalogEntry.Upsert>()
+            .single { it.sourceId == "kizyak-beta7" }
+        assertTrue(kizyak.link.contains(" "))
+        val etoneya = fromDefaults.entries
+            .filterIsInstance<SubscriptionCatalogEntry.Upsert>()
+            .single { it.sourceId == "etoneya-wl" }
+        assertEquals(7, etoneya.link.split(" ").size)
     }
 }

@@ -13,7 +13,8 @@ object SubscriptionSourceKind {
     )
 
     fun inferFromLink(link: String): Int {
-        val host = runCatching { URL(link).host.lowercase() }.getOrNull().orEmpty()
+        // Mirror lists ("https://a https://b") are not a single URL — classify by canonical.
+        val host = runCatching { URL(SubscriptionLinks.firstLink(link)).host.lowercase() }.getOrNull().orEmpty()
         return if (host in GITHUB_HOSTS) GITHUB else WEB
     }
 }

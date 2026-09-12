@@ -5,6 +5,12 @@ import fr.husi.database.DataStore
 import fr.husi.ktx.Logs
 import fr.husi.libcore.Libcore
 import fr.husi.utils.simpleModeLog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 
 /**
  * Unified HTTP fetch for text subscription feeds (RAW, catalog, import preview).
@@ -45,6 +51,8 @@ object SubscriptionHttpFetch {
          * Per-request HTTP timeout (ms); null → default (15s, mirrors libcore C.TCPTimeout).
          */
         val timeoutMs: Int? = null,
+        /** Ordered mirror candidates raced in parallel after [canonicalLink]; first success wins. */
+        val mirrorLinks: List<String> = emptyList(),
         val logContext: String? = null,
     )
 
@@ -57,6 +65,55 @@ object SubscriptionHttpFetch {
     )
 
     suspend fun fetchText(request: Request): Response {
+        val candidates = (listOf(request.canonicalLink) + request.mirrorLinks)
+            .flatMap { SubscriptionLinks.splitMirrors(it) }
+            .distinct()
+        return if (candidates.size <= 1) {
+            fetchTextSingle(request, candidates.firstOrNull() ?: request.canonicalLink)
+        } else {
+            fetchTextRace(request, candidates)
+        }
+    }
+
+    /**
+     * Fast mirror race (v2whitelist-style): all candidates start in parallel, the first
+     * successful fetch wins and the losers are cancelled. Wall time is bounded by the
+     * fastest success instead of the sum of timeouts. When every candidate fails, the
+     * canonical candidate's failure (or the first one) is rethrown so downstream
+     * [fr.husi.database.SubscriptionUpdateStateStore] message classification keeps working.
+     */
+    private suspend fun fetchTextRace(request: Request, candidates: List<String>): Response =
+        coroutineScope {
+            simpleModeLog(
+                "SimpleMode",
+                "H16 subscription_fetch_race purpose=${request.purpose.name.lowercase()} " +
+                    "candidates=${candidates.size}${request.logContext?.let { " $it" }.orEmpty()}",
+            )
+            val winner = Channel<Response>(capacity = 1)
+            val failures = HashMap<String, Throwable>()
+            val jobs = candidates.map { link ->
+                launch(Dispatchers.IO) {
+                    try {
+                        winner.trySend(fetchTextSingle(request, link))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        synchronized(failures) { failures[link] = e }
+                    }
+                }
+            }
+            launch { jobs.joinAll(); winner.close() }
+            for (response in winner) {
+                jobs.forEach { it.cancel() }
+                return@coroutineScope response
+            }
+            val cause = synchronized(failures) {
+                failures[request.canonicalLink] ?: failures.values.firstOrNull()
+            }
+            throw cause ?: IllegalStateException("no fetch attempts")
+        }
+
+    private suspend fun fetchTextSingle(request: Request, canonicalLink: String): Response {
         require(request.transport == SubscriptionFetchTransport.TextFeed) {
             "SubscriptionHttpFetch.fetchText supports TextFeed only; JsonPanel is not implemented"
         }
@@ -68,17 +125,17 @@ object SubscriptionHttpFetch {
             else -> DataStore.serviceState.connected
         }
         val fetchLink = WhitelistSubscriptionFetch.resolveFetchLink(
-            link = request.canonicalLink,
+            link = canonicalLink,
             whitelistRestricted = whitelistRestricted,
             vpnConnected = vpnConnected,
         )
-        val viaMirror = fetchLink != request.canonicalLink
+        val viaMirror = fetchLink != canonicalLink
         if (viaMirror) {
             val ctx = request.logContext?.let { " $it" }.orEmpty()
             simpleModeLog(
                 "SimpleMode",
                 "H29 subscription_fetch_mirror yandex purpose=${request.purpose.name.lowercase()}$ctx " +
-                    "host=${request.canonicalLink.substringBefore('?')}",
+                    "host=${canonicalLink.substringBefore('?')}",
             )
         }
 
@@ -91,12 +148,12 @@ object SubscriptionHttpFetch {
         // Via VPN the canonical works through SOCKS — no mirror. Off BS the fetch link is
         // the canonical itself.
         val mirrorFallback = !whitelistRestricted && !vpnConnected &&
-            WhitelistSubscriptionFetch.supportsYandexMirror(request.canonicalLink)
+            WhitelistSubscriptionFetch.supportsYandexMirror(canonicalLink)
         val attempts = when {
             whitelistRestricted && !vpnConnected -> linkedSetOf(fetchLink)
             mirrorFallback -> linkedSetOf(
                 fetchLink,
-                WhitelistSubscriptionFetch.yandexTranslateUrl(request.canonicalLink),
+                WhitelistSubscriptionFetch.yandexTranslateUrl(canonicalLink),
             )
             else -> linkedSetOf(fetchLink)
         }
@@ -106,24 +163,24 @@ object SubscriptionHttpFetch {
             // With a mirror fallback, cap the canonical attempt so the mirror still fits the
             // background budget (canonical ≤8s + mirror ≤15s ≤ 25s open refresh budget);
             // explicit preconnect timeouts are already below the cap (no-op).
-            val timeoutMs = if (mirrorFallback && link == request.canonicalLink) {
+            val timeoutMs = if (mirrorFallback && link == canonicalLink) {
                 minOf(defaultTimeoutMs, CANONICAL_FIRST_ATTEMPT_TIMEOUT_MS)
             } else {
                 defaultTimeoutMs
             }
-            if (link != request.canonicalLink && !viaMirror) {
+            if (link != canonicalLink && !viaMirror) {
                 val ctx = request.logContext?.let { " $it" }.orEmpty()
                 simpleModeLog(
                     "SimpleMode",
                     "H29 subscription_fetch_mirror yandex purpose=${request.purpose.name.lowercase()}$ctx " +
-                        "host=${request.canonicalLink.substringBefore('?')} fallback=true",
+                        "host=${canonicalLink.substringBefore('?')} fallback=true",
                 )
             }
             try {
-                val raw = rawFetch(request, link, vpnConnected, timeoutMs)
+                val raw = rawFetch(request, canonicalLink, link, vpnConnected, timeoutMs)
                 return buildTextFeedResponse(
                     raw = raw.content,
-                    canonicalLink = request.canonicalLink,
+                    canonicalLink = canonicalLink,
                     fetchLink = link,
                     subscriptionUserInfo = raw.subscriptionUserInfo,
                 )
@@ -148,6 +205,7 @@ object SubscriptionHttpFetch {
 
     private fun rawFetch(
         request: Request,
+        canonicalLink: String,
         link: String,
         vpnConnected: Boolean,
         timeoutMs: Int,
@@ -159,7 +217,7 @@ object SubscriptionHttpFetch {
         if (SubscriptionFetchTestHooks.shouldFailFetch(link)) {
             throw IllegalStateException("test hook: fetch failed for $link")
         }
-        SubscriptionFetchTestHooks.bodyFor(request.canonicalLink)?.let { body ->
+        SubscriptionFetchTestHooks.bodyFor(canonicalLink)?.let { body ->
             return RawFetch(body, null)
         }
         val response = Libcore.newHttpClient().apply {

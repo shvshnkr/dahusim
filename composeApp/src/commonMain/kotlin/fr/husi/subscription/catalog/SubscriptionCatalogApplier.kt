@@ -12,7 +12,6 @@ import fr.husi.database.SagerDatabase
 import fr.husi.database.SubscriptionBean
 import fr.husi.ktx.Logs
 import fr.husi.ktx.applyDefaultValues
-import java.net.URL
 
 object SubscriptionCatalogApplier {
 
@@ -89,7 +88,8 @@ object SubscriptionCatalogApplier {
                 val userWithSameLink = subscriptions.any { group ->
                     val sub = group.subscription ?: return@any false
                     sub.catalogOwnership == CatalogOwnership.USER &&
-                        normalizeLink(sub.link) == normalizeLink(record.link)
+                        SubscriptionCatalogParser.normalizeLinkField(sub.link) ==
+                        SubscriptionCatalogParser.normalizeLinkField(record.link)
                 }
                 if (userWithSameLink) {
                     runCatching {
@@ -243,16 +243,6 @@ object SubscriptionCatalogApplier {
 
     private fun githubSourceId(sourceId: String): String =
         "${SubscriptionCatalogDefaults.GITHUB_SOURCE_PREFIX}$sourceId"
-
-    private fun normalizeLink(link: String): String {
-        val trimmed = link.trim()
-        return runCatching {
-            val parsed = URL(trimmed)
-            "${parsed.protocol.lowercase()}://${parsed.host.lowercase()}${parsed.file}"
-        }.getOrElse {
-            trimmed
-        }
-    }
 
     private fun SubscriptionBean.isGithubManagedSourceId(): Boolean {
         return managedByRemote && sourceId.startsWith(SubscriptionCatalogDefaults.GITHUB_SOURCE_PREFIX)

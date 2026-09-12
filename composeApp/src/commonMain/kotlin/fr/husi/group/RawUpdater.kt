@@ -67,9 +67,11 @@ object RawUpdater : GroupUpdater() {
             )
             // #endregion
         } else {
+            val links = SubscriptionLinks.splitMirrors(subscription.link)
             val fetch = SubscriptionHttpFetch.fetchText(
                 SubscriptionHttpFetch.Request(
-                    canonicalLink = subscription.link,
+                    canonicalLink = links.firstOrNull() ?: subscription.link,
+                    mirrorLinks = links.drop(1),
                     userAgent = SubscriptionFetchProfile.resolveUserAgent(subscription),
                     purpose = SubscriptionHttpFetch.FetchPurpose.GroupUpdate,
                     logContext = "group=${proxyGroup.displayName()}",

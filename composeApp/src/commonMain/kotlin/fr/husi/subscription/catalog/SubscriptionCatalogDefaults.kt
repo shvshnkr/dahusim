@@ -9,6 +9,13 @@ object SubscriptionCatalogDefaults {
     const val RESERVED_BUILTIN_SOURCE_KEY = "reserved"
     const val RESERVED_BUILTIN_GROUP_NAME = "Built-in"
 
+    /**
+     * Joins mirror URLs of one source into a single link field (whitespace-separated —
+     * the catalog record format is `|`-delimited, so `|` cannot be the mirror separator;
+     * [fr.husi.group.SubscriptionLinks.splitMirrors] accepts both at fetch time).
+     */
+    private fun joinLinks(vararg urls: String): String = urls.joinToString(" ")
+
     data class CatalogSeed(
         val sourceKey: String,
         val name: String,
@@ -31,13 +38,23 @@ object SubscriptionCatalogDefaults {
         CatalogSeed(
             "black-vless-rus-mobile",
             "BLACK VLESS RUS mobile",
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt",
+                "https://gitlab.com/igareck/vpn-configs-for-russia/raw/main/BLACK_VLESS_RUS_mobile.txt",
+                "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/BLACK_VLESS_RUS_mobile.txt",
+                "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
+            ),
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
             "vless-wl-rus-mobile",
             "Vless Reality White Lists Rus Mobile",
-            "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+                "https://gitlab.com/igareck/vpn-configs-for-russia/raw/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+                "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+                "https://raw.githack.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+            ),
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
@@ -117,21 +134,36 @@ object SubscriptionCatalogDefaults {
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
-            "kizyak-beta6",
-            "КIЗЯК VPN 6",
-            "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt",
-            ConnectPoolRole.OPEN,
+            sourceKey = "kizyak-beta7",
+            name = "КIЗЯК VPN 7",
+            link = joinLinks(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta7.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
+            ),
+            poolRole = ConnectPoolRole.WL,
+            legacyLinks = setOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt",
+            ),
         ),
         CatalogSeed(
             "kizyak-beta6-bl",
             "КIЗЯК VPN BLACKLIST",
-            "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6BL.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6BL.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt",
+            ),
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
             "kizyak-testru",
             "КIЗЯК VPN TEST_RU",
-            "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyaktestru.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyaktestru.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyaktestru.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyaktestru.txt",
+            ),
             ConnectPoolRole.OPEN,
         ),
         CatalogSeed(
@@ -173,32 +205,116 @@ object SubscriptionCatalogDefaults {
         CatalogSeed(
             "goida-open",
             "goida Обход чёрных",
-            "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/1.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/1.txt",
+                "https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/1.txt",
+                "https://cdn.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/1.txt",
+            ),
             ConnectPoolRole.OPEN,
         ),
         CatalogSeed(
             "goida-wl",
             "goida Обход белых SNI/CIDR",
-            "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt",
+                "https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/26.txt",
+                "https://cdn.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/26.txt",
+            ),
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
             "rkp-wl",
             "RKP Белые списки",
-            "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
+                "https://fastly.jsdelivr.net/gh/RKPchannel/RKP_bypass_configs@main/whitelist.txt",
+                "https://cdn.jsdelivr.net/gh/RKPchannel/RKP_bypass_configs@main/whitelist.txt",
+            ),
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
             "rkp-black",
             "RKP Чёрные списки",
-            "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt",
+                "https://fastly.jsdelivr.net/gh/RKPchannel/RKP_bypass_configs@main/blacklist.txt",
+                "https://cdn.jsdelivr.net/gh/RKPchannel/RKP_bypass_configs@main/blacklist.txt",
+            ),
             ConnectPoolRole.OPEN,
         ),
         CatalogSeed(
             "hiztin-gribi",
             "VLESS-PO-GRIBI Обход",
-            "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
+            joinLinks(
+                "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
+                "https://fastly.jsdelivr.net/gh/hiztin/VLESS-PO-GRIBI@main/deploy/subscriptions/25.txt",
+                "https://cdn.jsdelivr.net/gh/hiztin/VLESS-PO-GRIBI@main/deploy/subscriptions/25.txt",
+            ),
             ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "etoneya-wl",
+            "ЭтоНеЯ Белые списки",
+            joinLinks(
+                "https://etoneya.su/whitelist",
+                "https://etoneya.best/whitelist",
+                "https://alley.serv00.net/whitelist",
+                "https://internet-tenshi.kangel.tech/whitelist",
+                "https://whitelist.etoneya.baby",
+                "https://etoskam.ru/whitelist",
+                "https://xn--e1apcp8cq.xn--p1ai/whitelist",
+            ),
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "etoneya-other",
+            "ЭтоНеЯ Прочие (чёрные)",
+            joinLinks(
+                "https://etoneya.su/other",
+                "https://etoneya.best/other",
+                "https://alley.serv00.net/other",
+                "https://internet-tenshi.kangel.tech/other",
+                "https://blacklist.etoneya.baby",
+                "https://etoskam.ru/other",
+                "https://xn--e1apcp8cq.xn--p1ai/other",
+            ),
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "cyberportal-wl-list",
+            "CYBERPORTAL White List",
+            "https://warp-gen.cyb-portal.org/CP-035",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "cyberportal-cidr-wl",
+            "CYBERPORTAL CIDR White",
+            "https://warp-gen.cyb-portal.org/CP-006",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "cyberportal-sni-wl",
+            "CYBERPORTAL SNI White",
+            "https://warp-gen.cyb-portal.org/CP-008",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "cyberportal-wl-keys",
+            "CYBERPORTAL White Keys",
+            "https://warp-gen.cyb-portal.org/CP-042",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "jsxta-autotest",
+            "jsxta Авто-тестируемые",
+            "https://gbr.mydan.online/configs",
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "mifa-reserve",
+            "mifa/bobrik Резерв",
+            "https://mifa.world/bobrik",
+            ConnectPoolRole.ANY,
         ),
     )
 
