@@ -335,4 +335,74 @@ class V2RayFmtTest {
         assertEquals("auto", transport["mode"])
         assertEquals("/xhttppath", transport["path"])
     }
+
+    @Test
+    fun `buildSingBoxOutboundStandardV2RayBean should normalize xhttp extra camelCase to snake_case`() {
+        val bean = VLESSBean().apply {
+            serverAddress = "84.201.177.246"
+            serverPort = 3000
+            uuid = "77b99fda-3096-47e7-8287-c2d84c089055"
+            v2rayTransport = "xhttp"
+            xhttpMode = "auto"
+            path = "/api/v2/config/sync"
+            security = "tls"
+            sni = "eda.yandex.ru"
+            xhttpExtra = """
+                {"host":"","path":"","mode":"","headers":null,
+                 "xPaddingBytes":"50-150","xPaddingObfsMode":false,
+                 "xPaddingKey":"","noGRPCHeader":false,"noSSEHeader":true,
+                 "scMaxEachPostBytes":"21000000","scMinPostsIntervalMs":"0",
+                 "scMaxBufferedPosts":30,"scStreamUpServerSecs":"20-40",
+                 "xmux":{"maxConcurrency":"16-32","maxConnections":"0",
+                         "cMaxReuseTimes":"96-192","hMaxRequestTimes":"400-600",
+                         "hMaxReusableSecs":"1800-3000","hKeepAlivePeriod":0},
+                 "downloadSettings":null,"extra":null}
+            """.trimIndent()
+        }
+
+        val outbound = buildSingBoxOutboundStandardV2RayBean(bean)
+        val vless = assertIs<SingBoxOptions.Outbound_VLESSOptions>(outbound)
+        val transport = assertNotNull(vless.transport).asKxsMap()
+
+        assertEquals("50-150", transport["x_padding_bytes"])
+        assertEquals(true, transport["no_sse_header"])
+        assertEquals("21000000", transport["sc_max_each_post_bytes"])
+        assertEquals(30L, transport["sc_max_buffered_posts"])
+        assertEquals("20-40", transport["sc_stream_up_server_secs"])
+        assertNull(transport["xPaddingBytes"])
+        assertNull(transport["x_padding_obfs_mode"])
+        assertNull(transport["x_padding_key"])
+        assertNull(transport["downloadSettings"])
+
+        val xmux = assertIs<Map<*, *>>(transport["xmux"])
+        assertEquals("16-32", xmux["max_concurrency"])
+        assertEquals("96-192", xmux["c_max_reuse_times"])
+        assertEquals("400-600", xmux["h_max_request_times"])
+        assertEquals("1800-3000", xmux["h_max_reusable_secs"])
+        assertNull(xmux["maxConnections"])
+        assertNull(xmux["max_connections"])
+        assertNull(xmux["h_keep_alive_period"])
+    }
+
+    @Test
+    fun `buildSingBoxOutboundStandardV2RayBean should default xhttp x_padding_bytes when extra has none`() {
+        val bean = VLESSBean().apply {
+            serverAddress = "185.71.67.130"
+            serverPort = 443
+            uuid = "121cd573-3612-4aff-8b3e-076058c565be"
+            v2rayTransport = "xhttp"
+            xhttpMode = "auto"
+            path = "/"
+            security = "tls"
+            sni = "net.cloud134.ru"
+            xhttpExtra = """{"noSSEHeader":true}"""
+        }
+
+        val outbound = buildSingBoxOutboundStandardV2RayBean(bean)
+        val vless = assertIs<SingBoxOptions.Outbound_VLESSOptions>(outbound)
+        val transport = assertNotNull(vless.transport).asKxsMap()
+
+        assertEquals("100-1000", transport["x_padding_bytes"])
+        assertEquals(true, transport["no_sse_header"])
+    }
 }

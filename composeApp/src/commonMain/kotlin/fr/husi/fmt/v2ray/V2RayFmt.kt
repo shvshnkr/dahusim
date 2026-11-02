@@ -46,8 +46,6 @@ import fr.husi.ktx.queryParameterUnescapeNotBlank
 import fr.husi.ktx.readableMessage
 import fr.husi.ktx.kxs
 import kotlinx.serialization.json.JsonObject
-import fr.husi.libcore.Libcore
-import fr.husi.libcore.URL
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -96,7 +94,7 @@ fun parseV2Ray(rawUrl: String): StandardV2RayBean {
         }
     }
 
-    val url = Libcore.parseURL(rawUrl)
+    val url = parseShareUrl(rawUrl)
     val bean = if (url.scheme == "vmess") {
         VMessBean()
     } else {
@@ -111,7 +109,7 @@ const val BEGIN_ECH = "-----BEGIN ECH CONFIG-----"
 const val END_ECH = "-----END ECH CONFIG-----"
 
 // https://github.com/XTLS/Xray-core/discussions/716
-fun StandardV2RayBean.parseDuckSoft(url: URL) {
+fun StandardV2RayBean.parseDuckSoft(url: ShareUrlReader) {
     serverAddress = url.host
     serverPort = url.ports.toIntOrNull() ?: 443
     name = url.fragment
@@ -325,7 +323,7 @@ fun StandardV2RayBean.toUriVMessVLESSTrojan(): String {
     }
 
     // ducksoft fmt
-    val builder = Libcore.newURL(protocol).apply {
+    val builder = newShareUrlBuilder(protocol).apply {
         username = if (isTrojan) {
             (this@toUriVMessVLESSTrojan as TrojanBean).password
         } else {
@@ -430,7 +428,7 @@ fun StandardV2RayBean.toUriVMessVLESSTrojan(): String {
         builder.fragment = name
     }
 
-    return builder.string
+    return builder.build()
 }
 
 fun buildSingBoxOutboundStreamSettings(bean: StandardV2RayBean): V2RayTransportOptions? {
@@ -518,11 +516,70 @@ fun buildSingBoxOutboundTransport(bean: StandardV2RayBean): JsonObject? {
     return buildSingBoxOutboundStreamSettings(bean)?.toJsonObjectKxs()
 }
 
+// Xray share-link `extra` JSON uses camelCase; sing-box xhttp transport expects snake_case.
+private val XHTTP_EXTRA_CAMEL_TO_SNAKE = mapOf(
+    "xPaddingBytes" to "x_padding_bytes",
+    "xPaddingObfsMode" to "x_padding_obfs_mode",
+    "xPaddingKey" to "x_padding_key",
+    "xPaddingHeader" to "x_padding_header",
+    "xPaddingPlacement" to "x_padding_placement",
+    "xPaddingMethod" to "x_padding_method",
+    "uplinkHTTPMethod" to "uplink_http_method",
+    "sessionIDPlacement" to "session_placement",
+    "sessionIDKey" to "session_key",
+    "sessionIDTable" to "session_table",
+    "sessionIDLength" to "session_id_length",
+    "seqPlacement" to "seq_placement",
+    "seqKey" to "seq_key",
+    "uplinkDataPlacement" to "uplink_data_placement",
+    "uplinkDataKey" to "uplink_data_key",
+    "uplinkChunkSize" to "uplink_chunk_size",
+    "noGRPCHeader" to "no_grpc_header",
+    "noSSEHeader" to "no_sse_header",
+    "scMaxEachPostBytes" to "sc_max_each_post_bytes",
+    "scMinPostsIntervalMs" to "sc_min_posts_interval_ms",
+    "scMaxBufferedPosts" to "sc_max_buffered_posts",
+    "scStreamUpServerSecs" to "sc_stream_up_server_secs",
+    "serverMaxHeaderBytes" to "server_max_header_bytes",
+    "maxConcurrency" to "max_concurrency",
+    "maxConnections" to "max_connections",
+    "cMaxReuseTimes" to "c_max_reuse_times",
+    "hMaxRequestTimes" to "h_max_request_times",
+    "hMaxReusableSecs" to "h_max_reusable_secs",
+    "hKeepAlivePeriod" to "h_keep_alive_period",
+)
+
+private fun isXhttpExtraEmptyValue(value: Any?): Boolean = when (value) {
+    is String -> value.isEmpty() || value == "0" || value == "null"
+    is Number -> value.toLong() == 0L
+    is Boolean -> !value
+    else -> false
+}
+
+private fun normalizeXhttpExtraValue(value: Any?): Any? = when (value) {
+    is Map<*, *> -> normalizeXhttpExtra(value)
+    is List<*> -> value.map { normalizeXhttpExtraValue(it) }
+    else -> value
+}
+
+private fun normalizeXhttpExtra(extra: Map<*, *>): JSONMap {
+    val result = linkedMapOf<String, Any?>()
+    for ((key, value) in extra) {
+        val snake = XHTTP_EXTRA_CAMEL_TO_SNAKE[key.toString()] ?: key.toString()
+        if (snake == "downloadSettings" || snake == "extra") continue
+        val normalized = normalizeXhttpExtraValue(value)
+        if (isXhttpExtraEmptyValue(normalized)) continue
+        if (normalized is Map<*, *> && normalized.isEmpty()) continue
+        result[snake] = normalized
+    }
+    return result
+}
+
 private fun buildSingBoxOutboundXHTTPTransport(bean: StandardV2RayBean): JsonObject {
     val transport = linkedMapOf<String, Any?>()
     if (bean.xhttpExtra.isNotBlank()) {
         runCatching { bean.xhttpExtra.toJsonMapKxs() }.onSuccess { extra ->
-            mergeJson(extra, transport)
+            mergeJson(normalizeXhttpExtra(extra), transport)
         }.onFailure {
             Logs.w("Ignore invalid xhttp extra JSON: ${it.readableMessage}")
         }
@@ -533,6 +590,10 @@ private fun buildSingBoxOutboundXHTTPTransport(bean: StandardV2RayBean): JsonObj
     if (bean.path.isNotBlank()) transport["path"] = bean.path
     bean.headers.blankAsNull()?.let(::buildHeader)?.takeIf { it.isNotEmpty() }?.let {
         transport["headers"] = it
+    }
+    // patched sing-box rejects x_padding_bytes <= 0 ("cannot be disabled"); xray default is 100-1000
+    if (transport.containsKey("x_padding_bytes").not()) {
+        transport["x_padding_bytes"] = "100-1000"
     }
     return transport.toJsonObjectKxs()
 }
