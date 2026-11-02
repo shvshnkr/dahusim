@@ -69,7 +69,7 @@ class SubscriptionSurvivesBootstrapJourneyTest : FeatureJourneyTest() {
         DefaultUserBootstrap.bootstrapAll()
 
         val wlSeed = SubscriptionCatalogDefaults.STARTER_SEEDS
-            .single { it.sourceKey == "wl-standalone" }
+            .single { it.sourceKey == "zieng2-wl" }
         val group = SagerDatabase.groupDao.allGroups().first()
             .single { it.subscription?.link == wlSeed.link }
 

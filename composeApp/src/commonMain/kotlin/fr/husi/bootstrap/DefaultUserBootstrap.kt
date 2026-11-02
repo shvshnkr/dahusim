@@ -127,6 +127,7 @@ object DefaultUserBootstrap {
     private suspend fun bootstrapDefaultSubscriptions() {
         val subscriptions = SagerDatabase.groupDao.subscriptions()
         migrateLegacyBuiltinLinks(subscriptions)
+        retireRemovedStarterSeeds(subscriptions)
         ensureBuiltinManagedMarkers(subscriptions)
         val existingLinks = SagerDatabase.groupDao.subscriptions()
             .mapNotNull { it.subscription?.link }
@@ -234,6 +235,28 @@ object DefaultUserBootstrap {
             GroupManager.updateGroup(group)
             GroupUpdater.executeUpdate(group, byUser = false)
             Logs.d("DefaultUserBootstrap: migrated group id=${group.id} to canonical link")
+        }
+    }
+
+    private suspend fun retireRemovedStarterSeeds(subscriptions: List<ProxyGroup>) {
+        val activeKeys = SubscriptionCatalogDefaults.STARTER_SEEDS
+            .map { it.sourceKey }
+            .toSet()
+        val retiredIds = subscriptions.mapNotNull { group ->
+            val sub = group.subscription ?: return@mapNotNull null
+            if (!sub.managedByRemote) return@mapNotNull null
+            val key = sub.sourceId
+                .takeIf { it.startsWith(SubscriptionCatalogDefaults.BUILTIN_SOURCE_PREFIX) }
+                ?.removePrefix(SubscriptionCatalogDefaults.BUILTIN_SOURCE_PREFIX)
+                ?: return@mapNotNull null
+            if (key == SubscriptionCatalogDefaults.RESERVED_BUILTIN_SOURCE_KEY || key in activeKeys) {
+                return@mapNotNull null
+            }
+            group.id
+        }
+        if (retiredIds.isNotEmpty()) {
+            GroupManager.deleteGroup(retiredIds)
+            Logs.d("DefaultUserBootstrap: retired removed starter seeds, count=${retiredIds.size}")
         }
     }
 }

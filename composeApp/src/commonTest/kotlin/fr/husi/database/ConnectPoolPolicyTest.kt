@@ -148,7 +148,7 @@ class ConnectPoolPolicyTest {
 
     @Test
     fun wlSubscriptionTagMatchesSourceId() {
-        val group = group(5L, "Any name", sourceId = "gh.white-lattice")
+        val group = group(5L, "Any name", sourceId = "gh.zieng2-wl")
         val tag = WlSubscriptionTag.resolve(
             allProxies = listOf(proxy(7L, 5L, 1L)),
             groups = listOf(group),

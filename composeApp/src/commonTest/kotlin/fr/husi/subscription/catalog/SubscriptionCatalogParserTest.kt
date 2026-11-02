@@ -68,7 +68,7 @@ class SubscriptionCatalogParserTest {
         assertEquals(SubscriptionCatalogDefaults.STARTER_SEEDS.size, fromDefaults.entries.size)
         val wlFeed = fromDefaults.entries
             .filterIsInstance<SubscriptionCatalogEntry.Upsert>()
-            .single { it.sourceId == "white-lattice" }
+            .single { it.sourceId == "zieng2-wl" }
         assertEquals(ConnectPoolRole.WL, wlFeed.poolRole)
     }
 
@@ -232,9 +232,9 @@ class SubscriptionCatalogParserTest {
             .filterIsInstance<SubscriptionCatalogEntry.Upsert>()
             .single { it.sourceId == "kizyak-beta7" }
         assertTrue(kizyak.link.contains(" "))
-        val etoneya = fromDefaults.entries
+        val zieng2 = fromDefaults.entries
             .filterIsInstance<SubscriptionCatalogEntry.Upsert>()
-            .single { it.sourceId == "etoneya-wl" }
-        assertEquals(7, etoneya.link.split(" ").size)
+            .single { it.sourceId == "zieng2-wl" }
+        assertEquals(4, zieng2.link.split(" ").size)
     }
 }

@@ -11,13 +11,10 @@ internal object WlSubscriptionTag {
 
     /** Legacy fallback for gh-managed [ConnectPoolRole.ANY] until catalog pool_role is applied. */
     val KNOWN_WL_SOURCE_IDS: Set<String> = setOf(
-        "white-lattice",
-        "white-list-vpn-black",
-        "aetris-vpn",
-        "black-vless-rus-mobile",
-        "vless-wl-rus-mobile",
-        "tri-228-wl",
-        "wl-standalone",
+        "zieng2-wl",
+        "kizyak-beta7",
+        "kizyak-beta6-bl",
+        "aetris-wl-lite",
     )
 
     data class Resolution(

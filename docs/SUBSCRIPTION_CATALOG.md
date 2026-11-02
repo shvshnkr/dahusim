@@ -86,21 +86,27 @@ PROTECTED_BUILTIN and USER groups are never updated or removed by the catalog.
 
 ## Static feeds (`docs/subscription-feeds/`)
 
-`tri_228-open.txt` and `tri_228-wl.txt` are split from upstream `tri_228.txt` (open: `#для wifi и моб инет без бс` … `#для обхода бс`; wl: BS-bypass section and below). When upstream changes, rebuild both files manually and bump catalog `generation` if URLs or `source_id` change.
+`tri_228-open.txt` and `tri_228-wl.txt` were split from upstream `tri_228.txt` (open: `#для wifi и моб инет без бс` … `#для обхода бс`; wl: BS-bypass section and below). **Removed in generation 15**: every node in both feeds failed real-traffic liveness checks (telegram/youtube through tunnel) as of 2026-11-02; the files stay in the repo for history only.
 
-`wl-standalone.txt` is a curated WL feed for single-node relays (SOCKS, VLESS, etc.); add profiles one line per URI and bump catalog `generation` when the feed URL or catalog entry changes.
+`wl-standalone.txt` was a curated WL feed for single-node relays. **Removed in generation 15**: the upstream feed no longer carries any usable node (only a commented-out domain-only SOCKS relay that blocks IPv4 CONNECT to Telegram DCs).
 
-`zieng2-wl` points directly at the upstream BS-direct mirror (`hub.mos.ru`), reachable under whitelist restrictions without a Yandex mirror, unlike `raw.githubusercontent.com`. The list refreshes hourly upstream and profiles churn daily; transient 404s are handled by the subscription jail (profiles stay cached, one unjail attempt per cycle).
+`zieng2-wl` points at the upstream BS-direct mirrors; the old `hub.mos.ru` mirror returns 404 (upstream restructure). Generation 15 canonical link is `gitverse.ru` (RU-hosted, reachable under whitelist restrictions), raced against `raw.githubusercontent.com`, `bitbucket.org` and `codeberg.org` mirrors of `vless_universal.txt` / `list_universal.txt`. The codeberg mirror carries the freshest node set (includes VK-hosted entries); the other three are byte-identical. The list refreshes hourly upstream and profiles churn daily; transient 404s are handled by the subscription jail (profiles stay cached, one unjail attempt per cycle). Liveness 2026-11-02: 1/10 sampled nodes pass real-traffic checks (Selectel xhttp node); VK-hosted xhttp nodes accept TCP but never answer from a RU BL uplink.
 
-`migiti-wl` (MiGiTi) and `vlessfo-open` (Vlessforu) point at upstream GitHub/self-hosted lists; `migiti-wl` is a RU-SNI whitelist (BS) list, the others are general-purpose VLESS Reality lists. `migiti-open` was removed in generation 11: its `4.txt` is a near-duplicate of `migiti-wl` (same 350 servers, ~92% host overlap, RU-SNI profiles relabeled "Universal").
+`vlessfo-open` (Vlessforu) points at the upstream self-hosted list; 5/10 sampled nodes pass real-traffic checks (2026-11-02).
 
-`razlo4ka-open` (Razlo4ka) is a general-purpose VLESS list refreshed upstream every few hours.
+`razlo4ka-open` (Razlo4ka) was removed in generation 15: 0/22 sampled nodes alive across two independent samples.
 
-`etoneya-yt` (etoneya.su/whitelist) was removed in generation 13: the site is dead — every fetch hangs until the 15s HTTP timeout, so the seed only poisoned preconnect and background refreshes (field: failStreak 26, state SUSPECT).
+`migiti-wl` and `migiti-fast-ru` were removed: the upstream repo `misha12333211-ctrl/proxy-subs` returns 404 for all list files.
 
-`aetris-blacklist` (AetrisVPN BlackList, open) and `aetris-wl-lite` (AetrisVPN WhiteList Lite, WL) are the ЧС/БС-lite variants from the same author as `aetris-vpn` (flaafix), auto-updated upstream.
+`aetris-blacklist` (AetrisVPN BlackList, open; 4/10 alive) and `aetris-wl-lite` (AetrisVPN WhiteList Lite, WL; 5/10 alive, all live nodes are shadowsocks) are the ЧС/БС-lite variants from the same author as the removed `aetris-vpn` (flaafix), auto-updated upstream. `aetris-vpn` itself was removed in generation 15 (0/22 alive).
 
-`kizyak-beta6` (КIЗЯК VPN 6, open), `kizyak-beta6-bl` (КIЗЯК VPN BLACKLIST, WL) and `kizyak-testru` (КIЗЯК VPN TEST_RU, open) are general-purpose VLESS/hysteria2/trojan lists from `Maskkost93/kizyak-vpn-4.0` (same ecosystem as `igareck/vpn-configs-for-russia`; the BL variant carries `[BL]`-tagged nodes like `black-vless-rus-mobile`, so it is pool_role `wl`).
+`kizyak-beta7` (КIЗЯК VPN 7, WL; 7/9 alive — the strongest feed of the November 2026 sweep) replaces `kizyak-beta6` (catalog generation 15; upstream renamed the file). `kizyak-beta6-bl` (КIЗЯК VPN BLACKLIST, WL; 2/2 alive) carries `[BL]`-tagged nodes. `kizyak-testru` was removed in generation 15 (0/22 alive; nearly all hysteria2 entries have dead DNS).
+
+## Generation 15 cleanup (2026-11-02)
+
+Real-traffic liveness sweep (353 node tests via sing-box + SOCKS, RU BL uplink; a node counts alive only if exit IP differs from the tester AND api.telegram.org / youtube `generate_204` answer through the tunnel) removed every feed with zero live nodes: `swordware-main`, `black-vless-rus-mobile`, `vless-wl-rus-mobile`, `aetris-vpn`, `tri-228-open`, `tri-228-wl`, `wl-standalone`, `white-lattice`, `white-list-vpn-black`, `migiti-wl`, `razlo4ka-open`, `kizyak-testru`. Starter seeds that were never catalog-managed (etoneya, CYBERPORTAL, goida, RKP, hiztin, haven, go-engine, terik21, kafka, mifa, jsxta, hardvpn, migiti-fast-ru) were dropped from `SubscriptionCatalogDefaults.STARTER_SEEDS`; existing installs delete the stale builtin groups on the next bootstrap (`DefaultUserBootstrap.retireRemovedStarterSeeds`). Nullcore `v2whitelist` is an APK landing page without a subscription feed — not a source (re-confirms the generation 12 decision).
+
+Known app-level gap found by the sweep (fixed 2026-11-02): xray share-links with camelCase `extra` JSON (xhttp transport) were merged verbatim into the sing-box transport config, but sing-box expects snake_case and a positive `x_padding_bytes` — such nodes failed config validation (`x_padding_bytes cannot be disabled`). `buildSingBoxOutboundXHTTPTransport` now normalizes extra keys camelCase→snake_case, drops empty/zero/false values (incl. `downloadSettings`/`extra` shells and zero xmux entries) and injects the xray-default `x_padding_bytes: "100-1000"` when absent. Regression: `V2RayFmtTest` (camelCase zieng2-style extra → snake_case transport).
 
 ## Degraded feed / jail
 
