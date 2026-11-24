@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.husi.Key
 import fr.husi.database.DataStore
@@ -58,6 +60,9 @@ const val BLACK = 21
 const val DYNAMIC = 22
 
 val LocalAppDarkMode = compositionLocalOf { false }
+
+// FONTSCALE-UI-FIX: кэп системного fontScale (применяется в AppTheme; PLAN-61 DH-a)
+const val MAX_FONT_SCALE = 1.3f
 
 val themes = listOf(
     Color(0xFFF44336),
@@ -130,7 +135,19 @@ fun AppTheme(content: @Composable () -> Unit) {
         }
     }
 
-    CompositionLocalProvider(LocalAppDarkMode provides isDarkMode) {
+    // FONTSCALE-UI-FIX (PLAN-61 DH-a; порт из IsaevAudio): системный fontScale кэпится на 1.3 —
+    // при 1.6–2.0 плотная геометрия переносится по строкам и выталкивает элементы за экран.
+    // density (dp-геометрия) не трогается; при системном масштабе ≤1.3 ничего не меняется.
+    val systemDensity = LocalDensity.current
+    val cappedDensity = Density(
+        systemDensity.density,
+        fontScale = minOf(systemDensity.fontScale, MAX_FONT_SCALE),
+    )
+
+    CompositionLocalProvider(
+        LocalAppDarkMode provides isDarkMode,
+        LocalDensity provides cappedDensity,
+    ) {
         currentPlatformThemeApi().ApplyTheme(
             colorScheme = colorScheme,
             isDarkMode = isDarkMode,
