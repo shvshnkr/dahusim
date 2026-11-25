@@ -38,9 +38,21 @@ object SubscriptionCatalogDefaults {
             ConnectPoolRole.OPEN,
         ),
         CatalogSeed(
-            "aetris-wl-lite",
-            "AetrisVPN WhiteList Lite",
-            "https://raw.githubusercontent.com/flaafix/AetrisVPN-white-list-lite/refs/heads/main/AetrisVPN.txt",
+            "rkp-bl",
+            "RKP BlackList",
+            joinLinks(
+                "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/bl",
+                "https://raw.githubusercontent.com/rkp-community/sub/main/bl",
+            ),
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "rkp-wl",
+            "RKP WhiteList",
+            joinLinks(
+                "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/wl",
+                "https://raw.githubusercontent.com/rkp-community/sub/main/wl",
+            ),
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
@@ -54,31 +66,42 @@ object SubscriptionCatalogDefaults {
             ConnectPoolRole.WL,
         ),
         CatalogSeed(
-            sourceKey = "kizyak-beta7",
-            name = "КIЗЯК VPN 7",
-            link = joinLinks(
-                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta7.txt",
-                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
-                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
-            ),
-            poolRole = ConnectPoolRole.WL,
-            legacyLinks = setOf(
-                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt",
-            ),
-        ),
-        CatalogSeed(
             sourceKey = "zieng2-wl",
             name = "zieng2 wl",
             link = joinLinks(
                 "https://gitverse.ru/api/repos/zieng2/wl/raw/branch/master/list_universal.txt",
                 "https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt",
                 "https://bitbucket.org/zieng2/wl/raw/main/vless_universal.txt",
-                "https://codeberg.org/zieng2/wl/raw/branch/main/vless_universal.txt",
             ),
             poolRole = ConnectPoolRole.WL,
             legacyLinks = setOf(
                 "https://hub.mos.ru/zieng2/wl/raw/main/list_universal.txt",
+                "https://codeberg.org/zieng2/wl/raw/branch/main/vless_universal.txt",
             ),
+        ),
+        CatalogSeed(
+            "akres-all",
+            "AkresVPN",
+            "https://raw.githubusercontent.com/theakres/VPN/refs/heads/main/all",
+            ConnectPoolRole.OPEN,
+        ),
+        CatalogSeed(
+            "pizduk-wl",
+            "PizdukVPN WhiteList",
+            joinLinks(
+                "https://raw.githubusercontent.com/PizdukMod/PizdukVPN/main/wl",
+                "https://fastly.jsdelivr.net/gh/PizdukMod/PizdukVPN@main/wl",
+            ),
+            ConnectPoolRole.WL,
+        ),
+        CatalogSeed(
+            "white-cidr-ru",
+            "WHITE-CIDR-RU",
+            joinLinks(
+                "https://bitbucket.org/igareck/vpn-configs-for-russia/raw/main/WHITE-CIDR-RU-all.txt",
+                "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-all.txt",
+            ),
+            ConnectPoolRole.WL,
         ),
     )
 

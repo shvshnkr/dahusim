@@ -228,13 +228,15 @@ class SubscriptionCatalogParserTest {
     @Test
     fun `defaults starter seeds all parse with mirrors`() {
         val fromDefaults = SubscriptionCatalogParser.parse(SubscriptionCatalogDefaults.joinToCatalogLines(5L))
-        val kizyak = fromDefaults.entries
+        val rkp = fromDefaults.entries
             .filterIsInstance<SubscriptionCatalogEntry.Upsert>()
-            .single { it.sourceId == "kizyak-beta7" }
-        assertTrue(kizyak.link.contains(" "))
+            .single { it.sourceId == "rkp-wl" }
+        assertTrue(rkp.link.contains(" "))
+        // RU-hosted first mirror: hub.mos.ru is reachable under whitelist restrictions
+        assertTrue(rkp.link.startsWith("https://hub.mos.ru/"))
         val zieng2 = fromDefaults.entries
             .filterIsInstance<SubscriptionCatalogEntry.Upsert>()
             .single { it.sourceId == "zieng2-wl" }
-        assertEquals(4, zieng2.link.split(" ").size)
+        assertEquals(3, zieng2.link.split(" ").size)
     }
 }

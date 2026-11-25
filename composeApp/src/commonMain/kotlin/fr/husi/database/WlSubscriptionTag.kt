@@ -12,9 +12,10 @@ internal object WlSubscriptionTag {
     /** Legacy fallback for gh-managed [ConnectPoolRole.ANY] until catalog pool_role is applied. */
     val KNOWN_WL_SOURCE_IDS: Set<String> = setOf(
         "zieng2-wl",
-        "kizyak-beta7",
         "kizyak-beta6-bl",
-        "aetris-wl-lite",
+        "rkp-wl",
+        "pizduk-wl",
+        "white-cidr-ru",
     )
 
     data class Resolution(
